@@ -144,4 +144,4 @@ Nine core modules: `AstAnalyzer` · `CallGraphAnalyzer` · `YamlRuleEngine` · `
 
 ## License
 
-Open-sourced under the [MIT license](LICENSE). © 2026 code-review-agent contributors.
+Open-sourced under the [MIT license](LICENSE). © 2026 13liyunfei.
