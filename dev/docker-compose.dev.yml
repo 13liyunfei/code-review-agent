@@ -1,0 +1,63 @@
+# ============================================================
+# 本地开发基础设施编排（仅本地调试用，生产请勿使用）
+#
+# 用途：用 Docker 拉起 code-review-agent 本地开发所需的外部依赖
+#       （PostgreSQL 17 + pgvector / Redis / Gitea），替代 brew+colima 方案，
+#       任何装有 Docker 的机器（含 Linux CI）都可一键起。
+#
+# 用法：
+#   cd dev
+#   docker compose -f docker-compose.dev.yml up -d        # 启动
+#   docker compose -f docker-compose.dev.yml down         # 停止
+#
+# 之后按 README「本地开发调试」一节启动引擎：
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+# ============================================================
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: review-pg
+    environment:
+      POSTGRES_DB: codereview
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: codereview
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d codereview"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: review-redis
+    ports:
+      - "6379:6379"
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: review-gitea
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__ROOT_URL: "http://localhost:3000/"
+      GITEA__server__DOMAIN: "localhost"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__webhook__ALLOWED_HOST_LIST: "private,loopback"
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - gitea-data:/data
+      - gitea-logs:/var/log/gitea
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata: {}
+  gitea-data: {}
+  gitea-logs: {}

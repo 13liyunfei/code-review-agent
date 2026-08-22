@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================
+# ============================================================
+# ⚠️ 仅本地开发调试用；生产环境请直接管理独立服务进程。
+# ============================================================
 # 一键停止整套环境
 # 用法：
 #   ./scripts/stop-all.sh           # 停止审查服务 + Gitea + Redis + PostgreSQL（保留 Colima）
@@ -21,21 +24,32 @@ else
   echo "    未在运行"
 fi
 
-step "2/4 停止 Gitea 容器"
+step "2/4 停止控制台微服务（:8081）"
+if lsof -iTCP:8081 -sTCP:LISTEN -P >/dev/null 2>&1; then
+  PID=$(lsof -iTCP:8081 -sTCP:LISTEN -P | tail -n +2 | awk 'NR==1{print $2}')
+  [ -n "$PID" ] && kill "$PID" 2>/dev/null && sleep 2
+  [ -n "$PID" ] && kill -9 "$PID" 2>/dev/null || true
+  pkill -f "CodeReviewConsole" 2>/dev/null || true
+  echo "    已停止"
+else
+  echo "    未在运行"
+fi
+
+step "3/4 停止 Gitea 容器"
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^gitea$'; then
   docker stop gitea >/dev/null && echo "    已停止"
 else
   echo "    未在运行"
 fi
 
-step "3/4 停止 Redis"
+step "4/5 停止 Redis"
 if pkill -f "redis-server.*:6379" 2>/dev/null; then
   echo "    已停止"
 else
   echo "    未在运行"
 fi
 
-step "4/4 停止 PostgreSQL"
+step "5/5 停止 PostgreSQL"
 if pgrep -q -f "postgres -D $PG_DATA_DIR"; then
   "$PG_BIN/pg_ctl" -D "$PG_DATA_DIR" stop -m fast && echo "    已停止"
 else

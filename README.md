@@ -45,31 +45,45 @@ The design is heavily inspired by open-source agentic coding harnesses — [deep
 
 ## Quick Start
 
-### One-click environment (macOS, Colima + Homebrew)
+### Standard deployment (production / standalone service)
+
+The agent is a **standalone service**: build it, point it at your external PostgreSQL/Redis/Gitea, and run the jar.
 
 ```bash
-# 1. Prepare credentials (see .env.example): GITEA_API_TOKEN / TOKENHUB_API_KEY / REVIEW_API_TOKEN
-cp .env.example .env
+# 1. Build
+./mvnw -o package -DskipTests
 
-# 2. Start everything: PostgreSQL 17+pgvector → Redis → Colima → Gitea → engine (:8080)
-./scripts/start-all.sh dev
+# 2. Configure (application.yml / env vars): PG+pgvector, Redis, Gitea/GitLab base URL,
+#    tokenhub API key, review.lang, review.profile ... see "Key Configuration" below.
 
-# 3. Check status / stop
-./scripts/status.sh
-./scripts/stop-all.sh
+# 3. Run the service
+java -jar target/code-review-agent-1.0.0.jar
 ```
 
-### Run the engine only (no Gitea)
+- Defaults: webhook `http://<host>:8080/webhook/gitea`; console (separate repo `code-review-console`) on :8081.
+- No bundled infrastructure — external dependencies (PG/Redis/Gitea) are provided by your environment/ops.
+
+### Local development (optional, macOS Colima+Homebrew or Docker)
+
+> ⚠️ The `dev/` scripts are for **local debugging only** — they pull up the full stack (PG/Redis/Colima/Gitea/engine). Not used in production.
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=default
+# Option A: macOS with Colima + Homebrew (one-click full stack)
+cp .env.example .env
+./dev/start-all.sh dev        # PG → Redis → Colima → Gitea → engine (:8080)
+./dev/status.sh
+./dev/stop-all.sh --all       # --all also stops the Colima VM
+
+# Option B: any machine with Docker — infra via compose, engine via maven
+cd dev && docker compose -f docker-compose.dev.yml up -d   # PG17+pgvector / Redis / Gitea
+cd .. && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ## Integrations
 
 ### Gitea (recommended for local)
 
-1. Start Gitea (see `scripts/start-all.sh`, container `gitea/gitea` on :3000).
+1. Start Gitea (see `dev/docker-compose.dev.yml` or `dev/start-all.sh`, container `gitea/gitea` on :3000).
 2. Create a token for the bot account (e.g. `reviewer`).
 3. In the repo → Settings → Webhooks, add `http://localhost:8080/webhook/gitea`, content type JSON, secret matching `gitea.webhook-secret`, events: **Pull Request**.
 4. Open a PR — the engine reviews it and posts the report automatically.

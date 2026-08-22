@@ -20,22 +20,40 @@ RAG 与三层记忆、4 级降级链等核心设计。
 - 多租户（团队）隔离：全局基线（`__global__`）+ 团队叠加，按 `teamId` 隔离自定义规则 / 知识 / 记忆 / 历史 / 反馈
 - 全链路追踪：基于 SLF4J MDC 的 `traceId` + LangChain4j `ChatModelListener`（LLM 请求/响应边界日志）
 
-## 快速开始（一键启动整套环境）
+## 快速开始
 
-整套环境包含 5 个组件：**PostgreSQL 17 + pgvector**（记忆存储）、**Redis**（消息队列）、  
-**Colima**（Docker 运行时）、**Gitea**（代码托管 + Webhook 触发）、**审查服务**（本应用）。
+### 标准部署（生产环境 / 独立服务）
+
+agent 是**独立服务**：打包后指向你已有的 PostgreSQL/Redis/Gitea，直接运行 jar 即可。
 
 ```bash
-cd code-review-agent
+# 1. 打包
+./mvnw -o package -DskipTests
 
-# 一键启动全部组件（已运行的自动跳过，可重复执行）
-./scripts/start-all.sh
+# 2. 配置（application.yml / 环境变量）：PG+pgvector、Redis、Gitea/GitLab 地址、
+#    tokenhub API key、review.lang、review.profile…… 见下方「关键配置」
 
-# 查看各组件运行状态
-./scripts/status.sh
+# 3. 运行服务
+java -jar target/code-review-agent-1.0.0.jar
+```
 
-# 一键停止（默认保留 Colima；加 --all 连虚拟机一起停）
-./scripts/stop-all.sh
+- 默认 Webhook：`http://<host>:8080/webhook/gitea`；控制台（独立仓库 `code-review-console`）:8081
+- **不捆绑任何基础设施**——PG/Redis/Gitea 由你的环境/运维提供
+
+### 本地开发调试（可选，macOS Colima+Homebrew 或 Docker）
+
+> ⚠️ `dev/` 下的脚本**仅用于本地开发调试**：一次性拉起 PG/Redis/Colima/Gitea/引擎全家桶。生产环境请勿使用。
+
+```bash
+# 方式 A：macOS（Colima + Homebrew）一键全家桶
+cp .env.example .env
+./dev/start-all.sh dev        # PG → Redis → Colima → Gitea → 引擎(:8080)
+./dev/status.sh
+./dev/stop-all.sh --all       # --all 连 Colima 虚拟机一起停
+
+# 方式 B：任意装 Docker 的机器 —— 基础设施用 compose，引擎用 maven 起
+cd dev && docker compose -f docker-compose.dev.yml up -d   # PG17+pgvector / Redis / Gitea
+cd .. && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 `start-all.sh` 会自动完成：
@@ -64,11 +82,11 @@ cd code-review-agent
 
 ```bash
 cd code-review-agent
-./scripts/start-all.sh     # 开机后跑一次，全部拉起
-./scripts/status.sh        # 随时确认状态
+./dev/start-all.sh     # 开机后跑一次，全部拉起
+./dev/status.sh        # 随时确认状态
 # ... 正常使用（提 PR → 自动审查）...
 # 不用时：
-./scripts/stop-all.sh      # 或 ./scripts/stop-all.sh --all 彻底关停
+./dev/stop-all.sh      # 或 ./dev/stop-all.sh --all 彻底关停
 ```
 
 ### 手动启动（可选，不走脚本）
@@ -189,7 +207,7 @@ docker exec -u git gitea gitea admin user generate-access-token --username revie
 ### 第二步：启动审查服务
 
 ```bash
-./scripts/start-all.sh    # 一键启动 Gitea + PostgreSQL + Redis + 审查服务
+./dev/start-all.sh    # 一键启动 Gitea + PostgreSQL + Redis + 审查服务
 ```
 
 或手动指定参数：
@@ -836,7 +854,7 @@ src/main/java/com/codereview/agent/
 ### 组件安装与说明
 
 三大基础设施均提供「生产 + 离线」双实现，通过 `application.yml` 一键切换，业务代码零改动。  
-日常启停直接用 `./scripts/start-all.sh` / `stop-all.sh` 即可，这里说明组件的安装来源与数据位置：
+日常启停直接用 `./dev/start-all.sh` / `stop-all.sh` 即可，这里说明组件的安装来源与数据位置：
 
 ```bash
 # 安装（仅首次，macOS Homebrew）
