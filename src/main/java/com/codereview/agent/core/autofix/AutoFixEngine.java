@@ -5,8 +5,12 @@ import com.codereview.agent.core.llm.aiservice.CodeReviewAiService;
 import com.codereview.agent.core.llm.aiservice.FixResultDto;
 import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.ReviewReport;
+import com.codereview.agent.core.tools.ToolExposure;
+import com.codereview.agent.core.tools.ToolGate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -35,6 +39,12 @@ public class AutoFixEngine {
 
     private final LlmClient llmClient;
     private final CodeReviewAiService aiService;
+    /** 运行模式（SUGGEST 默认；APPLY 需沙箱可用）。 */
+    private final AutoFixMode mode;
+    /** 隔离沙箱（只读工作区、禁外网）是否可用。 */
+    private final boolean sandboxAvailable;
+    /** 工具门控（可空：为 null 时 DEFERRED 一律拒绝，fail-closed）。 */
+    private final ToolGate toolGate;
 
     /** 确定性修复模板：ruleId -> (标题, 修复代码片段)。 */
     private static final Map<String, String[]> DETERMINISTIC = Map.ofEntries(
@@ -48,9 +58,98 @@ public class AutoFixEngine {
                     "// 已登记 ISSUE-xxx，移除临时 TODO"})
     );
 
+    /**
+     * 测试 / 独立构造（默认 SUGGEST 模式、无沙箱，fail-closed）。
+     */
     public AutoFixEngine(LlmClient llmClient, CodeReviewAiService aiService) {
+        this(llmClient, aiService, AutoFixMode.SUGGEST, false, null);
+    }
+
+    /**
+     * 测试构造（显式指定模式与沙箱可用性，无工具门控）。
+     */
+    public AutoFixEngine(LlmClient llmClient, CodeReviewAiService aiService,
+                         AutoFixMode mode, boolean sandboxAvailable) {
+        this(llmClient, aiService, mode, sandboxAvailable, null);
+    }
+
+    /**
+     * Spring 装配构造（模式 + 沙箱探测 + 工具门控）。
+     *
+     * @param llmClient         大模型客户端
+     * @param aiService        LangChain4j AiServices（可为 null → 回退文本路径）
+     * @param mode             运行模式（默认 SUGGEST）
+     * @param sandboxConfigured 显式配置的沙箱可用性（留空则走 {@link SandboxProbe} 探测）
+     * @param sandboxProbe     沙箱探测器（探测失败按不可用处理，fail-closed）
+     * @param toolGate         工具门控（DEFERRED 重工具默认拒绝，仅显式授权 / STRICT 放行）
+     */
+    @Autowired
+    public AutoFixEngine(LlmClient llmClient, CodeReviewAiService aiService,
+                         @Value("${review.autofix.mode:SUGGEST}") AutoFixMode mode,
+                         @Value("${review.autofix.sandbox-available:}") String sandboxConfigured,
+                         SandboxProbe sandboxProbe,
+                         ToolGate toolGate) {
+        this(llmClient, aiService, mode, resolveSandbox(sandboxConfigured, sandboxProbe), toolGate);
+    }
+
+    private AutoFixEngine(LlmClient llmClient, CodeReviewAiService aiService,
+                          AutoFixMode mode, boolean sandboxAvailable, ToolGate toolGate) {
         this.llmClient = llmClient;
         this.aiService = aiService;
+        this.mode = mode;
+        this.sandboxAvailable = sandboxAvailable;
+        this.toolGate = toolGate;
+        log.info("[自动修复] 初始化：mode={}, sandboxAvailable={}（fail-closed 边界已启用）",
+                mode, sandboxAvailable);
+    }
+
+    /** 解析沙箱可用性：显式配置优先，否则探测器探测，探测失败一律不可用（fail-closed）。 */
+    private static boolean resolveSandbox(String configured, SandboxProbe probe) {
+        if (configured != null && !configured.isBlank()) {
+            return Boolean.parseBoolean(configured);
+        }
+        if (probe != null) {
+            return probe.detect().available();
+        }
+        return false;
+    }
+
+    /**
+     * 当前运行模式。
+     */
+    public AutoFixMode getMode() {
+        return mode;
+    }
+
+    /**
+     * 是否允许实际应用（写入代码）修复。
+     *
+     * <p>对齐 fail-closed 不变量：{@code SUGGEST} 始终允许（不产生变更）；
+     * {@code APPLY} 仅在沙箱可用时允许，否则坚决拒绝。同时「实际写代码」属于
+     * DEFERRED 重工具，须经 {@link ToolGate} 放行（显式授权或 STRICT 强度）。
+     *
+     * @return true=允许应用
+     */
+    public boolean canApply() {
+        if (!AutoFixSafetyPolicy.isApplyAllowed(mode, sandboxAvailable)) {
+            return false;
+        }
+        if (toolGate != null && !toolGate.allows("autofix.apply", ToolExposure.DEFERRED)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 任何「实际写入代码」的修复路径都必须先经此守卫。
+     *
+     * @throws IllegalStateException 当前模式/沙箱状态不允许应用（fail-closed）
+     */
+    public void requireApplyAllowed() {
+        if (!canApply()) {
+            throw new IllegalStateException(
+                    "fail-closed：当前禁止应用修复（mode=" + mode + ", sandboxAvailable=" + sandboxAvailable + "）");
+        }
     }
 
     /**

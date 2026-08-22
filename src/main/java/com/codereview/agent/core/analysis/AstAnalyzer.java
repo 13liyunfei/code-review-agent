@@ -200,10 +200,14 @@ public final class AstAnalyzer {
         // 拼接当前行与上一行（签名可能折行）
         String ctx = (idx > 0 ? lines[idx - 1] : "") + " " + line;
         Matcher m = METHOD_SIG.matcher(ctx);
-        if (m.find()) {
-            return m.group(1);
+        // 取最后一个匹配：ctx 含上一行 + 当前行，若上一行也是一行式方法声明，
+        // 第一个匹配会错误命中上一行的方法名（本块由当前行 '{' 开启，签名应属于当前行）。
+        // 取最后匹配同时保留「签名折行」（签名在上一行、'{' 在当行）的场景。
+        String found = null;
+        while (m.find()) {
+            found = m.group(1);
         }
-        return null;
+        return found;
     }
 
     private static String matchType(String line, String[] lines, int idx) {

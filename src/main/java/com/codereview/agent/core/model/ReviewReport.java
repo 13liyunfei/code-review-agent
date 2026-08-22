@@ -70,6 +70,39 @@ public class ReviewReport {
                 arbitrationNotes, overriddenFindings, suppressedFindings, verification);
     }
 
+    /**
+     * 返回替换发现列表并重算分级统计的新报告（供 Profile 过滤等后处理使用）。
+     *
+     * @param newFindings 后处理后的发现列表
+     * @return 新报告（分级统计随之重算）
+     */
+    public ReviewReport withFindings(List<Finding> newFindings) {
+        return new ReviewReport(prId, repo, newFindings, countBySeverity(newFindings),
+                runId, reviewTimeMs, arbitrationNotes, overriddenFindings, suppressedFindings, verification);
+    }
+
+    /**
+     * 返回同时替换「发现 / 被抑制误报 / 被仲裁覆盖」三份列表的新报告（供权限收敛等后处理使用）。
+     *
+     * @param newFindings     最终发现
+     * @param newSuppressed   抑制后的误报
+     * @param newOverridden   仲裁覆盖（落败）列表
+     * @return 新报告
+     */
+    public ReviewReport withPostProcessing(List<Finding> newFindings,
+                                           List<Finding> newSuppressed,
+                                           List<Finding> newOverridden) {
+        return new ReviewReport(prId, repo, newFindings, countBySeverity(newFindings),
+                runId, reviewTimeMs, arbitrationNotes, newOverridden, newSuppressed, verification);
+    }
+
+    /** 按严重级别统计。 */
+    private static Map<Severity, Long> countBySeverity(List<Finding> findings) {
+        return findings.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        Finding::severity, java.util.stream.Collectors.counting()));
+    }
+
     public long getPrId() {
         return prId;
     }

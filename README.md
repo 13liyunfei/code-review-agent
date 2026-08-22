@@ -418,6 +418,67 @@ Coordinator 按固定优先级权重裁决，高优先级胜出，落败方进�
 - `GET /api/quality-report?range=week|all` 基于历史聚合输出周度 / 全量质量趋势 Markdown：审查次数、问题总数、  
   分级分布、高频规则 Top10、仓库分布、最近审查，供 Tech Lead 持续改进。
 
+### 5. 架构对标增强（deepseek-harness / openai codex 借鉴落地）
+
+> 对照两份外部 harness 源码（dsh 事件源 Session / codex RolloutItem 轨迹、context-fragments 按需注入、  
+> suspend/recover_turn 断点续跑、guardian-v2 fail-closed、intersect_permission_profiles 权限收敛、  
+> ToolExposures 工具分级、agent-team TeamMailbox 持久信箱、llm-replay 确定性回放）逐一落地，  
+> 全部为**可选增强**：不配置即与旧版行为完全一致，核心审查链路不受影响。
+
+**5.1 事件源审查轨迹（对齐 dsh `Session` / codex `RolloutItem`）**
+- `core/trajectory/`：`ReviewEvent`（不可变）+ `ReviewEventLog`（RCU 原子追加、不可变视图）+ `ReviewTrajectoryRecorder`；
+- 每次审查按 `runId` 记录 `review.started → context.diff-loaded → context.injected → agent.started → agent.completed → review.completed` 全链路事件；
+- 落盘 `data-dir/<teamId>/trajectories/<runId>.jsonl`（JSONL，追加式），失败仅告警不阻断审查；事件自带 traceId，与日志链路关联。
+
+**5.2 上下文影响面切片（对齐 codex `context-fragments`）**
+- `core/impact/ImpactAnalyzer` 复用 `AstAnalyzer` + `CallGraphAnalyzer`，计算「变更方法 → 上游调用方」传播链；
+- 影响面摘要经 `ReviewContext.impactSummary` 注入 5 个 Agent 的 prompt（模板新增「影响面」区块，缺失变量安全）；无影响面时返回空串，避免噪声；
+- 大 PR 只喂「改动方法 + 受影响调用方」，降 token、提聚焦度。
+
+**5.3 断点续跑（对齐 codex `suspend_turn_and_shutdown` + `recover_turn_if_idle`）**
+- `core/resume/`：`ResumeState`（已完成 Agent + 已产出发现）+ `FileResumeStore`（原子 JSON 落盘 `data-dir/<teamId>/resume/<runId>.json`）；
+- 同 `runId` 再次审查时自动恢复：**已完成的 Agent 不重跑**，只跑剩余 Agent，崩溃后长 PR 不重审；
+- 每完成一个 Agent 即保存断点，正常完成自动清理；轨迹含 `review.resumed` 事件便于审计。
+
+**5.4 审查强度 Profile（可热切换）**
+- `core/profile/ReviewProfile`：`STRICT`（保留 Minor+）/ `ADVISORY`（默认，只留 Major+）/ `SUGGEST`（全保留）；
+- 配置 `review.profile=STRICT|ADVISORY|SUGGEST`，作用于聚合去重/仲裁/抑制之后，CI 门禁用 STRICT、日常用 ADVISORY。
+
+**5.5 AutoFix fail-closed 安全边界 + 沙箱探测（对齐 dsh `SandboxUnavailableError` / codex `guardian-v2`）**
+- `core/autofix/`：`AutoFixMode`（SUGGEST/APPLY，默认 SUGGEST）+ `AutoFixSafetyPolicy`（APPLY 需沙箱可用，否则拒绝）+ `SandboxProbe`（探测 bwrap/firejail/sandbox-exec/docker，探测失败一律不可用）；
+- 任何实际写代码的路径必须先过 `canApply()/requireApplyAllowed()` 守卫，绝不在无隔离时静默应用。
+
+**5.6 权限收敛（对齐 codex `intersect_permission_profiles` 父不覆盖子）**
+- `core/permission/VetoPolicy`：**BLOCKER 级强否决不可被「误报抑制」或「仲裁覆盖」剔除**，自动回收回最终报告；
+- 保证「任一专家 Agent 的阻断级结论不会被总审查员宽松处理」。
+
+**5.7 工具分级门控（对齐 codex `ToolExposures` DIRECT/DEFERRED/CODE_MODE）**
+- `core/tools/`：`ToolExposure` + `ToolGate`——DEFERRED 重工具（全量编译、跑测试、AutoFix 写码）默认**拒绝**（fail-closed）；
+- 放行条件：`review.tools.deferred-enabled=true` 或当前 profile=STRICT；每次裁定记录调用统计（放行/拒绝计数），供审计。
+
+**5.8 持久化信箱委派（对齐 dsh `agent-team` `TeamMailbox`）**
+- `core/mailbox/TeamMailbox`：`send`（先落盘 QUEUED）→ `poll`（DELIVERED）→ `ack`（ACKED），崩溃后 `recoverFor` 重投未确认消息；
+- 落盘 `data-dir/<teamId>/mailbox/<to>.json`（原子写，重启自动恢复），为后续「主审委派子任务给专项 Agent」提供不丢、不重、有序的队列基础。
+
+**5.9 确定性回放评测（对齐 dsh `llm-replay` / codex `rollout`）**
+- `core/eval/ReviewReplay`：读取轨迹 JSONL 校验事件序列结构完整性（必须有 `review.started` 开头、`review.completed` 结尾、事件类型合法）；
+- 配合固定 fixture 可做回归评测：新版本审查器对同一 PR 的轨迹应保持合法且结论一致，从「能跑」到「可信」。
+
+**5.10 外部工具 SPI 插件化（对齐 codex `mcp_tool`）**
+- `core/tools/external/`：`ExternalToolProvider`（name/capabilities/invoke）+ `ExternalToolRegistry`（注册/按名路由/fail-fast 调用）；
+- MCP 等协议由 Provider 实现承载（文档见接口注释），引擎自身不强制引入 MCP SDK，保持离线可编译。
+
+**配置项汇总（均为可选）**
+
+| 配置项 | 默认 | 说明 |
+| ------ | ---- | ---- |
+| `review.profile` | `ADVISORY` | 审查强度：STRICT / ADVISORY / SUGGEST |
+| `review.tools.deferred-enabled` | `false` | 是否放行 DEFERRED 重工具（fail-closed 默认拒绝） |
+| `review.tools.code-mode-enabled` | `false` | 是否放行 CODE_MODE 工具 |
+| `review.autofix.mode` | `SUGGEST` | 自动修复模式：SUGGEST / APPLY |
+| `review.autofix.sandbox-available` | 空 | 显式指定沙箱可用性；留空则自动探测（bwrap/firejail/sandbox-exec/docker） |
+| `review.data-dir` | `./data` | 轨迹 / 断点 / 信箱 / 反馈 / 历史统一落盘根目录 |
+
 > 以上 4 类能力默认开启，无需额外配置；人工反馈与质量报告接口由 `review.api.enabled` 控制（`true` 默认开启），  
 > 生产环境建议配合网关鉴权暴露。
 
@@ -696,6 +757,15 @@ src/main/java/com/codereview/agent/
     ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG
     ├── llm/          # LlmClient / ModelGateway（多供应商路由+配额+failover）/ LangChain4jChatProvider / MockProvider / NoOpChatModel / LoggingChatModelListener / EmbeddingClient / aiservice/（CodeReviewAiService 结构化输出 + ChatMemory）
     ├── trace/        # TraceContext（SLF4J MDC traceId，跨线程 wrap 传播，全链路追踪）
+    ├── trajectory/   # ReviewEvent / ReviewEventLog / ReviewTrajectoryRecorder（事件源审查轨迹，JSONL 落盘）
+    ├── impact/       # ImpactAnalyzer（上下文影响面切片：变更方法 → 上游调用方，注入 Agent prompt）
+    ├── resume/       # ResumeState / FileResumeStore（断点续跑：崩溃后同 runId 只重跑剩余 Agent）
+    ├── profile/      # ReviewProfile（审查强度 STRICT/ADVISORY/SUGGEST 热切换）
+    ├── permission/   # VetoPolicy（权限收敛：BLOCKER 免于误报抑制 / 仲裁覆盖）
+    ├── tools/        # ToolGate / ToolExposure（工具分级门控）+ external/（ExternalToolProvider SPI 插件化）
+    ├── mailbox/      # TeamMailbox（持久化信箱：send/poll/ack/recoverFor 崩溃重投）
+    ├── eval/         # ReviewReplay（轨迹确定性回放评测）
+    ├── enhance/      # ReviewEnhancements（Coordinator 可选增强能力聚合入口）
     ├── report/       # ReportGenerator（去重/优先级仲裁/误报抑制/定档）+ ArbitrationPolicy + QualityTrendReporter + VerificationResult
     ├── feedback/     # FeedbackStore 接口 + 文件/内存实现（误报反馈闭环）
     ├── history/      # ReviewHistoryStore 接口 + 历史记录（修复后复检 / 质量趋势）
@@ -737,6 +807,16 @@ src/main/java/com/codereview/agent/
 | 人机协作工作流（BLOCKER 强审批）          | `workflow/ReviewWorkflowEngine` + `GiteaApiClient`             |
 | SCA 依赖漏洞（CVE/SBOM）                 | `analysis/ScaScanner`（CycloneDX-lite SBOM）                   |
 | IDE LSP 接口（实时诊断/Quick Fix）        | `ide/IdeReviewServer`（JSON-RPC over stdio）                    |
+| 事件源审查轨迹（审计/回放）              | `trajectory/*`（JSONL 落盘 `data-dir/<teamId>/trajectories/`） |
+| 上下文影响面切片（按需注入）            | `impact/ImpactAnalyzer` + `ReviewContext.impactSummary` + prompt 模板 |
+| 断点续跑（长 PR 崩溃恢复）              | `resume/FileResumeStore`（同 runId 只重跑剩余 Agent）          |
+| 审查强度热切换（STRICT/ADVISORY/SUGGEST） | `profile/ReviewProfile` + `review.profile`                    |
+| AutoFix fail-closed + 沙箱探测           | `autofix/AutoFixSafetyPolicy` + `SandboxProbe` + `ToolGate`   |
+| 权限收敛（BLOCKER 免于抑制/覆盖）        | `permission/VetoPolicy`                                        |
+| 工具分级门控（DEFERRED 默认拒绝）        | `tools/ToolGate` + `ToolExposure` + `review.tools.*`           |
+| 持久化信箱（多 Agent 委派不丢不重）      | `mailbox/TeamMailbox`（send/poll/ack/recoverFor）              |
+| 确定性回放评测（轨迹回归）              | `eval/ReviewReplay`                                            |
+| 外部工具 SPI（MCP 等插件化接入点）       | `tools/external/ExternalToolProvider` + `ExternalToolRegistry` |
 | 多租户（团队）隔离（全局基线+团队叠加）     | `tenant/*`（Teams/TeamProperties/TeamResolver）+ `review.teams.*` + 控制台 `X-Team-Id` + PG `team_id` |
 | 全链路追踪（可观测性）                   | `core/trace/TraceContext`（MDC traceId 跨线程传播）+ `core/llm/LoggingChatModelListener`（LLM 边界日志） |
 

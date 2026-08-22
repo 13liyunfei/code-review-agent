@@ -3,11 +3,21 @@ package com.codereview.agent.core.coordinator.impl;
 import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
 import com.codereview.agent.core.coordinator.Coordinator;
+import com.codereview.agent.core.enhance.ReviewEnhancements;
+import com.codereview.agent.core.impact.ImpactAnalyzer;
+import com.codereview.agent.core.permission.VetoPolicy;
+import com.codereview.agent.core.profile.ReviewProfile;
+import com.codereview.agent.core.resume.FileResumeStore;
+import com.codereview.agent.core.resume.ResumeState;
+import com.codereview.agent.core.tools.ToolGate;
+import com.codereview.agent.core.trajectory.ReviewEvent;
+import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;
 import com.codereview.agent.core.feedback.FeedbackStore;
 import com.codereview.agent.core.history.FindingSummary;
 import com.codereview.agent.core.history.ReviewHistoryEntry;
 import com.codereview.agent.core.history.ReviewHistoryStore;
 import com.codereview.agent.core.model.AgentResult;
+import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
 import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.PullRequest;
@@ -22,9 +32,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -51,28 +64,77 @@ public class CompletableFutureCoordinator implements Coordinator {
     @Value("${review.agent.timeout-ms:300000}")
     private long timeoutMillis;
 
+    /** 审查强度 Profile（默认 ADVISORY：只保留 Major 及以上）。 */
+    @Value("${review.profile:ADVISORY}")
+    private String profileConfig;
+
     private final List<ReviewAgent> agents;
     private final ReportGenerator reportGenerator;
     private final FeedbackStore feedbackStore;
     private final ReviewHistoryStore historyStore;
     private final AdvancedAnalyzer advancedAnalyzer;
     private final Executor agentExecutor;
+    /** 影响面分析器（可空：为 null 时跳过影响面注入）。 */
+    private final ImpactAnalyzer impactAnalyzer;
+    /** 审查轨迹记录器（可空：为 null 时不记录轨迹，零侵入）。 */
+    private final ReviewTrajectoryRecorder recorder;
+    /** 断点续跑存储（P0-③，可空）。 */
+    private final FileResumeStore resumeStore;
+    /** 权限收敛：BLOCKER 免于抑制/覆盖（P1-⑥，可空）。 */
+    private final VetoPolicy vetoPolicy;
+    /** 工具分级门控（P1-⑦，可空）。 */
+    private final ToolGate toolGate;
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
                                        AdvancedAnalyzer advancedAnalyzer) {
-        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, ForkJoinPool.commonPool());
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer,
+                ForkJoinPool.commonPool(), null, null, ReviewEnhancements.none());
     }
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
                                        AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor) {
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer,
+                agentExecutor, null, null, ReviewEnhancements.none());
+    }
+
+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder) {
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer,
+                agentExecutor, impactAnalyzer, recorder, ReviewEnhancements.none());
+    }
+
+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
+                                       ReviewEnhancements enhancements) {
         this.agents = agents;
         this.reportGenerator = reportGenerator;
         this.feedbackStore = feedbackStore;
         this.historyStore = historyStore;
         this.advancedAnalyzer = advancedAnalyzer;
         this.agentExecutor = agentExecutor;
+        this.impactAnalyzer = impactAnalyzer;
+        this.recorder = recorder;
+        this.resumeStore = enhancements == null ? null : enhancements.resumeStore();
+        this.vetoPolicy = enhancements == null ? null : enhancements.vetoPolicy();
+        this.toolGate = enhancements == null ? null : enhancements.toolGate();
+    }
+
+    /** 生效的审查强度 Profile（未配置 / 非法时回退 ADVISORY）。 */
+    private ReviewProfile effectiveProfile() {
+        if (profileConfig == null || profileConfig.isBlank()) {
+            return ReviewProfile.ADVISORY;
+        }
+        try {
+            return ReviewProfile.valueOf(profileConfig.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return ReviewProfile.ADVISORY;
+        }
     }
 
     @Override
@@ -87,16 +149,63 @@ public class CompletableFutureCoordinator implements Coordinator {
         log.info("[Coordinator] 开始审查 PR#{}（仓库={}，团队={}，Agent 数={}，runId={}）",
                 pr.id(), pr.repo(), teamId, agents.size(), runId);
 
+        // 审查轨迹：开启会话并记录「审查开始」事件（事件源不变量：模型可见即可追溯）
+        if (recorder != null) {
+            recorder.begin(runId, teamId);
+            recorder.append(runId, "review.started", Map.of(
+                    "prId", pr.id(), "repo", pr.repo(), "teamId", teamId, "agentCount", agents.size()));
+            // 模型输入规模登记：diff 构成（文件数 / 行数 / 语言），保证「喂给模型的输入可追溯」
+            int added = diffs.stream().mapToInt(CodeDiff::addedLines).sum();
+            int del = diffs.stream().mapToInt(CodeDiff::delLines).sum();
+            long javaFiles = diffs.stream().filter(d -> "java".equals(d.language())).count();
+            recorder.append(runId, "context.diff-loaded", Map.of(
+                    "files", diffs.size(), "addedLines", added, "delLines", del, "javaFiles", javaFiles));
+        }
+
+        // 断点续跑（对齐 codex suspend/recover）：同 runId 已有未完成审查 → 恢复已完成 Agent，只重跑剩余
+        List<ReviewAgent> pendingAgents = agents;
+        List<AgentResult> resumedResults = new ArrayList<>();
+        if (resumeStore != null) {
+            Optional<ResumeState> prev = resumeStore.load(runId, teamId);
+            if (prev.isPresent()) {
+                ResumeState rs = prev.get();
+                Set<AgentType> done = rs.doneAgents();
+                pendingAgents = agents.stream()
+                        .filter(a -> !done.contains(a.getType()))
+                        .toList();
+                Map<AgentType, List<Finding>> byType = rs.findings().stream()
+                        .collect(Collectors.groupingBy(Finding::agentType));
+                byType.forEach((t, fs) -> resumedResults.add(new AgentResult(pr.id(), t, fs)));
+                log.info("[Coordinator] 检测到断点（runId={}），恢复续跑：已完成 {} 个 Agent，剩余 {} 个",
+                        runId, done.size(), pendingAgents.size());
+                if (recorder != null) {
+                    recorder.append(runId, "review.resumed", Map.of(
+                            "doneAgents", done.size(), "pendingAgents", pendingAgents.size()));
+                }
+            }
+        }
+
+        // 上下文影响面切片：计算变更方法的上游调用方，注入 Agent 提示词（对齐 codex context-fragments）
+        String impactSummary = (impactAnalyzer != null) ? impactAnalyzer.summarize(diffs) : "";
+        ReviewContext enrichedCtx = ctx.withImpactSummary(impactSummary);
+        if (recorder != null && !impactSummary.isBlank()) {
+            recorder.append(runId, "context.injected", Map.of(
+                    "type", "impact-surface", "summaryLength", impactSummary.length()));
+        }
+
         // 上一轮审查记录（用于复检验证）
         ReviewHistoryEntry previous = historyStore == null ? null
                 : historyStore.getLatest(teamId, pr.repo() + "#" + pr.id()).orElse(null);
 
         // 1. 为每个 Agent 创建 Future，并行审查（TraceContext.wrap 保证 traceId 跨线程传播）
-        List<CompletableFuture<AgentResult>> futures = agents.stream()
+        List<CompletableFuture<AgentResult>> futures = pendingAgents.stream()
                 .map(agent -> CompletableFuture.supplyAsync(TraceContext.wrap(() -> {
                     long a0 = System.currentTimeMillis();
+                    if (recorder != null) {
+                        recorder.append(runId, "agent.started", Map.of("agentType", agent.getType().name()));
+                    }
                     log.info("[Coordinator] 子Agent[{}] 开始审查（并行执行）", agent.getType());
-                    List<Finding> findings = agent.review(diffs, ctx);
+                    List<Finding> findings = agent.review(diffs, enrichedCtx);
                     log.info("[Coordinator] 子Agent[{}] 完成：发现 {} 条，耗时 {}ms",
                             agent.getType(), findings.size(), System.currentTimeMillis() - a0);
                     return new AgentResult(pr.id(), agent.getType(), findings);
@@ -126,15 +235,19 @@ public class CompletableFutureCoordinator implements Coordinator {
                     }
                 });
 
-        // 3. 收集结果（个别失败 / 超时以空结果占位，保证整体可用）
-        List<AgentResult> results = new ArrayList<>();
+        // 3. 收集结果（个别失败 / 超时以空结果占位，保证整体可用）；每个 Agent 完成即保存断点
+        List<AgentResult> mainResults = new ArrayList<>();
         for (CompletableFuture<AgentResult> future : futures) {
             try {
-                results.add(future.join());
+                mainResults.add(future.join());
+                saveCheckpoint(runId, pr, teamId, resumedResults, mainResults);
             } catch (Exception e) {
                 log.warn("[Coordinator] 单个 Agent 执行失败，已跳过：{}", e.getMessage());
             }
         }
+        List<AgentResult> results = new ArrayList<>(resumedResults);
+        results.addAll(mainResults);
+
         // 3.1 收集高级分析结果
         if (advancedFuture != null) {
             try {
@@ -144,11 +257,30 @@ public class CompletableFutureCoordinator implements Coordinator {
             }
         }
 
+        // 审查轨迹：记录各 Agent 完成事件（类型 + 发现数，便于事后回放/审计）
+        if (recorder != null) {
+            for (AgentResult r : results) {
+                recorder.append(runId, "agent.completed", Map.of(
+                        "agentType", r.agentType().name(), "findingCount", r.findings().size()));
+            }
+        }
+
         long durationMs = System.currentTimeMillis() - start;
 
         // 4. 汇聚、去重、优先级仲裁、误报抑制、定档
         ReviewReport report = reportGenerator.aggregate(
                 pr.id(), pr.repo(), results, feedbackStore, runId, durationMs, teamId);
+
+        // 4.1 权限收敛（P1-⑥）：BLOCKER 级强否决不可被误报抑制 / 仲裁覆盖（父不覆盖子）
+        if (vetoPolicy != null) {
+            report = vetoPolicy.apply(report);
+        }
+
+        // 4.2 审查强度 Profile（P1-④）：按 STRICT/ADVISORY/SUGGEST 过滤最终对外发现
+        ReviewProfile profile = effectiveProfile();
+        if (profile != ReviewProfile.SUGGEST) {
+            report = report.withFindings(profile.apply(report.getFindings()));
+        }
 
         // 5. 复检验证（与上一轮对比已解决 / 未解决 / 新引入）
         VerificationResult verification = computeVerification(previous, report.getFindings());
@@ -161,12 +293,47 @@ public class CompletableFutureCoordinator implements Coordinator {
                     toSummaries(report.getFindings())));
         }
 
-        log.info("[Coordinator] PR#{} 审查完成（runId={}）：最终 {} 条，抑制误报 {} 条，仲裁覆盖 {} 条，" +
+        // 6.1 正常完成 → 清理断点（不留脏状态）
+        if (resumeStore != null) {
+            resumeStore.complete(runId, teamId);
+        }
+
+        log.info("[Coordinator] PR#{} 审查完成（runId={}，profile={}）：最终 {} 条，抑制误报 {} 条，仲裁覆盖 {} 条，" +
                         "复检已解决 {} 条 / 未解决 {} 条 / 新引入 {} 条",
-                pr.id(), runId, report.getFindings().size(), report.getSuppressedFindings().size(),
+                pr.id(), runId, profile, report.getFindings().size(), report.getSuppressedFindings().size(),
                 report.getOverriddenFindings().size(), verification.resolvedCount(),
                 verification.unresolvedCount(), verification.introducedCount());
+
+        // 审查轨迹：记录「审查结束」并落盘（若 recorder 可用）
+        if (recorder != null) {
+            recorder.append(runId, "review.completed", Map.of(
+                    "totalFindings", report.getFindings().size(), "durationMs", durationMs));
+            recorder.close(runId);
+        }
         return report;
+    }
+
+    /**
+     * 保存断点快照：已完成 Agent 类型 + 已产出发现（供崩溃后同 runId 续跑）。
+     * 仅统计主审查 Agent（高级静态分析每次重跑，不参与断点）。
+     */
+    private void saveCheckpoint(String runId, PullRequest pr, String teamId,
+                                List<AgentResult> resumed, List<AgentResult> mainResults) {
+        if (resumeStore == null) {
+            return;
+        }
+        Set<AgentType> done = new HashSet<>();
+        List<Finding> findings = new ArrayList<>();
+        for (AgentResult r : resumed) {
+            done.add(r.agentType());
+            findings.addAll(r.findings());
+        }
+        for (AgentResult r : mainResults) {
+            done.add(r.agentType());
+            findings.addAll(r.findings());
+        }
+        resumeStore.save(new ResumeState(runId, pr.id(), pr.repo(), teamId, done, findings,
+                System.currentTimeMillis()));
     }
 
     /**

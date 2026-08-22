@@ -51,6 +51,8 @@ public final class CallGraphAnalyzer {
                     }
                 }
             }
+            // 声明语句（如 "void m() {"）会被 CALL 正则误记为自调用，方法自身不是上游调用方，剔除。
+            visited.remove(method);
             return visited;
         }
     }

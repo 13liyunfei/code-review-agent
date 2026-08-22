@@ -367,8 +367,11 @@ public class ReviewAgentConfig {
     public Coordinator coordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                   FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
                                   AdvancedAnalyzer advancedAnalyzer,
-                                  @org.springframework.beans.factory.annotation.Qualifier("agentExecutor") Executor agentExecutor) {
+                                  @org.springframework.beans.factory.annotation.Qualifier("agentExecutor") Executor agentExecutor,
+                                  com.codereview.agent.core.impact.ImpactAnalyzer impactAnalyzer,
+                                  com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder trajectoryRecorder,
+                                  com.codereview.agent.core.enhance.ReviewEnhancements enhancements) {
         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
-                historyStore, advancedAnalyzer, agentExecutor);
+                historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder, enhancements);
     }
 }

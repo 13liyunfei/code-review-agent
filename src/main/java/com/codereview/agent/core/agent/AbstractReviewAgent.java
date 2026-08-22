@@ -159,6 +159,7 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
         vars.put("author", ctx.author());
         vars.put("changedFiles", ctx.changedFiles());
         vars.put("diffs", formatDiffs(diffs));
+        vars.put("impactSummary", ctx.impactSummary() == null ? "" : ctx.impactSummary());
         vars.put("prId", ctx.prId());
         return vars;
     }
