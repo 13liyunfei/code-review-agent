@@ -790,4 +790,4 @@ brew install postgresql@17 pgvector redis colima docker
 
 ## License
 
-本项目以 [MIT 协议](LICENSE) 开源。© 2026 code-review-agent contributors。
+本项目以 [MIT 协议](LICENSE) 开源。© 2026 13liyunfei。
