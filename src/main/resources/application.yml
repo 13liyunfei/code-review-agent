@@ -86,6 +86,8 @@ redis:
 
 # ===== 审查调度配置 =====
 review:
+  # 对外文案语言（zh=中文默认 / en=English），作用于审查报告/修复建议/质量报告等开发者可见输出
+  lang: ${REVIEW_LANG:zh}
   # 生产级并发边界，避免任务无限堆积到 JVM
   concurrency:
     webhook-threads: ${REVIEW_WEBHOOK_THREADS:8}

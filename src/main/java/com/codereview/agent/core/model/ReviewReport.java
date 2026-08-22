@@ -146,45 +146,48 @@ public class ReviewReport {
     /**
      * 渲染为 Markdown 文本，便于直接发布到 PR 评论。
      *
+     * <p>文案经 {@code i18n/messages*.properties} 国际化，语言由 {@code review.lang=zh|en} 控制
+     * （见 {@link com.codereview.agent.core.i18n.ReviewMessages}）。
+     *
      * @return Markdown 格式报告
      */
     public String toMarkdown() {
         StringBuilder sb = new StringBuilder();
-        sb.append("# 🤖 多 Agent 协同代码审查报告\n\n");
-        sb.append("- **仓库**：").append(repo).append('\n');
-        sb.append("- **PR**：#").append(prId).append('\n');
+        sb.append("# 🤖 ").append(msg("report.title")).append("\n\n");
+        sb.append("- **").append(msg("report.repo")).append("**：").append(repo).append('\n');
+        sb.append("- **").append(msg("report.pr")).append("**：#").append(prId).append('\n');
         if (runId != null && !runId.isBlank()) {
-            sb.append("- **运行 ID**：`").append(runId).append("`\n");
+            sb.append("- **").append(msg("report.runId")).append("**：`").append(runId).append("`\n");
         }
-        sb.append("- **发现问题总数**：").append(findings.size()).append('\n');
+        sb.append("- **").append(msg("report.totalFindings")).append("**：").append(findings.size()).append('\n');
         if (reviewTimeMs > 0) {
-            sb.append("- **审查耗时**：").append(reviewTimeMs).append(" ms\n");
+            sb.append("- **").append(msg("report.duration")).append("**：").append(reviewTimeMs).append(" ms\n");
         }
-        sb.append("- **分级统计**：")
-                .append("🔴 Blocker ").append(severityCount.getOrDefault(Severity.BLOCKER, 0L))
-                .append("，🟠 Major ").append(severityCount.getOrDefault(Severity.MAJOR, 0L))
-                .append("，🟡 Minor ").append(severityCount.getOrDefault(Severity.MINOR, 0L))
-                .append("，🔵 Info ").append(severityCount.getOrDefault(Severity.INFO, 0L))
+        sb.append("- **").append(msg("report.severityStats")).append("**：")
+                .append("🔴 ").append(msg("report.severity.blocker")).append(" ").append(severityCount.getOrDefault(Severity.BLOCKER, 0L))
+                .append("，🟠 ").append(msg("report.severity.major")).append(" ").append(severityCount.getOrDefault(Severity.MAJOR, 0L))
+                .append("，🟡 ").append(msg("report.severity.minor")).append(" ").append(severityCount.getOrDefault(Severity.MINOR, 0L))
+                .append("，🔵 ").append(msg("report.severity.info")).append(" ").append(severityCount.getOrDefault(Severity.INFO, 0L))
                 .append("\n\n");
 
         // 复检验证区块
         if (verification != null && verification.reCheck()) {
-            sb.append("## 🔁 修复复检（与上次审查对比）\n\n");
-            sb.append("- ✅ 已解决：").append(verification.resolvedCount()).append('\n');
-            sb.append("- ⏳ 未解决：").append(verification.unresolvedCount()).append('\n');
-            sb.append("- 🆕 新引入：").append(verification.introducedCount()).append("\n\n");
+            sb.append("## 🔁 ").append(msg("report.recheck.title")).append("\n\n");
+            sb.append("- ✅ ").append(msg("report.recheck.resolved")).append("：").append(verification.resolvedCount()).append('\n');
+            sb.append("- ⏳ ").append(msg("report.recheck.unresolved")).append("：").append(verification.unresolvedCount()).append('\n');
+            sb.append("- 🆕 ").append(msg("report.recheck.introduced")).append("：").append(verification.introducedCount()).append("\n\n");
             if (!verification.resolvedItems().isEmpty()) {
-                sb.append("**已解决项**：\n");
+                sb.append("**").append(msg("report.recheck.resolvedItems")).append("**：\n");
                 verification.resolvedItems().forEach(i -> sb.append("- ").append(i).append('\n'));
                 sb.append('\n');
             }
             if (!verification.unresolvedItems().isEmpty()) {
-                sb.append("**未解决项**：\n");
+                sb.append("**").append(msg("report.recheck.unresolvedItems")).append("**：\n");
                 verification.unresolvedItems().forEach(i -> sb.append("- ").append(i).append('\n'));
                 sb.append('\n');
             }
             if (!verification.introducedItems().isEmpty()) {
-                sb.append("**新引入项**：\n");
+                sb.append("**").append(msg("report.recheck.introducedItems")).append("**：\n");
                 verification.introducedItems().forEach(i -> sb.append("- ").append(i).append('\n'));
                 sb.append('\n');
             }
@@ -192,8 +195,8 @@ public class ReviewReport {
 
         // 冲突仲裁区块
         if (overriddenFindings != null && !overriddenFindings.isEmpty()) {
-            sb.append("## ⚖️ 冲突仲裁（").append(overriddenFindings.size())
-                    .append(" 项按优先级裁决）\n\n");
+            sb.append("## ⚖️ ").append(msg("report.arbitration.title", overriddenFindings.size()))
+                    .append("\n\n");
             if (arbitrationNotes != null) {
                 arbitrationNotes.forEach(n -> sb.append("- ").append(n).append('\n'));
             }
@@ -202,15 +205,15 @@ public class ReviewReport {
 
         // 误报抑制区块
         if (suppressedFindings != null && !suppressedFindings.isEmpty()) {
-            sb.append("## 🚫 已抑制误报（").append(suppressedFindings.size())
-                    .append(" 项，依据开发者反馈）\n\n");
+            sb.append("## 🚫 ").append(msg("report.suppressed.title", suppressedFindings.size()))
+                    .append("\n\n");
             for (Finding f : suppressedFindings) {
                 sb.append("- [").append(f.ruleId()).append("] ").append(f.title())
                         .append("（").append(f.file());
                 if (f.lineStart() > 0) {
                     sb.append(":L").append(f.lineStart());
                 }
-                sb.append("，来源 ").append(f.agentType().getDisplayName()).append("）\n");
+                sb.append("，").append(msg("report.source")).append(" ").append(agentName(f.agentType())).append("）\n");
             }
             sb.append("\n");
         }
@@ -223,22 +226,42 @@ public class ReviewReport {
             if (group.isEmpty()) {
                 continue;
             }
-            sb.append("## ").append(severity).append(" 级问题（").append(group.size()).append("）\n\n");
+            sb.append("## ").append(severityName(severity)).append("（").append(group.size()).append("）\n\n");
             for (Finding f : group) {
                 sb.append("### [").append(f.ruleId()).append("] ").append(f.title()).append('\n');
-                sb.append("- **文件**：`").append(f.file()).append("`")
+                sb.append("- **").append(msg("report.file")).append("**：`").append(f.file()).append("`")
                         .append(" (L").append(f.lineStart());
                 if (f.lineEnd() != f.lineStart()) {
                     sb.append("-").append(f.lineEnd());
                 }
                 sb.append(")\n");
-                sb.append("- **审查方**：").append(f.agentType().getDisplayName())
-                        .append("（来源 ").append(f.source()).append("，置信度 ")
+                sb.append("- **").append(msg("report.reviewer")).append("**：").append(agentName(f.agentType()))
+                        .append("（").append(msg("report.source")).append(" ").append(f.source()).append("，")
+                        .append(msg("report.confidence")).append(" ")
                         .append(String.format("%.2f", f.confidence())).append("）\n");
-                sb.append("- **描述**：").append(f.description()).append('\n');
-                sb.append("- **建议**：").append(f.suggestion()).append("\n\n");
+                sb.append("- **").append(msg("report.description")).append("**：").append(f.description()).append('\n');
+                sb.append("- **").append(msg("report.suggestion")).append("**：").append(f.suggestion()).append("\n\n");
             }
         }
         return sb.toString();
+    }
+
+    /** 本地化 Agent 显示名（英文枚举名 → 按语言解析）。 */
+    private static String agentName(AgentType agentType) {
+        return msg("agent.type." + agentType.name());
+    }
+
+    /** 本地化严重级别显示名。 */
+    private static String severityName(Severity severity) {
+        return switch (severity) {
+            case BLOCKER -> msg("severity.BLOCKER");
+            case MAJOR -> msg("severity.MAJOR");
+            case MINOR -> msg("severity.MINOR");
+            case INFO -> msg("severity.INFO");
+        };
+    }
+
+    private static String msg(String key, Object... args) {
+        return com.codereview.agent.core.i18n.ReviewMessages.get(key, args);
     }
 }

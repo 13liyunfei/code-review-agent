@@ -348,6 +348,19 @@ public class ReviewAgentConfig {
     }
 
     /**
+     * 对外文案国际化消息源（i18n/messages*.properties，中文默认 + 英文）。
+     * 语言由 {@code review.lang=zh|en} 控制，见 {@link com.codereview.agent.core.i18n.ReviewMessages}。
+     */
+    @Bean
+    public org.springframework.context.MessageSource messageSource() {
+        org.springframework.context.support.ResourceBundleMessageSource ms =
+                new org.springframework.context.support.ResourceBundleMessageSource();
+        ms.setBasename("i18n/messages");
+        ms.setDefaultEncoding("UTF-8");
+        return ms;
+    }
+
+    /**
      * 反馈存储（误报反馈闭环）：默认基于本地 JSON 文件持久化，目录不可用时回退内存。
      */
     @Bean

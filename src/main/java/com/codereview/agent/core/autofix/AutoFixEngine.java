@@ -46,15 +46,15 @@ public class AutoFixEngine {
     /** 工具门控（可空：为 null 时 DEFERRED 一律拒绝，fail-closed）。 */
     private final ToolGate toolGate;
 
-    /** 确定性修复模板：ruleId -> (标题, 修复代码片段)。 */
+    /** 确定性修复模板：ruleId -> (i18n key, 修复代码片段)。 */
     private static final Map<String, String[]> DETERMINISTIC = Map.ofEntries(
-            Map.entry("LOGIC-002", new String[]{"替换 printStackTrace 为日志框架",
+            Map.entry("LOGIC-002", new String[]{"autofix.fix.log2logger",
                     "log.error(\"xxx 发生异常\", e);"}),
-            Map.entry("LOGIC-003", new String[]{"替换 System.out 为日志框架",
+            Map.entry("LOGIC-003", new String[]{"autofix.fix.sysout2logger",
                     "log.info(\"{}\", value);"}),
-            Map.entry("PERF-001", new String[]{"显式列出查询字段",
+            Map.entry("PERF-001", new String[]{"autofix.fix.explicitColumns",
                     "SELECT id, name, status FROM orders WHERE id = ?"}),
-            Map.entry("STYLE-002", new String[]{"登记 TODO 到任务系统并移除遗留标记",
+            Map.entry("STYLE-002", new String[]{"autofix.fix.todo2issue",
                     "// 已登记 ISSUE-xxx，移除临时 TODO"})
     );
 
@@ -177,13 +177,14 @@ public class AutoFixEngine {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("\n## 🛠️ 自动修复建议\n\n");
-        sb.append("> 下列修复已同步为 PR 行内评论，可直接在代码旁点「应用建议」一键采纳。\n\n");
+        sb.append("\n## ").append(com.codereview.agent.core.i18n.ReviewMessages.get("autofix.title")).append("\n\n");
+        sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get("autofix.hint")).append("\n\n");
         int count = 0;
         for (FixItem it : items) {
             count++;
             sb.append(String.format("### %d. %s\n", count, it.label()));
-            sb.append(String.format("> 文件 `%s` 第 %d 行 · 规则 `%s`\n\n", it.file(), it.line(), it.ruleId()));
+            sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get(
+                    "autofix.itemFile", it.file(), it.line(), it.ruleId())).append("\n\n");
             sb.append("```suggestion\n").append(it.snippet()).append("\n```\n\n");
         }
         return sb.toString();
@@ -206,10 +207,10 @@ public class AutoFixEngine {
             String label;
             String snippet;
             if (fix != null) {
-                label = fix[0];
+                label = com.codereview.agent.core.i18n.ReviewMessages.get(fix[0]);
                 snippet = fix[1];
             } else {
-                label = "由大模型生成针对性修复（" + f.ruleId() + "）";
+                label = com.codereview.agent.core.i18n.ReviewMessages.get("autofix.llmLabel", f.ruleId());
                 snippet = llmFix(f);
             }
             if (snippet == null || snippet.isBlank()) {

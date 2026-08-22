@@ -173,9 +173,10 @@ public class GiteaReviewService {
             sb.append(workflow);
         }
         sb.append("\n---\n");
-        sb.append("> 🤖 本报告由多 Agent 协同代码审查系统自动生成（");
-        sb.append("逻辑 / 安全 / 性能 / 风格 / 架构 五 Agent + AST/调用图/SCA 高级分析 + 混元 LLM）\n");
-        sb.append("> 源分支 `").append(sourceBranch).append("` → 目标分支 `").append(targetBranch).append("`\n");
+        sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get("gitea.generatedBy"));
+        sb.append(com.codereview.agent.core.i18n.ReviewMessages.get("gitea.generatedByDetail")).append("\n");
+        sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get(
+                "gitea.branchFlow", sourceBranch, targetBranch)).append("\n");
         return sb.toString();
     }
 
@@ -183,8 +184,8 @@ public class GiteaReviewService {
      * 当审查无法正常执行时，在 PR 上发布一条跳过说明。
      */
     private void postSkipNote(String owner, String repo, long prNum, String reason) {
-        String body = "⚠️ **代码审查被跳过**\n\n" + reason
-                + "\n\n> 如需手动触发审查，请检查系统配置或联系管理员。";
+        String body = com.codereview.agent.core.i18n.ReviewMessages.get("gitea.skipTitle") + "\n\n" + reason
+                + "\n\n" + com.codereview.agent.core.i18n.ReviewMessages.get("gitea.skipFooter");
         giteaClient.postPrComment(owner, repo, prNum, body);
     }
 }

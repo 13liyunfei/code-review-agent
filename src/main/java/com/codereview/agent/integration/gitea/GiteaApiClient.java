@@ -180,7 +180,7 @@ public class GiteaApiClient {
             }
             ObjectNode payload = MAPPER.createObjectNode();
             payload.put("commit_id", sha);
-            payload.put("body", "🤖 由多 Agent 协同代码审查系统自动提交的评审建议");
+            payload.put("body", com.codereview.agent.core.i18n.ReviewMessages.get("gitea.reviewTitle"));
             payload.put("event", "COMMENT");
             payload.set("comments", comments);
 

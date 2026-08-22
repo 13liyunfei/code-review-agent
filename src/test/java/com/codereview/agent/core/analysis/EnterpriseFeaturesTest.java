@@ -32,6 +32,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class EnterpriseFeaturesTest {
 
+    /** 注入中文消息源，使 AutoFix/报告等对外文案按中文解析（i18n 后测试需真实 MessageSource）。 */
+    @org.junit.jupiter.api.BeforeEach
+    void injectMessages() {
+        org.springframework.context.support.ResourceBundleMessageSource ms =
+                new org.springframework.context.support.ResourceBundleMessageSource();
+        ms.setBasename("i18n/messages");
+        ms.setDefaultEncoding("UTF-8");
+        new com.codereview.agent.core.i18n.ReviewMessages("zh", ms);
+    }
+
     private static CodeDiff javaDiff(String fileName, String body) {
         StringBuilder sb = new StringBuilder();
         sb.append("diff --git a/").append(fileName).append(" b/").append(fileName).append('\n');

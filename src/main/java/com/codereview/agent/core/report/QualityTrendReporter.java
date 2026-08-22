@@ -40,22 +40,23 @@ public class QualityTrendReporter {
         long since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
         return build(historyStore.list(teamId).stream()
                 .filter(e -> e.timestamp() >= since)
-                .toList(), "最近 7 天");
+                .toList(), "trend.week");
     }
 
     /**
      * 输出某团队全部历史的质量趋势报告。
      */
     public String reportAll(String teamId) {
-        return build(historyStore.list(teamId), "全部历史");
+        return build(historyStore.list(teamId), "trend.all");
     }
 
-    private String build(List<ReviewHistoryEntry> entries, String scope) {
+    private String build(List<ReviewHistoryEntry> entries, String scopeKey) {
         StringBuilder sb = new StringBuilder();
-        sb.append("# 📊 代码审查质量趋势报告（").append(scope).append("）\n\n");
+        sb.append("# 📊 ").append(msg("trend.title"))
+                .append(msg("trend.scopePrefix")).append(msg(scopeKey)).append(msg("trend.scopeSuffix")).append("\n\n");
 
         if (entries.isEmpty()) {
-            sb.append("_暂无审查历史数据。触发一次 PR 审查后将自动累积。_\n");
+            sb.append("_").append(msg("trend.empty")).append("_\n");
             return sb.toString();
         }
 
@@ -89,26 +90,27 @@ public class QualityTrendReporter {
         Map<String, Long> repos = entries.stream()
                 .collect(Collectors.groupingBy(ReviewHistoryEntry::repo, Collectors.counting()));
 
-        sb.append("- **审查次数**：").append(totalReviews).append('\n');
-        sb.append("- **发现问题总数**：").append(totalFindings).append('\n');
-        sb.append("- **分级分布**：🔴 Blocker ").append(sev.get(Severity.BLOCKER))
-                .append("，🟠 Major ").append(sev.get(Severity.MAJOR))
-                .append("，🟡 Minor ").append(sev.get(Severity.MINOR))
-                .append("，🔵 Info ").append(sev.get(Severity.INFO)).append("\n\n");
+        sb.append("- **").append(msg("trend.reviews")).append("**：").append(totalReviews).append('\n');
+        sb.append("- **").append(msg("trend.totalFindings")).append("**：").append(totalFindings).append('\n');
+        sb.append("- **").append(msg("trend.severityDist")).append("**：🔴 ").append(msg("report.severity.blocker"))
+                .append(" ").append(sev.get(Severity.BLOCKER))
+                .append("，🟠 ").append(msg("report.severity.major")).append(" ").append(sev.get(Severity.MAJOR))
+                .append("，🟡 ").append(msg("report.severity.minor")).append(" ").append(sev.get(Severity.MINOR))
+                .append("，🔵 ").append(msg("report.severity.info")).append(" ").append(sev.get(Severity.INFO)).append("\n\n");
 
-        sb.append("## 🔝 高频规则 Top ").append(topRules.size()).append("\n\n");
-        sb.append("| 规则 | 命中次数 |\n|------|----------|\n");
+        sb.append("## 🔝 ").append(msg("trend.topRules")).append(" ").append(topRules.size()).append("\n\n");
+        sb.append("| ").append(msg("trend.rule")).append(" | ").append(msg("trend.count")).append(" |\n|------|----------|\n");
         for (var r : topRules) {
             sb.append("| ").append(r.getKey()).append(" | ").append(r.getValue()).append(" |\n");
         }
         sb.append('\n');
 
-        sb.append("## 📦 仓库分布\n\n");
-        sb.append("| 仓库 | 审查次数 |\n|------|----------|\n");
+        sb.append("## 📦 ").append(msg("trend.repos")).append("\n\n");
+        sb.append("| ").append(msg("trend.repos")).append(" | ").append(msg("trend.reviews")).append(" |\n|------|----------|\n");
         repos.forEach((k, v) -> sb.append("| ").append(k).append(" | ").append(v).append(" |\n"));
         sb.append('\n');
 
-        sb.append("## 🕑 最近审查\n\n");
+        sb.append("## 🕑 ").append(msg("trend.recent")).append("\n\n");
         entries.stream()
                 .sorted(Comparator.comparingLong(ReviewHistoryEntry::timestamp).reversed())
                 .limit(10)
@@ -116,8 +118,12 @@ public class QualityTrendReporter {
                         .append(FMT.format(Instant.ofEpochMilli(e.timestamp())))
                         .append(" `").append(e.repo()).append("#").append(e.prId()).append("`")
                         .append(" runId=").append(e.runId(), 0, Math.min(8, e.runId().length()))
-                        .append(" 发现 ").append(e.findings().size()).append(" 条\n"));
+                        .append(" ").append(msg("trend.recentItem", e.prId(), e.repo(), e.findings().size())).append("\n"));
 
         return sb.toString();
+    }
+
+    private static String msg(String key, Object... args) {
+        return com.codereview.agent.core.i18n.ReviewMessages.get(key, args);
     }
 }
