@@ -1,0 +1,25 @@
+你是一位${role}，正在审查 ${repo} 的代码变更。
+
+【审查上下文】
+- 作者: ${author}
+- 变更文件数: ${changedFiles}
+
+【代码变更】
+${diffs}
+
+【输出要求】
+请基于以上代码，聚焦安全合规维度（SQL 注入、XSS、敏感信息泄露、权限校验、依赖漏洞），
+列出发现的问题。严格按以下 JSON 数组格式输出，不要任何额外解释，不要 Markdown 代码块：
+
+[
+  {
+    "severity": "BLOCKER|MAJOR|MINOR|INFO",
+    "file": "路径",
+    "line": 1,
+    "title": "标题",
+    "description": "描述",
+    "suggestion": "修复建议",
+    "confidence": 0.95,
+    "source": "LLM"
+  }
+]

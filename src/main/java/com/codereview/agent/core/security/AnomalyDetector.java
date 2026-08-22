@@ -1,0 +1,74 @@
+package com.codereview.agent.core.security;
+
+import org.springframework.stereotype.Component;
+
+/**
+ * 异常输入检测（Prompt Stuffing / 编码绕过检测）。
+ *
+ * <p>依据文档 Layer 1 思路：通过长度、信息熵、重复模式三类异常信号识别
+ * 填充攻击与编码绕过，作为注入检测的补充维度。
+ */
+@Component
+public class AnomalyDetector {
+
+    /** 异常长输入阈值（疑似填充攻击）。 */
+    private static final int MAX_INPUT_LENGTH = 50000;
+    /** 高熵阈值（正常自然语言约 3.5~4.5，超阈值疑似 Base64/编码绕过）。 */
+    private static final double ENTROPY_THRESHOLD = 5.5;
+    /** 重复模式占比阈值（疑似 AAAAA... 填充）。 */
+    private static final double REPETITION_THRESHOLD = 0.7;
+
+    /**
+     * 判断输入是否异常。
+     *
+     * @param input 输入文本
+     * @return 异常返回 true
+     */
+    public boolean detect(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        if (input.length() > MAX_INPUT_LENGTH) {
+            return true;
+        }
+        if (calculateShannonEntropy(input) > ENTROPY_THRESHOLD) {
+            return true;
+        }
+        return calculateRepetition(input) > REPETITION_THRESHOLD;
+    }
+
+    /**
+     * 计算香农熵（比特/字符）。
+     */
+    private double calculateShannonEntropy(String input) {
+        int[] freq = new int[256];
+        for (int i = 0; i < input.length(); i++) {
+            freq[input.charAt(i) & 0xFF]++;
+        }
+        double entropy = 0.0;
+        int n = input.length();
+        for (int f : freq) {
+            if (f > 0) {
+                double p = (double) f / n;
+                entropy -= p * (Math.log(p) / Math.log(2));
+            }
+        }
+        return entropy;
+    }
+
+    /**
+     * 计算重复字符占比（最长连续重复段 / 总长）。
+     */
+    private double calculateRepetition(String input) {
+        int maxRun = 1, run = 1;
+        for (int i = 1; i < input.length(); i++) {
+            if (input.charAt(i) == input.charAt(i - 1)) {
+                run++;
+                maxRun = Math.max(maxRun, run);
+            } else {
+                run = 1;
+            }
+        }
+        return (double) maxRun / input.length();
+    }
+}

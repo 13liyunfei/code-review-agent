@@ -1,0 +1,165 @@
+# ===== 服务器端口 =====
+server:
+  port: 8080
+  # 优雅停机：SIGTERM 后等待在途审查任务完成，避免任务丢失（配合 spring.lifecycle 超时）
+  shutdown: graceful
+
+# ===== GitLab 对接配置 =====
+# 填入你的 GitLab 实例地址 + Personal Access Token（需 api 权限），
+# 即可接收 Webhook 并自动审查 Merge Request。
+# 未配置 api-token 时，系统仍可启动但不会处理 GitLab Webhook。
+gitlab:
+  # GitLab 实例地址（自建 GitLab 填 https://gitlab.your-company.com；SaaS填 https://gitlab.com）
+  base-url: https://gitlab.com
+  # Personal Access Token，需勾选 api scope
+  api-token: ""
+  # Webhook Secret Token（在 GitLab Webhook 设置页配置的，用于校验请求来源合法性）
+  webhook-secret: ""
+  # 是否启用 GitLab 接入（设为 true 后注册相关 Bean）
+  enabled: false
+
+# ===== Gitea 对接配置（轻量方案，本地 Docker 运行）=====
+# 与 GitLab 配置二选一启用。填入 Gitea 地址 + Access Token，
+# 即可接收 Webhook 并自动审查 Pull Request。
+# 注意：enabled=true 时才会注册 /webhook/gitea 控制器；
+# IDEA 本地 debug 也直接生效（无需额外传参），改配置后需重启应用。
+gitea:
+  # Gitea 实例地址（本地 Docker 启动默认为 http://localhost:3000；生产通过 GITEA_BASE_URL 注入）
+  base-url: ${GITEA_BASE_URL:http://localhost:3000}
+  # Access Token 通过环境变量或 Secret 注入，禁止提交明文凭证
+  api-token: ${GITEA_API_TOKEN:}
+  # Webhook 密钥（在 Gitea 仓库 Webhook 设置里填同一个值，用于 HMAC-SHA256 签名校验；
+  # 生产环境必须配置，与 Gitea Webhook 侧保持一致
+  webhook-secret: ${GITEA_WEBHOOK_SECRET:}
+  # 生产环境强制要求签名一致：不允许无签名请求。dev 覆盖为 true 以便本地联调。
+  webhook-allow-unsigned: false
+  # 是否启用 Gitea 接入（设为 true 后注册相关 Bean）
+  enabled: true
+
+# ===== TokenHub 大模型配置（腾讯云大模型服务平台，OpenAI 兼容协议）=====
+# 申请入口：https://console.cloud.tencent.com/tokenhub/ （注册腾讯云 + 实名认证 → 开通服务
+# → 模型广场领免费体验包 → API Key 管理创建 Key，格式 sk-xxx，只显示一次）。
+# 关键：同一个 API Key 可调用平台上所有模型，仅需切换 model 字段。
+# 下方 models 列表按顺序声明要用的模型；某模型超时/失败时网关自动 failover 到下一个。
+# api-key 留空则回退 Mock（仅供演示，LLM 不产生发现）。
+tokenhub:
+  # API Key 通过环境变量或 Secret 注入，禁止提交明文凭证
+  api-key: ${TOKENHUB_API_KEY:}
+  # OpenAI 兼容接入点
+  base-url: https://tokenhub.tencentmaas.com/v1
+  # 单次请求超时（秒）
+  timeout-seconds: 60
+  # 网关每分钟总配额
+  quota-per-minute: 200
+  # 模型列表：name=网关内供应商名（日志/路由），model=TokenHub 模型调用参数
+  models:
+    - name: hunyuan
+      model: hy3
+    - name: deepseek
+      model: deepseek-v4-flash
+    - name: glm
+      model: glm-5.2
+
+# ===== PostgreSQL + pgvector 配置 =====
+# enabled=true 时使用 PostgreSQL + pgvector 持久化记忆；false 回退到内存
+pgvector:
+  enabled: true
+  host: ${PGVECTOR_HOST:localhost}
+  port: ${PGVECTOR_PORT:5432}
+  database: ${PGVECTOR_DATABASE:codereview}
+  # 生产环境务必通过环境变量注入用户名/密码（PGVECTOR_USERNAME / PGVECTOR_PASSWORD），不要写死
+  username: ${PGVECTOR_USERNAME:yunfei}
+  password: ${PGVECTOR_PASSWORD:}
+  # 默认 profile 使用 SimpleHashEmbeddingClient，必须使用 256 维；
+  # dev profile 开启真实 Embedding 时覆盖为 1024 维。
+  vector-dim: ${PGVECTOR_VECTOR_DIM:256}
+
+# ===== Redis 配置 =====
+# enabled=true 时使用 Redis 作为消息队列；false 回退到内存
+redis:
+  enabled: true
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:}
+  connect-timeout-ms: ${REDIS_CONNECT_TIMEOUT_MS:2000}
+  so-timeout-ms: ${REDIS_SO_TIMEOUT_MS:30000}
+
+# ===== 审查调度配置 =====
+review:
+  # 生产级并发边界，避免任务无限堆积到 JVM
+  concurrency:
+    webhook-threads: ${REVIEW_WEBHOOK_THREADS:8}
+    webhook-queue-capacity: ${REVIEW_WEBHOOK_QUEUE_CAPACITY:2000}
+    review-threads: ${REVIEW_REVIEW_THREADS:32}
+    review-queue-capacity: ${REVIEW_REVIEW_QUEUE_CAPACITY:1000}
+    agent-threads: ${REVIEW_AGENT_THREADS:64}
+    agent-queue-capacity: ${REVIEW_AGENT_QUEUE_CAPACITY:512}
+    io-threads: ${REVIEW_IO_THREADS:32}
+    io-queue-capacity: ${REVIEW_IO_QUEUE_CAPACITY:1000}
+    max-inflight-per-tenant: ${REVIEW_MAX_INFLIGHT_PER_TENANT:20}
+    max-inflight-global: ${REVIEW_MAX_INFLIGHT_GLOBAL:500}
+  agent:
+    # Coordinator 整体审查超时（毫秒），默认 5 分钟
+    timeout-ms: ${REVIEW_AGENT_TIMEOUT_MS:300000}
+  # 数据目录：误报反馈、审查历史的本地 JSON 持久化位置（不可写时自动回退内存）
+  data-dir: ./data
+  # 人工介入与监控接口（/api/feedback、/api/quality-report）开关
+  api:
+    enabled: true
+    # API 访问令牌：保护 /api/**（含 /api/admin/**）的 Bearer 令牌，
+    # 生产必须通过环境变量 REVIEW_API_TOKEN 注入；留空则零鉴权放行（仅限本地 dev）。
+    auth-token: ${REVIEW_API_TOKEN:}
+  # ===== 多租户（团队）隔离配置 =====
+  # 系统采用「全局基线 + 团队叠加」模型：内置技能与基础编码规范（__global__）所有团队共享；
+  # 自定义规则 / 知识 / 记忆 / 历史 / 反馈按 teamId 隔离（数据落在 data-dir/<teamId>/ 下）。
+  # 仓库 → 团队映射：精确匹配 owner/repo 优先，其次匹配 owner（整组织），均未命中回退 default。
+  teams:
+    # 未匹配任何映射的仓库归属的默认团队
+    default: default
+    # 仓库 owner（组织）或 owner/repo → 团队映射
+    # 示例：
+    #   "acme": team-acme                # 整个组织 acme 归 team-acme
+    #   "acme/payments": team-acme-pay   # 更具体的仓库优先
+    #   "opensource/tool-x": team-oss
+    mapping: {}
+  # ===== LangChain4j 向量化配置 =====
+  # enabled=true 时，RAG/语义注入检测的嵌入计算切换为 LangChain4j OpenAiEmbeddingModel
+  # （OpenAI 兼容协议，复用上方 tokenhub.api-key / base-url）。
+  # 已实测 TokenHub 可用嵌入模型：kinfra-text-embedding-0.6b(1024维) / kinfra-text-embedding-4b(2560维)。
+  # 默认用 0.6b：pgvector ivfflat 索引上限 2000 维，4b 无法建索引；
+  # 切换模型时需同步把 pgvector.vector-dim 改为对应维度（存量表会自动迁移重建向量列）。
+  llm:
+    embedding:
+      enabled: false
+      # dev profile 覆盖为 true，并使用真实 TokenHub Embedding。
+      base-url: ""
+      api-key: ""
+      model: kinfra-text-embedding-0.6b
+      # 仅用于日志/维度对齐提示，不传给模型（TokenHub 不支持 dimensions 参数）
+      dim: 1024
+
+# ===== 演示模式 =====
+# 设为 true 时启动后执行硬编码样例审查（不走 Webhook）；默认关闭
+demo:
+  runner:
+    enabled: false
+
+logging:
+  # 全链路追踪：每行日志携带 traceId（由 TraceContext 写入 MDC），
+  # 据 traceId 可在海量日志中还原一次完整审查的调用链（Webhook→协调器→子Agent→LLM→向量库→Gitea）。
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId=%X{traceId:-N/A}] %-40.40logger{39} : %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId=%X{traceId:-N/A}] %-40.40logger{39} : %msg%n"
+  level:
+    com.codereview.agent: INFO
+    # 调试混元调用时可改为 DEBUG 查看请求/返回摘要
+    # com.codereview.agent.core.llm: DEBUG
+
+# ===== 优雅停机超时（与 server.shutdown=graceful 配合）=====
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# ===== 健康检查端点 =====
+# 零依赖实现：GET /health 与 /actuator/health 返回 200(UP)/503(DOWN)，
+# 供容器编排（k8s/Docker）做存活/就绪探针。状态聚合 PG(pgvector) 与 Redis 连通性。

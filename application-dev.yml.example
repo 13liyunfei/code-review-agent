@@ -1,0 +1,83 @@
+# 本地开发配置模板（application-dev.yml）
+# 用法：复制为 application-dev.yml 后按需覆盖（application-dev.yml 已被 .gitignore 忽略，不会提交）
+#   cp application-dev.yml.example application-dev.yml
+# 密钥一律通过环境变量注入（GITEA_API_TOKEN / GITEA_WEBHOOK_SECRET / TOKENHUB_API_KEY），不要写进本文件。
+server:
+  port: 8080
+
+gitlab:
+  enabled: false
+
+gitea:
+  enabled: true
+  base-url: ${GITEA_BASE_URL:http://localhost:3000}
+  api-token: ${GITEA_API_TOKEN:}
+  # 本地若未配置 Gitea Webhook Secret 可留空；配置后建议同步设置 GITEA_WEBHOOK_SECRET。
+  webhook-secret: ${GITEA_WEBHOOK_SECRET:}
+  # 本地 dev：Gitea webhook 通常未配 secret，允许无签名放行以避免 401 拒绝；
+  # 生产环境务必保持 false，并让 Gitea webhook 与引擎 webhook-secret 一致。
+  webhook-allow-unsigned: ${GITEA_WEBHOOK_ALLOW_UNSIGNED:true}
+
+tokenhub:
+  api-key: ${TOKENHUB_API_KEY:}
+  base-url: ${TOKENHUB_BASE_URL:https://tokenhub.tencentmaas.com/v1}
+  timeout-seconds: ${TOKENHUB_TIMEOUT_SECONDS:60}
+  quota-per-minute: ${TOKENHUB_QUOTA_PER_MINUTE:200}
+  models:
+    - name: hunyuan
+      model: hy3
+    - name: deepseek
+      model: deepseek-v4-flash
+    - name: glm
+      model: glm-5.2
+
+pgvector:
+  enabled: true
+  host: ${PGVECTOR_HOST:localhost}
+  port: ${PGVECTOR_PORT:5432}
+  database: ${PGVECTOR_DATABASE:codereview}
+  username: ${PGVECTOR_USERNAME:yunfei}
+  password: ${PGVECTOR_PASSWORD:}
+  vector-dim: ${PGVECTOR_VECTOR_DIM:1024}
+
+redis:
+  enabled: true
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:}
+  connect-timeout-ms: 2000
+  so-timeout-ms: 30000
+
+review:
+  data-dir: ./data-dev
+  concurrency:
+    webhook-threads: ${REVIEW_WEBHOOK_THREADS:2}
+    webhook-queue-capacity: ${REVIEW_WEBHOOK_QUEUE_CAPACITY:20}
+    review-threads: ${REVIEW_REVIEW_THREADS:2}
+    review-queue-capacity: ${REVIEW_REVIEW_QUEUE_CAPACITY:20}
+    agent-threads: ${REVIEW_AGENT_THREADS:6}
+    agent-queue-capacity: ${REVIEW_AGENT_QUEUE_CAPACITY:30}
+    io-threads: ${REVIEW_IO_THREADS:4}
+    io-queue-capacity: ${REVIEW_IO_QUEUE_CAPACITY:30}
+    max-inflight-per-tenant: ${REVIEW_MAX_INFLIGHT_PER_TENANT:2}
+    max-inflight-global: ${REVIEW_MAX_INFLIGHT_GLOBAL:4}
+  agent:
+    timeout-ms: ${REVIEW_AGENT_TIMEOUT_MS:300000}
+  api:
+    enabled: true
+  teams:
+    default: default
+    mapping: {}
+  llm:
+    http:
+      bypass-system-proxy: true
+    embedding:
+      enabled: true
+      base-url: ${TOKENHUB_BASE_URL:}
+      api-key: ${TOKENHUB_API_KEY:}
+      model: ${TOKENHUB_EMBEDDING_MODEL:kinfra-text-embedding-0.6b}
+      dim: ${TOKENHUB_EMBEDDING_DIM:1024}
+
+demo:
+  runner:
+    enabled: false

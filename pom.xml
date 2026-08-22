@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 使用 Spring Boot 父 POM，统一依赖与插件版本管理 -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.codereview</groupId>
+    <artifactId>code-review-agent</artifactId>
+    <version>1.0.0</version>
+    <name>code-review-agent</name>
+    <description>基于多 Agent 协同的智能代码审查系统（Multi-Agent Code Review System）</description>
+
+    <properties>
+        <!-- 与文档设计一致，使用 Java 17。
+             注：保持 17 而非 21 的原因——本机 IDEA 为 2022.2，不识别 Java 21 项目语言级别，
+             导致 Maven 重新导入时把模块 bytecode 回退/夹到 1.8（需手动改 17 才能编译）。
+             统一到 17 后 IDEA 可正确解析，reimport 不再回退；代码本身仅用到 records(17 特性)，
+             无 Java 21 专属语法，Spring Boot 3.3 最低要求亦为 17，零功能损失。 -->
+        <java.version>17</java.version>
+        <!-- 显式声明编译参数，避免部分 IDE/环境未继承 parent 配置导致的报错 -->
+        <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
+        <!-- LangChain4j：统一大模型/嵌入/RAG 框架 -->
+        <langchain4j.version>1.19.0</langchain4j.version>
+    </properties>
+
+    <dependencies>
+        <!-- Web 启动器：IoC 容器 + 内嵌 Tomcat + Spring MVC（接收 GitLab Webhook） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- JSON 序列化：用于 Agent 间标准化消息协议（ReviewMessage）的编解码 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
+        <!-- 测试启动器：用于单元测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- PostgreSQL JDBC 驱动（pgvector 向量库） -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- HikariCP 连接池：PgVector 向量库生产级连接管理（受 spring-boot 父 POM 版本管理，5.1.0） -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+
+        <!-- Jedis：Redis 客户端（消息队列实现） -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+        </dependency>
+
+        <!-- YAML 解析：低代码规则平台（团队用 YAML 描述自定义规则） -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
+
+        <!-- ===== LangChain4j：大模型 / AiServices / 记忆 / RAG ===== -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <!-- OpenAI 兼容协议：覆盖 OpenAI 官方 / Azure OpenAI / 腾讯混元 tokenhub MaaS 等 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <!-- JDK HttpClient 实现（langchain4j-open-ai 将其声明为 optional，需显式引入才能编译期使用 JdkHttpClientBuilder 自定义代理） -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-http-client-jdk</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <!-- 注：langchain4j-pgvector 为独立版本号（如 1.19.0-beta29）且其 schema 与现有
+             team 隔离的 memory_store 不兼容，故不使用；PG 记忆沿用现有存储，
+             仅将嵌入计算切换为 langchain4j OpenAiEmbeddingModel。 -->
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot 打包插件，支持可执行 jar -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.codereview.agent.CodeReviewAgentApplication</mainClass>
+                </configuration>
+            </plugin>
+            <!-- 保留方法参数名，使 Jackson 可正确序列化/反序列化 record 类型消息体 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,11 @@
+# 构建上下文忽略（注意：保留 target/，因为要 COPY 其中的 *.jar）
+.idea/
+data/
+data-dev/
+.env
+.env.local
+application-dev.yml
+*.log
+*.rdb
+.git/
+scripts/dump.rdb
