@@ -9,6 +9,22 @@ RAG 与三层记忆、4 级降级链等核心设计。
 
 > 默认启用 PostgreSQL + pgvector + Redis + 腾讯混元，全套生产实现；未安装时设 `pgvector.enabled=false` / `redis.enabled=false` 即可回退内存实现。
 
+## 架构总览
+
+本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识后管链路）。
+
+### 分层架构（静态结构）
+
+![分层架构](docs/architecture-layered.svg)
+
+*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 5 个专业审查 Agent → 能力支撑层 → 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
+
+### 端到端流程 & 管理控制台后管（技能时长、团队知识）
+
+![端到端流程与管理控制台](docs/architecture-flow-console.svg)
+
+*图 2 — B1 实时审查泳道（① PR 推送 → ⑪ 行内评论，每个环节日志携带 `traceId`）；B2 后管链路：管理控制台 `code-review-console`（:8081）驱动引擎 `SkillAdminController`（含 ⏱ 时长/调用统计）、`KnowledgeController`（团队文档上传 → StructuredChunker 结构切块 → Pg 向量索引）、`StatsController`，团队知识库在审查时回流进 RAG 检索增强。*
+
 ## 技术栈
 
 - Java 17、Spring Boot 3.3.4
@@ -355,22 +371,6 @@ review:
 > 🔐 **生产凭证**：`RERANK_API_KEY` / `TOKENHUB_API_KEY` 必须由 Secret Manager（Vault / AWS Secrets Manager / Doppler）注入环境变量，**绝不入库**。`.env` 已被 git-ignore 忽略（见 `.env.example`）。
 >
 > 🌐 **GFW / 出口说明**：Cohere/Jina 端点在某些网络下被封锁。可用 `EGRESS_RERANK_MODE=proxy` + `RERANK_PROXY=http://127.0.0.1:<clash-mixed-port>`（如 Clash Verge 的 mixed-port `7897`）仅让**重排请求**走显式代理，不会劫持 localhost 的 PostgreSQL/Redis/Gitea 连接。`direct`（默认）适用于合规网络内直出、或经内部 AI Gateway（Envoy AI Gateway / LiteLLM Proxy 等）统一持有供应商 key 的场景。
-
-## 架构总览
-
-本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识后管链路）。
-
-### 分层架构（静态结构）
-
-![分层架构](docs/architecture-layered.svg)
-
-*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 5 个专业审查 Agent → 能力支撑层 → 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
-
-### 端到端流程 & 管理控制台后管（技能时长、团队知识）
-
-![端到端流程与管理控制台](docs/architecture-flow-console.svg)
-
-*图 2 — B1 实时审查泳道（① PR 推送 → ⑪ 行内评论，每个环节日志携带 `traceId`）；B2 后管链路：管理控制台 `code-review-console`（:8081）驱动引擎 `SkillAdminController`（含 ⏱ 时长/调用统计）、`KnowledgeController`（团队文档上传 → StructuredChunker 结构切块 → Pg 向量索引）、`StatsController`，团队知识库在审查时回流进 RAG 检索增强。*
 
 ## 多租户（团队）隔离架构
 

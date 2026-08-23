@@ -8,6 +8,22 @@ It organizes **5 specialized review agents** in a **star topology**, with a Coor
 
 > PostgreSQL + pgvector + Redis + Tencent Hunyuan are enabled by default for a full production setup. If not installed, set `pgvector.enabled=false` / `redis.enabled=false` to fall back to in-memory implementations.
 
+## Architecture Overview
+
+The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge backend).
+
+### Layered architecture (static structure)
+
+![Layered architecture](docs/architecture-layered-en.svg)
+
+*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → 5 Agents → Capability → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
+
+### End-to-end flow & admin console (skills duration, team knowledge)
+
+![End-to-end flow and admin console](docs/architecture-flow-console-en.svg)
+
+*Figure 2 — B1 realtime review swimlane (① PR push → ⑪ inline comments, each step carrying `traceId`); B2 admin backend where the `code-review-console` (:8081) drives `SkillAdminController` (incl. ⏱ duration/call stats), `KnowledgeController` (team-doc upload → StructuredChunker → Pg vector index) and `StatsController`, with team knowledge feeding back into RAG retrieval at review time.*
+
 ## Tech Stack
 
 - Java 17, Spring Boot 3.3.4
@@ -339,22 +355,6 @@ review:
 > 🔐 **Production credentials**: `RERANK_API_KEY` / `TOKENHUB_API_KEY` must be injected from a Secret Manager (Vault / AWS Secrets Manager / Doppler). They are **never** committed — `.env` is git-ignored (see `.env.example`).
 >
 > 🌐 **GFW / egress note**: Cohere/Jina endpoints are blocked on some networks. Use `EGRESS_RERANK_MODE=proxy` + `RERANK_PROXY=http://127.0.0.1:<clash-mixed-port>` (e.g. Clash Verge mixed-port `7897`) to route **only** the rerank request through an explicit proxy, without hijacking localhost PostgreSQL/Redis/Gitea connections. `direct` (default) is correct for servers in a compliant network or behind an internal AI Gateway.
-
-## Architecture Overview
-
-The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge backend).
-
-### Layered architecture (static structure)
-
-![Layered architecture](docs/architecture-layered-en.svg)
-
-*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → 5 Agents → Capability → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
-
-### End-to-end flow & admin console (skills duration, team knowledge)
-
-![End-to-end flow and admin console](docs/architecture-flow-console-en.svg)
-
-*Figure 2 — B1 realtime review swimlane (① PR push → ⑪ inline comments, each step carrying `traceId`); B2 admin backend where the `code-review-console` (:8081) drives `SkillAdminController` (incl. ⏱ duration/call stats), `KnowledgeController` (team-doc upload → StructuredChunker → Pg vector index) and `StatsController`, with team knowledge feeding back into RAG retrieval at review time.*
 
 ## Multi-Tenant (Team) Isolation Architecture
 
