@@ -47,7 +47,7 @@
   <path class="a" d="M381 180 L381 210" stroke="#534AB7"/>
   <rect x="314" y="210" width="134" height="44" rx="8" fill="#CECBF6" stroke="#534AB7"/>
   <text class="ts" x="381" y="226" text-anchor="middle" dominant-baseline="central">④ Coordinator parallel</text>
-  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 Agents + Advanced</text>
+  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 built-in + custom</text>
   <path class="a" d="M381 254 L381 284" stroke="#BA7517"/>
   <rect x="314" y="284" width="134" height="56" rx="8" fill="#FAEEDA" stroke="#BA7517"/>
   <text class="ts" x="381" y="302" text-anchor="middle" dominant-baseline="central">⑤ 5 specialized Agents</text>
@@ -94,34 +94,38 @@
   <path class="a" d="M238 818 L272 818" stroke="#993556"/>
   <rect x="272" y="796" width="356" height="44" rx="8" fill="#F4C0D1" stroke="#993556"/>
   <text class="th" x="450" y="812" text-anchor="middle" dominant-baseline="central">Engine Admin API</text>
-  <text class="ts" x="450" y="830" text-anchor="middle" dominant-baseline="central">SkillAdminController · KnowledgeController · StatsController</text>
+  <text class="ts" x="450" y="830" text-anchor="middle" dominant-baseline="central">SkillAdminController · KnowledgeController · StatsController · AgentAdminController</text>
 
-  <rect x="58" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
-  <text class="th" x="148" y="876" text-anchor="middle" fill="#72243E">Skills Mgmt</text>
+  <rect x="58" y="856" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="192" y="876" text-anchor="middle" fill="#72243E">Skills Mgmt</text>
   <text class="ts" x="68" y="896">• list / enable toggle</text>
   <text class="ts" x="68" y="914">• custom rule POST</text>
   <text class="ts" x="68" y="932">• YAML rule import</text>
   <text class="ts" x="68" y="950">• delete custom/{id}</text>
-  <text class="ts" x="68" y="970" fill="#993556">• ⏱ duration / call stats</text>
-  <rect x="250" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
-  <text class="th" x="340" y="876" text-anchor="middle" fill="#72243E">Team Knowledge</text>
-  <text class="ts" x="260" y="896">• upload doc POST</text>
-  <text class="ts" x="260" y="914">• StructuredChunker</text>
-  <text class="ts" x="260" y="932">  structure-aware split</text>
-  <text class="ts" x="260" y="950">• vectorize → Pg index</text>
-  <text class="ts" x="260" y="970">• drop / rebuild index</text>
-  <rect x="442" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
-  <text class="th" x="532" y="876" text-anchor="middle" fill="#72243E">Team Stats</text>
-  <text class="ts" x="452" y="896">• skillTotal/Enabled</text>
-  <text class="ts" x="452" y="914">• skillCustom count</text>
-  <text class="ts" x="452" y="932">• knowledgeTotal</text>
-  <text class="ts" x="452" y="950">• knowledgeIndexed</text>
-  <text class="ts" x="452" y="970">• isolated by teamId</text>
+  <text class="ts" x="68" y="968" fill="#993556">• ⏱ duration / call stats</text>
+  <rect x="342" y="856" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="476" y="876" text-anchor="middle" fill="#72243E">Team Knowledge</text>
+  <text class="ts" x="352" y="896">• upload doc POST</text>
+  <text class="ts" x="352" y="914">• StructuredChunker</text>
+  <text class="ts" x="352" y="932">  structure-aware split</text>
+  <text class="ts" x="352" y="950">• vectorize → Pg index</text>
+  <text class="ts" x="352" y="968">• drop / rebuild index</text>
+  <rect x="58" y="972" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="192" y="992" text-anchor="middle" fill="#72243E">Team Stats</text>
+  <text class="ts" x="68" y="1012">• skillTotal/Enabled</text>
+  <text class="ts" x="68" y="1030">• skillCustom count</text>
+  <text class="ts" x="68" y="1048">• knowledgeTotal</text>
+  <text class="ts" x="68" y="1066">• knowledgeIndexed</text>
+  <rect x="342" y="972" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="476" y="992" text-anchor="middle" fill="#72243E">Custom Agent List</text>
+  <text class="ts" x="352" y="1012">• GET /api/agents list</text>
+  <text class="ts" x="352" y="1030">• create / edit / delete</text>
+  <text class="ts" x="352" y="1048">• enable / disable toggle</text>
+  <text class="ts" x="352" y="1066" fill="#993556">• injection check · degrade · replay</text>
 
-  <path class="d" d="M340 976 L340 1008" stroke="#993556"/>
-  <rect x="200" y="1008" width="280" height="48" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.8"/>
-  <text class="th" x="340" y="1026" text-anchor="middle" fill="#27500A">Team knowledge base → RAG enhancement</text>
-  <text class="ts" x="340" y="1044" text-anchor="middle" dominant-baseline="central">hybrid retrieval (vec+BM25) + rerank at review time</text>
+  <path class="d" d="M340 1076 L340 1088" stroke="#993556"/>
+  <rect x="180" y="1088" width="320" height="40" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.8"/>
+  <text class="th" x="340" y="1112" text-anchor="middle" fill="#27500A">Team knowledge base → RAG enhancement</text>
 
   <text class="cap" x="40" y="1140">Legend: solid = sync call · dashed = knowledge warmup/side enhancement · block = layer ownership</text>
 </svg>

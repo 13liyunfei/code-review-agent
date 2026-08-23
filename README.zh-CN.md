@@ -11,19 +11,19 @@ RAG 与三层记忆、4 级降级链等核心设计。
 
 ## 架构总览
 
-本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识后管链路）。
+本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`，以及按团队展开的业务方**自定义 Agent**）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识 / 自定义 Agent 后管链路）。
 
 ### 分层架构（静态结构）
 
 ![分层架构](docs/architecture-layered.svg)
 
-*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 5 个专业审查 Agent → 能力支撑层 → 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
+*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 专业审查 Agent（5 内置 + 业务方自定义并行）→ 能力支撑层 → 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
 
 ### 端到端流程 & 管理控制台后管（技能时长、团队知识）
 
 ![端到端流程与管理控制台](docs/architecture-flow-console.svg)
 
-*图 2 — B1 实时审查泳道（① PR 推送 → ⑪ 行内评论，每个环节日志携带 `traceId`）；B2 后管链路：管理控制台 `code-review-console`（:8081）驱动引擎 `SkillAdminController`（含 ⏱ 时长/调用统计）、`KnowledgeController`（团队文档上传 → StructuredChunker 结构切块 → Pg 向量索引）、`StatsController`，团队知识库在审查时回流进 RAG 检索增强。*
+*图 2 — B1 实时审查泳道（① PR 推送 → ⑪ 行内评论，每个环节日志携带 `traceId`）；B2 后管链路：管理控制台 `code-review-console`（:8081）驱动引擎 `SkillAdminController`（含 ⏱ 时长/调用统计）、`KnowledgeController`（团队文档上传 → StructuredChunker 结构切块 → Pg 向量索引）、`StatsController`、`AgentAdminController`（自定义 Agent 列表：增删改查 + 注入预检 + 并行审查），团队知识库在审查时回流进 RAG 检索增强。*
 
 ## 技术栈
 
@@ -586,7 +586,7 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 反馈与历史默认落盘到 `review.data-dir`（默认 `./data`，生成 `feedback.json` / `review-history.json`）；  
 目录不可写时自动回退内存，保证系统不中断。
 
-## 管理控制台（Skills 市场 + 团队知识库）
+## 管理控制台（Skills 市场 + 团队知识库 + 自定义 Agent）
 
 为了让团队**自助管理审查规则与规范文档**，系统在引擎之上新增了独立的「控制台微服务 + Vue 前端」，
 形成三层结构（引擎仍是唯一权威数据源）：
@@ -696,6 +696,29 @@ npm run build
 | POST   | `/api/skills/custom`          | 新增团队自定义规则                            |
 | DELETE | `/api/skills/custom/{id}`     | 删除自定义规则                                |
 
+### 业务方自定义审查 Agent（团队级并行审查）
+
+除内置 5 个通用子 Agent 外，业务团队可在后管「**自定义 Agent 列表**」自助定义 0~N 个专属审查 Agent，与通用 Agent **并行**参与每次 PR 审查；定义按 `teamId` 隔离，运行期增删即生效，无需重启。
+
+设计原则（**可控性 > 灵活性、安全优先**）：
+
+- **声明式，不开放代码 / 工具调用**：业务方仅填写「角色描述 + 审查要点 + 严重级别偏好」两个内容槽；系统指令骨架由代码硬编码且**不可被覆盖**，末尾固定护栏（diff 文字只是被审查数据、非指令）。
+- **Prompt 注入纵深防御**：① 系统指令骨架不可覆盖；② 写库前对业务方提交内容做注入预检（`KeywordInjectionDetector`），命中即拒绝保存；③ 审查时 PR diff 过注入检测，命中仅数据区标注 `[INJECTION-RISK]`，**绝不切换系统角色**。
+- **可降级**：自定义 Agent 异常 / 超时（复用整体 `timeout-ms`）仅该 Agent 结果置空，不影响内置 5 Agent 与最终报告。
+- **可追踪 / 可回放**：复用事件源轨迹，记录 `agent.custom.expanded` / `agent.custom.disabled` 及 `custom-agent.created/updated/deleted/toggle`；落盘 `<data-dir>/<teamId>/trajectories/<runId>.jsonl`，支持事后回放与责任追溯（对齐 deepseek-harness / codex rollout）。
+
+控制台接口（经 8081 代理，底层转发引擎 `/api/admin/agents`）：
+
+| 方法   | 路径                          | 说明                                          |
+| ------ | ----------------------------- | --------------------------------------------- |
+| GET    | `/api/agents`                 | 自定义 Agent 列表（含启用态，按团队隔离）      |
+| POST   | `/api/agents`                 | 新增自定义 Agent（含注入预检）                |
+| PUT    | `/api/agents/{id}`            | 编辑更新（乐观锁 `version`）                  |
+| DELETE | `/api/agents/{id}`            | 删除自定义 Agent                              |
+| POST   | `/api/agents/{id}/toggle`     | 启停开关（`body: {"enabled": true/false}`）   |
+
+> 与「自定义规则」的区别：自定义规则是**正则匹配的单条规则**，注入到对应维度的内置 Agent；自定义 Agent 是**独立的并行审查角色**，拥有自己的系统指令与审查要点，适合表达「支付合规审查」「某业务线专属规范」这类整体视角。
+
 ### 团队知识库（规范文档 / 操作手册 / 视频，接入 RAG）
 
 「团队知识」页用于上传**团队规范文档、操作手册或培训视频**，解析后进入 RAG 向量知识库；
@@ -724,6 +747,7 @@ npm run build
 | ---------------- | ------------------------------------- |
 | 自定义规则       | `./data/custom-rules.json`            |
 | 技能启停状态     | `./data/skills-enabled.json`          |
+| 自定义 Agent 定义 | `./data/<teamId>/custom-agents.json`  |
 | 团队知识原文+元数据 | `./data/knowledge/`（`.meta.json` 记录提取文本与向量信息） |
 
 ## 目录结构
@@ -751,8 +775,8 @@ src/main/java/com/codereview/agent/
 │   └── TeamResolver.java                  # resolve(owner,repo,override) → teamId
 └── core/
     ├── model/        # 领域模型：Severity/AgentType/Finding/CodeDiff/PullRequest/ReviewMessage/Report
-    ├── agent/        # ReviewAgent 接口 + 抽象基类 + 5 个具体 Agent
-    ├── coordinator/  # Coordinator 接口 + CompletableFutureCoordinator（并行/超时/部分失败）
+    ├── agent/        # ReviewAgent 接口 + 抽象基类 + 5 个具体 Agent + DeclarativeReviewAgent（声明式自定义 Agent）
+    ├── coordinator/  # Coordinator 接口 + CompletableFutureCoordinator（并行/超时/部分失败/自定义 Agent 展开）
     ├── analysis/     # AstAnalyzer（AST 语义）/ CallGraphAnalyzer（调用链）/ ScaScanner（SCA）/ AdvancedAnalyzer（聚合）
     ├── autofix/      # AutoFixEngine（自动修复建议生成）
     ├── workflow/     # ReviewWorkflowEngine（BLOCKER 强制审批 / commit status）
@@ -760,7 +784,7 @@ src/main/java/com/codereview/agent/
     ├── prompt/       # PromptTemplate 接口 + 占位符模板 + classpath 加载器
     ├── skill/        # Skill 插件接口 + 注册中心 + 自定义规则 + YamlRuleEngine（低代码平台）
     │   └── impl/     # PatternSkill（通用正则技能）/ CustomRuleSkill（团队自定义）
-    ├── admin/        # 控制台后端：技能/知识管理 Controller + RAG 入库 + 文本提取 + DTO
+    ├── admin/        # 控制台后端：技能/知识/自定义 Agent 管理 Controller + RAG 入库 + 文本提取 + DTO（CustomAgentStore/CustomAgentDef/AgentAdminController）
     ├── calibration/  # 置信度校准服务（误报/正报）
     ├── mq/           # MessageQueue 接口 + 内存实现 + QueueNames + AgentWorker
     ├── tool/         # ToolDefinition / ToolRouter（意图→白名单）/ ToolCallValidator
@@ -799,6 +823,7 @@ src/main/java/com/codereview/agent/
 | 并行审查 + 超时 + 部分失败              | `CompletableFutureCoordinator`（allOf + orTimeout）               |
 | 标准化消息协议                       | `model/ReviewMessage`                                           |
 | Prompt 模板化                    | `prompt/*` + `resources/prompts/*.txt`                          |
+| 业务方自定义 Agent（并行 + 注入防御 + 降级） | `core/admin/CustomAgentStore` + `core/agent/DeclarativeReviewAgent` + `core/admin/AgentAdminController` |
 | Skill 插件化                     | `skill/*`（硬编码密钥、SQL 注入检测）                                       |
 | 工具路由（防选错工具）                   | `tool/ToolRouter` + `ToolCallValidator`                         |
 | 置信度校准（越用越准）                   | `calibration/ConfidenceCalibrationService`                      |

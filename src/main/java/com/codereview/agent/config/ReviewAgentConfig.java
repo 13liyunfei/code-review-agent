@@ -6,6 +6,8 @@ import com.codereview.agent.core.agent.impl.LogicAgent;
 import com.codereview.agent.core.agent.impl.PerformanceAgent;
 import com.codereview.agent.core.agent.impl.SecurityAgent;
 import com.codereview.agent.core.agent.impl.StyleAgent;
+import com.codereview.agent.core.agent.ReviewAgent;
+import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
 import com.codereview.agent.core.calibration.ConfidenceCalibrationService;
 import com.codereview.agent.core.coordinator.Coordinator;
@@ -315,6 +317,18 @@ public class ReviewAgentConfig {
         return new TeamResolver(teamProperties.getMapping(), teamProperties.getDefaultTeam());
     }
 
+    /**
+     * 自定义审查 Agent 存储（后管「自定义 Agent 列表」后端核心）。
+     *
+     * <p>按 teamId 隔离，落盘 <code>data-dir/&lt;teamId&gt;/custom-agents.json</code>；
+     * 写库前复用 {@link InjectionDetector} 对业务方提交内容做注入预检（命中即拒绝）。
+     */
+    @Bean
+    public CustomAgentStore customAgentStore(InjectionDetector injectionDetector,
+                                            @Value("${review.data-dir:./data}") String dataDir) {
+        return new CustomAgentStore(Path.of(dataDir), injectionDetector);
+    }
+
     /** 工具定义（供 ToolRouter 注册与白名单路由）。 */
     @Bean
     public List<ToolDefinition> tools() {
@@ -419,9 +433,13 @@ public class ReviewAgentConfig {
                                   com.codereview.agent.core.impact.ImpactAnalyzer impactAnalyzer,
                                   com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder trajectoryRecorder,
                                   com.codereview.agent.core.enhance.ReviewEnhancements enhancements,
-                                  com.codereview.agent.core.memory.RagContextBuilder ragContextBuilder) {
+                                  com.codereview.agent.core.memory.RagContextBuilder ragContextBuilder,
+                                  CustomAgentStore customAgentStore,
+                                  LlmClient llmClient,
+                                  CodeReviewAiService codeReviewAiService,
+                                  InjectionDetector injectionDetector) {
         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
                 historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,
-                enhancements, ragContextBuilder);
+                enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector);
     }
 }

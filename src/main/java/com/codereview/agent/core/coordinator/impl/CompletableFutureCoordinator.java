@@ -1,6 +1,9 @@
 package com.codereview.agent.core.coordinator.impl;
 
+import com.codereview.agent.core.agent.DeclarativeReviewAgent;
 import com.codereview.agent.core.agent.ReviewAgent;
+import com.codereview.agent.core.admin.CustomAgentDef;
+import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
 import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.enhance.ReviewEnhancements;
@@ -16,6 +19,8 @@ import com.codereview.agent.core.feedback.FeedbackStore;
 import com.codereview.agent.core.history.FindingSummary;
 import com.codereview.agent.core.history.ReviewHistoryEntry;
 import com.codereview.agent.core.history.ReviewHistoryStore;
+import com.codereview.agent.core.llm.LlmClient;
+import com.codereview.agent.core.llm.aiservice.CodeReviewAiService;
 import com.codereview.agent.core.model.AgentResult;
 import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
@@ -27,6 +32,7 @@ import com.codereview.agent.core.memory.RagContextBuilder;
 import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.report.VerificationResult;
+import com.codereview.agent.core.security.InjectionDetector;
 import com.codereview.agent.core.trace.TraceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +93,14 @@ public class CompletableFutureCoordinator implements Coordinator {
     private final ToolGate toolGate;
     /** RAG 上下文构建器（可空：为 null 时跳过 RAG 注入，审查仍可用）。 */
     private final RagContextBuilder ragContextBuilder;
+    /** 自定义 Agent 存储（可空：为 null 时不展开业务方自定义 Agent）。 */
+    private final CustomAgentStore customAgentStore;
+    /** 大模型客户端（自定义 Agent 调 LLM 用，可空）。 */
+    private final LlmClient llmClient;
+    /** LangChain4j AiServices（结构化输出，可空 → 回退文本）。 */
+    private final CodeReviewAiService aiService;
+    /** Prompt 注入检测器（自定义 Agent 防御用，可空）。 */
+    private final InjectionDetector injectionDetector;
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
@@ -125,6 +139,20 @@ public class CompletableFutureCoordinator implements Coordinator {
                                        ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
                                        ReviewEnhancements enhancements,
                                        RagContextBuilder ragContextBuilder) {
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, agentExecutor,
+                impactAnalyzer, recorder, enhancements, ragContextBuilder, null, null, null, null);
+    }
+
+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
+                                       ReviewEnhancements enhancements,
+                                       RagContextBuilder ragContextBuilder,
+                                       CustomAgentStore customAgentStore,
+                                       LlmClient llmClient,
+                                       CodeReviewAiService aiService,
+                                       InjectionDetector injectionDetector) {
         this.agents = agents;
         this.reportGenerator = reportGenerator;
         this.feedbackStore = feedbackStore;
@@ -137,6 +165,10 @@ public class CompletableFutureCoordinator implements Coordinator {
         this.vetoPolicy = enhancements == null ? null : enhancements.vetoPolicy();
         this.toolGate = enhancements == null ? null : enhancements.toolGate();
         this.ragContextBuilder = ragContextBuilder;
+        this.customAgentStore = customAgentStore;
+        this.llmClient = llmClient;
+        this.aiService = aiService;
+        this.injectionDetector = injectionDetector;
     }
 
     /** 生效的审查强度 Profile（未配置 / 非法时回退 ADVISORY）。 */
@@ -228,12 +260,42 @@ public class CompletableFutureCoordinator implements Coordinator {
                     "type", "impact-surface", "summaryLength", impactSummary.length()));
         }
 
+        // 业务方自定义 Agent 展开（按 teamId 隔离，与 5 个内置子 Agent 并行；可降级、零侵入）
+        List<ReviewAgent> effectiveAgents = pendingAgents;
+        List<String> customAgentNames = List.of();
+        if (customAgentStore != null) {
+            try {
+                List<CustomAgentDef> customDefs = customAgentStore.listEnabled(teamId);
+                if (!customDefs.isEmpty()) {
+                    List<ReviewAgent> expanded = new ArrayList<>(pendingAgents);
+                    for (CustomAgentDef def : customDefs) {
+                        expanded.add(new DeclarativeReviewAgent(def, llmClient, aiService, injectionDetector));
+                    }
+                    effectiveAgents = expanded;
+                    customAgentNames = customDefs.stream().map(CustomAgentDef::name).toList();
+                    if (recorder != null) {
+                        recorder.append(runId, "agent.custom.expanded", Map.of(
+                                "count", customDefs.size(),
+                                "names", customDefs.stream().map(CustomAgentDef::name).toList()));
+                    }
+                    log.info("[Coordinator] 团队 {} 注入 {} 个自定义 Agent，总 Agent 数={}",
+                            teamId, customDefs.size(), effectiveAgents.size());
+                }
+            } catch (Exception e) {
+                // 可降级：自定义 Agent 子系统异常不影响内置 5 Agent
+                log.warn("[Coordinator] 自定义 Agent 展开失败，仅跑内置 Agent：{}", e.getMessage());
+                if (recorder != null) {
+                    recorder.append(runId, "agent.custom.disabled", Map.of("reason", e.getMessage()));
+                }
+            }
+        }
+
         // 上一轮审查记录（用于复检验证）
         ReviewHistoryEntry previous = historyStore == null ? null
                 : historyStore.getLatest(teamId, pr.repo() + "#" + pr.id()).orElse(null);
 
         // 1. 为每个 Agent 创建 Future，并行审查（TraceContext.wrap 保证 traceId 跨线程传播）
-        List<CompletableFuture<AgentResult>> futures = pendingAgents.stream()
+        List<CompletableFuture<AgentResult>> futures = effectiveAgents.stream()
                 .map(agent -> CompletableFuture.supplyAsync(TraceContext.wrap(() -> {
                     long a0 = System.currentTimeMillis();
                     if (recorder != null) {
@@ -305,6 +367,11 @@ public class CompletableFutureCoordinator implements Coordinator {
         // 4. 汇聚、去重、优先级仲裁、误报抑制、定档
         ReviewReport report = reportGenerator.aggregate(
                 pr.id(), pr.repo(), results, feedbackStore, runId, durationMs, teamId);
+
+        // 4.0 报告如实标注本次参与的业务方自定义 Agent（无则不显示）
+        if (!customAgentNames.isEmpty()) {
+            report = report.withCustomAgents(customAgentNames);
+        }
 
         // 4.1 权限收敛（P1-⑥）：BLOCKER 级强否决不可被误报抑制 / 仲裁覆盖（父不覆盖子）
         if (vetoPolicy != null) {

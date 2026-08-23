@@ -47,7 +47,7 @@
   <path class="a" d="M381 180 L381 210" stroke="#534AB7"/>
   <rect x="314" y="210" width="134" height="44" rx="8" fill="#CECBF6" stroke="#534AB7"/>
   <text class="ts" x="381" y="226" text-anchor="middle" dominant-baseline="central">④ Coordinator 并行</text>
-  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 Agent + Advanced</text>
+  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 内置 + 自定义并行</text>
   <path class="a" d="M381 254 L381 284" stroke="#BA7517"/>
   <rect x="314" y="284" width="134" height="56" rx="8" fill="#FAEEDA" stroke="#BA7517"/>
   <text class="ts" x="381" y="302" text-anchor="middle" dominant-baseline="central">⑤ 五个专业 Agent</text>
@@ -94,34 +94,38 @@
   <path class="a" d="M238 818 L272 818" stroke="#993556"/>
   <rect x="272" y="796" width="356" height="44" rx="8" fill="#F4C0D1" stroke="#993556"/>
   <text class="th" x="450" y="812" text-anchor="middle" dominant-baseline="central">引擎 Admin API</text>
-  <text class="ts" x="450" y="830" text-anchor="middle" dominant-baseline="central">SkillAdminController · KnowledgeController · StatsController</text>
+  <text class="ts" x="450" y="830" text-anchor="middle" dominant-baseline="central">SkillAdminController · KnowledgeController · StatsController · AgentAdminController</text>
 
-  <rect x="58" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
-  <text class="th" x="148" y="876" text-anchor="middle" fill="#72243E">Skills 管理</text>
+  <rect x="58" y="856" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="192" y="876" text-anchor="middle" fill="#72243E">Skills 管理</text>
   <text class="ts" x="68" y="896">• 列表/启停 toggle</text>
   <text class="ts" x="68" y="914">• 自定义规则 POST</text>
   <text class="ts" x="68" y="932">• YAML 规则导入</text>
   <text class="ts" x="68" y="950">• 删除 custom/{id}</text>
-  <text class="ts" x="68" y="970" fill="#993556">• ⏱ 时长/调用统计</text>
-  <rect x="250" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
-  <text class="th" x="340" y="876" text-anchor="middle" fill="#72243E">团队知识</text>
-  <text class="ts" x="260" y="896">• 上传文档 POST</text>
-  <text class="ts" x="260" y="914">• StructuredChunker</text>
-  <text class="ts" x="260" y="932">  结构感知切块</text>
-  <text class="ts" x="260" y="950">• 向量化→Pg 索引</text>
-  <text class="ts" x="260" y="970">• 删除/重建索引</text>
-  <rect x="442" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
-  <text class="th" x="532" y="876" text-anchor="middle" fill="#72243E">团队统计</text>
-  <text class="ts" x="452" y="896">• skillTotal/Enabled</text>
-  <text class="ts" x="452" y="914">• skillCustom 计数</text>
-  <text class="ts" x="452" y="932">• knowledgeTotal</text>
-  <text class="ts" x="452" y="950">• knowledgeIndexed</text>
-  <text class="ts" x="452" y="970">• 按 teamId 隔离</text>
+  <text class="ts" x="68" y="968" fill="#993556">• ⏱ 时长/调用统计</text>
+  <rect x="342" y="856" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="476" y="876" text-anchor="middle" fill="#72243E">团队知识</text>
+  <text class="ts" x="352" y="896">• 上传文档 POST</text>
+  <text class="ts" x="352" y="914">• StructuredChunker</text>
+  <text class="ts" x="352" y="932">  结构感知切块</text>
+  <text class="ts" x="352" y="950">• 向量化→Pg 索引</text>
+  <text class="ts" x="352" y="968">• 删除/重建索引</text>
+  <rect x="58" y="972" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="192" y="992" text-anchor="middle" fill="#72243E">团队统计</text>
+  <text class="ts" x="68" y="1012">• skillTotal/Enabled</text>
+  <text class="ts" x="68" y="1030">• skillCustom 计数</text>
+  <text class="ts" x="68" y="1048">• knowledgeTotal</text>
+  <text class="ts" x="68" y="1066">• knowledgeIndexed</text>
+  <rect x="342" y="972" width="268" height="104" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="476" y="992" text-anchor="middle" fill="#72243E">自定义 Agent 列表</text>
+  <text class="ts" x="352" y="1012">• GET /api/agents 列表</text>
+  <text class="ts" x="352" y="1030">• 新增/编辑/删除</text>
+  <text class="ts" x="352" y="1048">• 启停 toggle</text>
+  <text class="ts" x="352" y="1066" fill="#993556">• 注入预检 · 可降级 · 轨迹回放</text>
 
-  <path class="d" d="M340 976 L340 1008" stroke="#993556"/>
-  <rect x="200" y="1008" width="280" height="48" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.8"/>
-  <text class="th" x="340" y="1026" text-anchor="middle" fill="#27500A">团队知识库 → RAG 检索增强</text>
-  <text class="ts" x="340" y="1044" text-anchor="middle" dominant-baseline="central">实时审查时混合检索(向量+BM25)+重排</text>
+  <path class="d" d="M340 1076 L340 1088" stroke="#993556"/>
+  <rect x="180" y="1088" width="320" height="40" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.8"/>
+  <text class="th" x="340" y="1112" text-anchor="middle" fill="#27500A">团队知识库 → RAG 检索增强</text>
 
   <text class="cap" x="40" y="1140">图例：实线=同步调用 虚线=知识库预热/旁路增强 色块=分层归属</text>
 </svg>

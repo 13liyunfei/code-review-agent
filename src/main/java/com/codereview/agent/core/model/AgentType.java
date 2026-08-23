@@ -18,6 +18,8 @@ public enum AgentType {
     STYLE("规范审查"),
     /** 架构审查 Agent：架构设计（分层、耦合、依赖）。 */
     ARCHITECTURE("架构审查"),
+    /** 业务方自定义审查 Agent：由团队在后管声明式定义，与 5 个通用子 Agent 并行。 */
+    CUSTOM("自定义审查"),
     /** 协调者 Agent：不负责具体审查，仅做调度与聚合。 */
     COORDINATOR("协调者");
 

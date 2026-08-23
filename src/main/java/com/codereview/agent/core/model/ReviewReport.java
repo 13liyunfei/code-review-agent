@@ -36,6 +36,8 @@ public class ReviewReport {
     private final List<Finding> suppressedFindings;
     /** 修复后复检的验证结果（首次审查为 none）。 */
     private final VerificationResult verification;
+    /** 本次审查展开的业务方自定义 Agent 名称（无则空列表，用于报告如实体现「五 Agent + 自定义」）。 */
+    private final List<String> customAgents;
 
     /**
      * 完整构造（聚合阶段使用）。
@@ -44,6 +46,19 @@ public class ReviewReport {
                         String runId, long reviewTimeMs, List<String> arbitrationNotes,
                         List<Finding> overriddenFindings, List<Finding> suppressedFindings,
                         VerificationResult verification) {
+        this(prId, repo, findings, severityCount, runId, reviewTimeMs, arbitrationNotes,
+                overriddenFindings, suppressedFindings, verification, List.of());
+    }
+
+    /**
+     * 含自定义 Agent 的完整构造（聚合阶段使用）。
+     *
+     * @param customAgents 本次展开的业务方自定义 Agent 名称列表（可为空）
+     */
+    public ReviewReport(long prId, String repo, List<Finding> findings, Map<Severity, Long> severityCount,
+                        String runId, long reviewTimeMs, List<String> arbitrationNotes,
+                        List<Finding> overriddenFindings, List<Finding> suppressedFindings,
+                        VerificationResult verification, List<String> customAgents) {
         this.prId = prId;
         this.repo = repo;
         this.findings = findings;
@@ -54,6 +69,7 @@ public class ReviewReport {
         this.overriddenFindings = overriddenFindings;
         this.suppressedFindings = suppressedFindings;
         this.verification = verification;
+        this.customAgents = customAgents == null ? List.of() : customAgents;
     }
 
     /**
@@ -67,7 +83,7 @@ public class ReviewReport {
     /** 返回附带复检结果的新报告（记录不可变，采用拷贝式更新）。 */
     public ReviewReport withVerification(VerificationResult verification) {
         return new ReviewReport(prId, repo, findings, severityCount, runId, reviewTimeMs,
-                arbitrationNotes, overriddenFindings, suppressedFindings, verification);
+                arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents);
     }
 
     /**
@@ -78,7 +94,7 @@ public class ReviewReport {
      */
     public ReviewReport withFindings(List<Finding> newFindings) {
         return new ReviewReport(prId, repo, newFindings, countBySeverity(newFindings),
-                runId, reviewTimeMs, arbitrationNotes, overriddenFindings, suppressedFindings, verification);
+                runId, reviewTimeMs, arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents);
     }
 
     /**
@@ -93,7 +109,18 @@ public class ReviewReport {
                                            List<Finding> newSuppressed,
                                            List<Finding> newOverridden) {
         return new ReviewReport(prId, repo, newFindings, countBySeverity(newFindings),
-                runId, reviewTimeMs, arbitrationNotes, newOverridden, newSuppressed, verification);
+                runId, reviewTimeMs, arbitrationNotes, newOverridden, newSuppressed, verification, customAgents);
+    }
+
+    /**
+     * 返回附带自定义 Agent 名称的新报告（用于报告如实体现业务方自定义 Agent 参与）。
+     *
+     * @param customAgents 本次展开的自定义 Agent 名称列表
+     * @return 新报告
+     */
+    public ReviewReport withCustomAgents(List<String> customAgents) {
+        return new ReviewReport(prId, repo, findings, severityCount, runId, reviewTimeMs,
+                arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents);
     }
 
     /** 按严重级别统计。 */
@@ -143,6 +170,10 @@ public class ReviewReport {
         return verification;
     }
 
+    public List<String> getCustomAgents() {
+        return customAgents;
+    }
+
     /**
      * 渲染为 Markdown 文本，便于直接发布到 PR 评论。
      *
@@ -158,6 +189,10 @@ public class ReviewReport {
         sb.append("- **").append(msg("report.pr")).append("**：#").append(prId).append('\n');
         if (runId != null && !runId.isBlank()) {
             sb.append("- **").append(msg("report.runId")).append("**：`").append(runId).append("`\n");
+        }
+        if (customAgents != null && !customAgents.isEmpty()) {
+            sb.append("- **").append(msg("report.customAgents")).append("**：")
+                    .append(String.join(" / ", customAgents)).append('\n');
         }
         sb.append("- **").append(msg("report.totalFindings")).append("**：").append(findings.size()).append('\n');
         if (reviewTimeMs > 0) {

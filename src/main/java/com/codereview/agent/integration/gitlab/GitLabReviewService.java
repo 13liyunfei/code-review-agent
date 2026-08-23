@@ -119,6 +119,10 @@ public class GitLabReviewService {
         sb.append("\n---\n");
         sb.append("> 🤖 本报告由多 Agent 协同代码审查系统自动生成（");
         sb.append("逻辑 / 安全 / 性能 / 风格 / 架构 五 Agent 并行审查 + 混元 LLM）\n");
+        if (report.getCustomAgents() != null && !report.getCustomAgents().isEmpty()) {
+            sb.append("> 本次审查包含自定义 Agent：")
+                    .append(String.join(" / ", report.getCustomAgents())).append("\n");
+        }
         sb.append("> 源分支 `").append(sourceBranch).append("` → 目标分支 `").append(targetBranch).append("`\n");
         return sb.toString();
     }

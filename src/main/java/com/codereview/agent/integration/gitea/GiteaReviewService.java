@@ -175,6 +175,10 @@ public class GiteaReviewService {
         sb.append("\n---\n");
         sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get("gitea.generatedBy"));
         sb.append(com.codereview.agent.core.i18n.ReviewMessages.get("gitea.generatedByDetail")).append("\n");
+        if (report.getCustomAgents() != null && !report.getCustomAgents().isEmpty()) {
+            sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get(
+                    "gitea.generatedByCustom", String.join(" / ", report.getCustomAgents()))).append("\n");
+        }
         sb.append("> ").append(com.codereview.agent.core.i18n.ReviewMessages.get(
                 "gitea.branchFlow", sourceBranch, targetBranch)).append("\n");
         return sb.toString();

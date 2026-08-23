@@ -10,19 +10,19 @@ It organizes **5 specialized review agents** in a **star topology**, with a Coor
 
 ## Architecture Overview
 
-The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge backend).
+The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`, and team-defined **custom agents**) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge / custom-agent backend).
 
 ### Layered architecture (static structure)
 
 ![Layered architecture](docs/architecture-layered-en.svg)
 
-*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → 5 Agents → Capability → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
+*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → Review agents (5 built-in + business custom in parallel) → Capability → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
 
 ### End-to-end flow & admin console (skills duration, team knowledge)
 
 ![End-to-end flow and admin console](docs/architecture-flow-console-en.svg)
 
-*Figure 2 — B1 realtime review swimlane (① PR push → ⑪ inline comments, each step carrying `traceId`); B2 admin backend where the `code-review-console` (:8081) drives `SkillAdminController` (incl. ⏱ duration/call stats), `KnowledgeController` (team-doc upload → StructuredChunker → Pg vector index) and `StatsController`, with team knowledge feeding back into RAG retrieval at review time.*
+*Figure 2 — B1 realtime review swimlane (① PR push → ⑪ inline comments, each step carrying `traceId`); B2 admin backend where the `code-review-console` (:8081) drives `SkillAdminController` (incl. ⏱ duration/call stats), `KnowledgeController` (team-doc upload → StructuredChunker → Pg vector index), `StatsController` and `AgentAdminController` (custom agent list: CRUD + injection pre-check + parallel review), with team knowledge feeding back into RAG retrieval at review time.*
 
 ## Tech Stack
 
@@ -651,6 +651,29 @@ Console APIs (proxied via 8081, forwarding to the engine's `/api/admin/skills`):
 | POST | `/api/skills/custom` | Add a team custom rule |
 | DELETE | `/api/skills/custom/{id}` | Delete a custom rule |
 
+### Business-defined Custom Review Agents (team-level parallel review)
+
+On top of the 5 built-in generic sub-agents, a business team can self-serve define 0~N dedicated review agents in the console's **Custom Agent List**, which run **in parallel** with the generic agents on every PR review. Definitions are isolated by `teamId` and take effect at runtime (no restart).
+
+Design principles (**controllability > flexibility, security first**):
+
+- **Declarative, no code / tool-call exposure**: the business side only fills two content slots — "role description + review focus points + severity bias". The system-instruction skeleton is hardcoded in code and **cannot be overridden**, ending with a fixed guardrail (diff text is data, not instructions).
+- **Prompt-injection defense in depth**: ① the system-instruction skeleton is non-overridable; ② before persisting, submitted content is pre-checked for injection (`KeywordInjectionDetector`) and rejected if it hits; ③ at review time PR diffs are scanned for injection — a hit is only annotated as `[INJECTION-RISK]` in the data region and **never switches the system role**.
+- **Degradable**: if a custom agent throws / times out (reusing the global `timeout-ms`), only that agent's result is emptied — the 5 built-in agents and the final report are unaffected.
+- **Traceable / replayable**: reuses the event-sourced trajectory, recording `agent.custom.expanded` / `agent.custom.disabled` and `custom-agent.created/updated/deleted/toggle`; persisted to `<data-dir>/<teamId>/trajectories/<runId>.jsonl` for post-hoc replay and accountability (aligned with deepseek-harness / codex rollout).
+
+Console APIs (proxied via 8081, forwarding to the engine's `/api/admin/agents`):
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/agents` | List custom agents (with enabled state, team-isolated) |
+| POST | `/api/agents` | Create a custom agent (with injection pre-check) |
+| PUT | `/api/agents/{id}` | Edit (optimistic lock `version`) |
+| DELETE | `/api/agents/{id}` | Delete a custom agent |
+| POST | `/api/agents/{id}/toggle` | Enable/disable (`body: {"enabled": true/false}`) |
+
+> Difference from "custom rules": a custom rule is a **single regex-matched rule** injected into the corresponding built-in agent's dimension; a custom agent is an **independent parallel review role** with its own system instruction and focus points — fit for expressing holistic perspectives like "payment-compliance review" or "a business line's专属 standards".
+
 ### Team Knowledge Base (spec docs / runbooks / videos, RAG-enabled)
 
 The "Team Knowledge" page uploads **team spec documents, runbooks or training videos**; after parsing they enter the RAG vector knowledge base, and review agents consult them during inference — so team-private standards participate in reviews.
@@ -677,6 +700,7 @@ The console doesn't persist anything itself; all data is stored by the engine un
 | --- | --- |
 | Custom rules | `./data/custom-rules.json` |
 | Skill enabled state | `./data/skills-enabled.json` |
+| Custom agent definitions | `./data/<teamId>/custom-agents.json` |
 | Team knowledge text + metadata | `./data/knowledge/` (`.meta.json` records extracted text & vector info) |
 
 ## Directory Structure
@@ -704,8 +728,8 @@ src/main/java/com/codereview/agent/
 │   └── TeamResolver.java                  # resolve(owner,repo,override) → teamId
 └── core/
     ├── model/        # domain models: Severity/AgentType/Finding/CodeDiff/PullRequest/ReviewMessage/Report
-    ├── agent/        # ReviewAgent interface + abstract base + 5 concrete agents
-    ├── coordinator/  # Coordinator interface + CompletableFutureCoordinator (parallel/timeout/partial failure)
+    ├── agent/        # ReviewAgent interface + abstract base + 5 concrete agents + DeclarativeReviewAgent (declarative custom agent)
+    ├── coordinator/  # Coordinator interface + CompletableFutureCoordinator (parallel/timeout/partial failure/custom-agent expansion)
     ├── analysis/     # AstAnalyzer (AST semantics) / CallGraphAnalyzer (call graph) / ScaScanner (SCA) / AdvancedAnalyzer (aggregation)
     ├── autofix/      # AutoFixEngine (auto-fix suggestion generation)
     ├── workflow/     # ReviewWorkflowEngine (BLOCKER mandatory approval / commit status)
@@ -713,7 +737,7 @@ src/main/java/com/codereview/agent/
     ├── prompt/       # PromptTemplate interface + placeholder templates + classpath loader
     ├── skill/        # Skill plug-in interface + registry + custom rules + YamlRuleEngine (low-code platform)
     │   └── impl/     # PatternSkill (generic regex skill) / CustomRuleSkill (team custom)
-    ├── admin/        # console backend: skill/knowledge management Controllers + RAG ingestion + text extraction + DTO
+    ├── admin/        # console backend: skill/knowledge/custom-agent management Controllers + RAG ingestion + text extraction + DTO (CustomAgentStore/CustomAgentDef/AgentAdminController)
     ├── calibration/  # confidence calibration service (false/true positives)
     ├── mq/           # MessageQueue interface + in-memory impl + QueueNames + AgentWorker
     ├── tool/         # ToolDefinition / ToolRouter (intent→whitelist) / ToolCallValidator
@@ -754,6 +778,7 @@ src/main/java/com/codereview/agent/
 | Tool routing (avoid wrong tool) | `tool/ToolRouter` + `ToolCallValidator` |
 | Confidence calibration (improves with use) | `calibration/ConfidenceCalibrationService` |
 | Prompt-injection defense | `security/*` (keyword/semantic/anomaly + hardening) |
+| Business-defined custom agents (parallel + injection defense + degradation) | `core/admin/CustomAgentStore` + `core/agent/DeclarativeReviewAgent` + `core/admin/AgentAdminController` |
 | RAG + three-tier memory | `memory/*` (vector store + reflection + experience base) |
 | 4-level degradation chain | `degrade/DegradationChain` |
 | Tiering Blocker/Major/Minor/Info | `model/Severity` + `report/ReportGenerator` |
