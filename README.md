@@ -342,6 +342,10 @@ review:
 
 ## Architecture Overview
 
+### Layered architecture (static structure)
+
+![Layered architecture](docs/architecture-layered.svg)
+
 ```
                   ┌──────────────┐
    PR trigger ───▶ │  Coordinator │  (star-topology hub: parallel scheduling + aggregation/arbitration + tiering)
@@ -409,6 +413,10 @@ review:
   Side path: console (code-review-console :8081) ──RestTemplate+X-Team-Id──▶ engine /api/admin/* (skills/knowledge/stats)
   Observability: every log line carries [traceId=...]; grep the traceId to reconstruct the full chain and timing above.
 ```
+
+### End-to-end flow & admin console (skills duration, team knowledge)
+
+![End-to-end flow and admin console](docs/architecture-flow-console.svg)
 
 ## Multi-Tenant (Team) Isolation Architecture
 

@@ -1,0 +1,127 @@
+<svg viewBox="0 0 680 1180" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+  <title>端到端审查流程 与 管理控制台后管链路</title>
+  <desc>左：PR 触发到评论写回的编号泳道流程；右：控制台后管 skills 时长/团队知识等配置链路。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <style>
+    text{font-family:'Segoe UI',system-ui,sans-serif}
+    .th{font-size:13px;font-weight:500;fill:#2C2C2A}
+    .ts{font-size:11px;fill:#5F5E5A}
+    .cap{font-size:11px;fill:#888780}
+    .lay{font-size:14px;font-weight:600}
+    .a{stroke-width:1.5;fill:none;marker-end:url(#arrow)}
+    .d{stroke-width:1;fill:none;stroke-dasharray:5 4}
+  </style>
+
+  <text class="th" x="40" y="28" font-size="15">端到端审查流程 &amp; 管理控制台后管链路</text>
+  <text class="ts" x="40" y="46">B1 实时审查泳道（编号步骤） · B2 后管配置与团队知识链路</text>
+
+  <!-- B1 -->
+  <text class="lay" x="40" y="74" fill="#0C447C">B1 · 实时审查泳道</text>
+  <rect x="40" y="84" width="120" height="640" rx="10" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text class="ts" x="100" y="104" text-anchor="middle" dominant-baseline="central">Gitea /</text>
+  <text class="ts" x="100" y="120" text-anchor="middle" dominant-baseline="central">GitLab</text>
+  <rect x="168" y="84" width="130" height="640" rx="10" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.5"/>
+  <text class="ts" x="233" y="104" text-anchor="middle" dominant-baseline="central">引擎 API</text>
+  <text class="ts" x="233" y="120" text-anchor="middle" dominant-baseline="central">integration</text>
+  <rect x="306" y="84" width="150" height="640" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text class="ts" x="381" y="104" text-anchor="middle" dominant-baseline="central">协调 / 分析</text>
+  <text class="ts" x="381" y="120" text-anchor="middle" dominant-baseline="central">coordinator</text>
+  <rect x="464" y="84" width="176" height="640" rx="10" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="ts" x="552" y="104" text-anchor="middle" dominant-baseline="central">LLM / RAG / 存储</text>
+  <text class="ts" x="552" y="120" text-anchor="middle" dominant-baseline="central">infrastructure</text>
+
+  <rect x="52" y="140" width="96" height="40" rx="8" fill="#B5D4F4" stroke="#185FA5"/>
+  <text class="ts" x="100" y="160" text-anchor="middle" dominant-baseline="central">① PR 推送</text>
+  <path class="a" d="M148 160 L168 160" stroke="#185FA5"/>
+  <rect x="176" y="140" width="114" height="40" rx="8" fill="#9FE1CB" stroke="#1D9E75"/>
+  <text class="ts" x="233" y="155" text-anchor="middle" dominant-baseline="central">② Webhook</text>
+  <text class="ts" x="233" y="171" text-anchor="middle" dominant-baseline="central">校验签名</text>
+  <path class="a" d="M290 160 L306 160" stroke="#1D9E75"/>
+  <rect x="314" y="140" width="134" height="40" rx="8" fill="#CECBF6" stroke="#534AB7"/>
+  <text class="ts" x="381" y="155" text-anchor="middle" dominant-baseline="central">③ 解析 owner/repo</text>
+  <text class="ts" x="381" y="171" text-anchor="middle" dominant-baseline="central">→ teamId · 生成 traceId</text>
+  <path class="a" d="M381 180 L381 210" stroke="#534AB7"/>
+  <rect x="314" y="210" width="134" height="44" rx="8" fill="#CECBF6" stroke="#534AB7"/>
+  <text class="ts" x="381" y="226" text-anchor="middle" dominant-baseline="central">④ Coordinator 并行</text>
+  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 Agent + Advanced</text>
+  <path class="a" d="M381 254 L381 284" stroke="#BA7517"/>
+  <rect x="314" y="284" width="134" height="56" rx="8" fill="#FAEEDA" stroke="#BA7517"/>
+  <text class="ts" x="381" y="302" text-anchor="middle" dominant-baseline="central">⑤ 五个专业 Agent</text>
+  <text class="ts" x="381" y="318" text-anchor="middle" dominant-baseline="central">Logic/Security/</text>
+  <text class="ts" x="381" y="334" text-anchor="middle" dominant-baseline="central">Perf/Style/Arch</text>
+  <path class="a" d="M448 312 L464 312" stroke="#5F5E5A"/>
+  <rect x="472" y="284" width="160" height="56" rx="8" fill="#D3D1C7" stroke="#5F5E5A"/>
+  <text class="ts" x="552" y="300" text-anchor="middle" dominant-baseline="central">⑥ LLM 推理</text>
+  <text class="ts" x="552" y="316" text-anchor="middle" dominant-baseline="central">ModelGateway→TokenHub</text>
+  <text class="ts" x="552" y="332" text-anchor="middle" dominant-baseline="central">RAG 检索(向量+BM25)</text>
+  <path class="a" d="M552 340 L552 372" stroke="#5F5E5A"/>
+  <rect x="472" y="372" width="160" height="50" rx="8" fill="#D3D1C7" stroke="#5F5E5A"/>
+  <text class="ts" x="552" y="388" text-anchor="middle" dominant-baseline="central">⑦ 结果回写 PG</text>
+  <text class="ts" x="552" y="406" text-anchor="middle" dominant-baseline="central">memory / knowledge 向量</text>
+  <path class="a" d="M472 397 L448 397" stroke="#534AB7"/>
+  <path class="a" d="M448 397 L448 430" stroke="#534AB7"/>
+  <path class="a" d="M448 430 L314 430" stroke="#534AB7"/>
+  <rect x="314" y="430" width="134" height="48" rx="8" fill="#CECBF6" stroke="#534AB7"/>
+  <text class="ts" x="381" y="446" text-anchor="middle" dominant-baseline="central">⑧ 聚合/去重/仲裁</text>
+  <text class="ts" x="381" y="464" text-anchor="middle" dominant-baseline="central">分级定档 · AutoFix</text>
+  <path class="a" d="M381 478 L381 508" stroke="#534AB7"/>
+  <rect x="314" y="508" width="134" height="48" rx="8" fill="#CECBF6" stroke="#534AB7"/>
+  <text class="ts" x="381" y="524" text-anchor="middle" dominant-baseline="central">⑨ ReportGenerator</text>
+  <text class="ts" x="381" y="542" text-anchor="middle" dominant-baseline="central">生成审查报告</text>
+  <path class="a" d="M290 532 L168 532" stroke="#1D9E75"/>
+  <rect x="176" y="512" width="114" height="48" rx="8" fill="#9FE1CB" stroke="#1D9E75"/>
+  <text class="ts" x="233" y="528" text-anchor="middle" dominant-baseline="central">⑩ ReviewService</text>
+  <text class="ts" x="233" y="546" text-anchor="middle" dominant-baseline="central">写回评论/工单</text>
+  <path class="a" d="M168 536 L148 536" stroke="#185FA5"/>
+  <rect x="52" y="516" width="96" height="48" rx="8" fill="#B5D4F4" stroke="#185FA5"/>
+  <text class="ts" x="100" y="532" text-anchor="middle" dominant-baseline="central">⑪ 行内评论</text>
+  <text class="ts" x="100" y="550" text-anchor="middle" dominant-baseline="central">+ 概览 + 工单</text>
+  <text class="cap" x="52" y="600">每个环节日志带 [traceId]，</text>
+  <text class="cap" x="52" y="616">grep 可重建全链路与耗时</text>
+  <text class="cap" x="52" y="636">（观测性）</text>
+
+  <!-- B2 -->
+  <text class="lay" x="40" y="752" fill="#993556">B2 · 管理控制台后管链路 (code-review-console :8081)</text>
+  <rect x="40" y="762" width="600" height="396" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="56" y="784" fill="#72243E">管理后端 /api/admin/* （X-Team-Id 路由到团队隔离数据）</text>
+  <rect x="58" y="796" width="180" height="44" rx="8" fill="#F4C0D1" stroke="#993556"/>
+  <text class="th" x="148" y="816" text-anchor="middle" dominant-baseline="central">控制台前端</text>
+  <text class="ts" x="148" y="832" text-anchor="middle" dominant-baseline="central">:8081 独立仓库</text>
+  <path class="a" d="M238 818 L272 818" stroke="#993556"/>
+  <rect x="272" y="796" width="356" height="44" rx="8" fill="#F4C0D1" stroke="#993556"/>
+  <text class="th" x="450" y="812" text-anchor="middle" dominant-baseline="central">引擎 Admin API</text>
+  <text class="ts" x="450" y="830" text-anchor="middle" dominant-baseline="central">SkillAdminController · KnowledgeController · StatsController</text>
+
+  <rect x="58" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="148" y="876" text-anchor="middle" fill="#72243E">Skills 管理</text>
+  <text class="ts" x="68" y="896">• 列表/启停 toggle</text>
+  <text class="ts" x="68" y="914">• 自定义规则 POST</text>
+  <text class="ts" x="68" y="932">• YAML 规则导入</text>
+  <text class="ts" x="68" y="950">• 删除 custom/{id}</text>
+  <text class="ts" x="68" y="970" fill="#993556">• ⏱ 时长/调用统计</text>
+  <rect x="250" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="340" y="876" text-anchor="middle" fill="#72243E">团队知识</text>
+  <text class="ts" x="260" y="896">• 上传文档 POST</text>
+  <text class="ts" x="260" y="914">• StructuredChunker</text>
+  <text class="ts" x="260" y="932">  结构感知切块</text>
+  <text class="ts" x="260" y="950">• 向量化→Pg 索引</text>
+  <text class="ts" x="260" y="970">• 删除/重建索引</text>
+  <rect x="442" y="856" width="180" height="120" rx="10" fill="#FFFFFF" stroke="#993556" stroke-width="0.5"/>
+  <text class="th" x="532" y="876" text-anchor="middle" fill="#72243E">团队统计</text>
+  <text class="ts" x="452" y="896">• skillTotal/Enabled</text>
+  <text class="ts" x="452" y="914">• skillCustom 计数</text>
+  <text class="ts" x="452" y="932">• knowledgeTotal</text>
+  <text class="ts" x="452" y="950">• knowledgeIndexed</text>
+  <text class="ts" x="452" y="970">• 按 teamId 隔离</text>
+
+  <path class="d" d="M340 976 L340 1008" stroke="#993556"/>
+  <rect x="200" y="1008" width="280" height="48" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.8"/>
+  <text class="th" x="340" y="1026" text-anchor="middle" fill="#27500A">团队知识库 → RAG 检索增强</text>
+  <text class="ts" x="340" y="1044" text-anchor="middle" dominant-baseline="central">实时审查时混合检索(向量+BM25)+重排</text>
+
+  <text class="cap" x="40" y="1140">图例：实线=同步调用 虚线=知识库预热/旁路增强 色块=分层归属</text>
+</svg>

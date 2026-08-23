@@ -358,6 +358,10 @@ review:
 
 ## 架构总览
 
+### 分层架构（静态结构）
+
+![分层架构](docs/architecture-layered.svg)
+
 ```
                   ┌──────────────┐
    PR 触发 ──────▶ │  Coordinator │  （星型拓扑中心：并行调度 + 聚合仲裁 + 分级定档）
@@ -423,6 +427,10 @@ review:
   旁路：管理控制台(code-review-console :8081) ──RestTemplate+X-Team-Id──▶ 引擎 /api/admin/*（技能/知识/统计）
   可观测：每行日志带 [traceId=...]，grep traceId 即可还原上述完整链路与耗时。
 ```
+
+### 端到端流程 & 管理控制台后管（技能时长、团队知识）
+
+![端到端流程与管理控制台](docs/architecture-flow-console.svg)
 
 ## 多租户（团队）隔离架构
 
