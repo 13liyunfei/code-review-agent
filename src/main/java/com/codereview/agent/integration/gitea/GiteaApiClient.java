@@ -37,6 +37,7 @@ public class GiteaApiClient {
 
     private final HttpClient httpClient;
     private final String apiBase;        // e.g. http://localhost:3000/api/v1
+    private final String webBase;        // e.g. http://localhost:3000（用于构造可点击的 Web 链接）
     private final String apiToken;
 
     /**
@@ -46,12 +47,29 @@ public class GiteaApiClient {
      * @param apiToken Access Token（需 repo / issue 权限）
      */
     public GiteaApiClient(String baseUrl, String apiToken) {
-        this.apiBase = stripTrailingSlash(baseUrl) + "/api/v1";
+        String stripped = stripTrailingSlash(baseUrl);
+        this.apiBase = stripped + "/api/v1";
+        this.webBase = stripped;
         this.apiToken = apiToken;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
         log.info("[Gitea API] 初始化 apiBase={}", this.apiBase);
+    }
+
+    /**
+     * 构造 Gitea Issue / PR 的 Web 页面可点击链接。
+     *
+     * <p>Gitea 评论中的裸 {@code #31} 不会自动渲染为链接，必须显式给出
+     * Markdown 链接 {@code [#31](<web-url>)} 才能点击跳转。
+     *
+     * @param owner     仓库所属
+     * @param repo      仓库名
+     * @param issueNum  Issue / PR 序号
+     * @return 形如 {@code http://localhost:3000/owner/repo/issues/31} 的完整 URL
+     */
+    public String getIssueUrl(String owner, String repo, long issueNum) {
+        return webBase + "/" + owner + "/" + repo + "/issues/" + issueNum;
     }
 
     // ===================== 核心 API =====================

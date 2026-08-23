@@ -64,6 +64,8 @@ public class RedisMessageQueue implements MessageQueue, AutoCloseable {
     private Thread recoverThread;
 
     private JedisPool pool;
+    /** Redis 可用性标志：初始化或运行中连接失败时置 false，发布/消费降级为本地直连不阻断主链路。 */
+    private volatile boolean available = false;
 
     /**
      * 构造 Redis 消息队列。
@@ -103,12 +105,14 @@ public class RedisMessageQueue implements MessageQueue, AutoCloseable {
             pool = new JedisPool(config, host, port, soTimeoutMs);
         }
 
-        // 验证连通性
+        // 验证连通性（失败仅告警，不阻断引擎启动：Redis 抖动时 MQ 降级，主审查链路不受影响）
         try (Jedis jedis = pool.getResource()) {
             String pong = jedis.ping();
             log.info("[Redis] 连接成功（{}:{}, ping={}）", host, port, pong);
+            available = true;
         } catch (JedisConnectionException e) {
-            throw new IllegalStateException("[Redis] 连接失败: " + e.getMessage(), e);
+            log.warn("[Redis] 初始连接失败，MQ 降级为不可用（不影响主审查链路）: {}", e.getMessage());
+            available = false;
         }
 
         // 启动后台恢复线程：重投超时未确认 / worker 崩溃遗留的消息
@@ -127,6 +131,11 @@ public class RedisMessageQueue implements MessageQueue, AutoCloseable {
 
     @Override
     public void publish(String queue, String message) {
+        if (!available || pool == null) {
+            // Redis 不可用时静默降级：不抛异常，调用方（审查主链路）走同步路径，不受影响
+            log.warn("[Redis] 发布消息降级跳过（Redis 不可用, queue={}）", queue);
+            return;
+        }
         try (Jedis jedis = pool.getResource()) {
             Env env = new Env(UUID.randomUUID().toString(), message, 1, System.currentTimeMillis());
             jedis.lpush(queue, toJson(env));

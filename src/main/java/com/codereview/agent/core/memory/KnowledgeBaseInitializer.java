@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
+import com.codereview.agent.core.rag.KnowledgeStore;
 import com.codereview.agent.tenant.Teams;
 
 import jakarta.annotation.PostConstruct;
@@ -13,8 +14,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,10 +29,10 @@ public class KnowledgeBaseInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeBaseInitializer.class);
 
-    private final MemoryStore memoryStore;
+    private final KnowledgeStore knowledgeStore;
 
-    public KnowledgeBaseInitializer(MemoryStore memoryStore) {
-        this.memoryStore = memoryStore;
+    public KnowledgeBaseInitializer(KnowledgeStore knowledgeStore) {
+        this.knowledgeStore = knowledgeStore;
     }
 
     /**
@@ -56,14 +56,12 @@ public class KnowledgeBaseInitializer {
             log.warn("[KB] 未找到编码规范手册，跳过预灌入");
             return;
         }
-        List<String> chunks = splitIntoChunks(handbook, 300);
-        for (String chunk : chunks) {
-            memoryStore.save(new MemoryEntry(
-                    null, "RAG", Teams.GLOBAL, chunk,
-                    Map.of("source", "handbook", "type", "coding_standard"),
-                    MemoryLevel.LONG_TERM, Instant.now(), null));
-        }
-        log.info("[KB] 编码规范已切分为 {} 段并入库", chunks.size());
+        // 结构感知切块 + 富元数据（层级 section + 重叠），由 KnowledgeStore 完成
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put("source", "handbook");
+        meta.put("type", "coding_standard");
+        int chunkCount = knowledgeStore.saveKnowledge(Teams.GLOBAL, handbook, meta);
+        log.info("[KB] 编码规范已结构化切分为 {} 段并入库", chunkCount);
     }
 
     /**
@@ -90,19 +88,4 @@ public class KnowledgeBaseInitializer {
      * @param maxChars  单 chunk 近似上限
      * @return chunk 列表
      */
-    List<String> splitIntoChunks(String text, int maxChars) {
-        List<String> chunks = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        for (String line : text.split("\n")) {
-            if (current.length() + line.length() + 1 > maxChars && !current.isEmpty()) {
-                chunks.add(current.toString().trim());
-                current.setLength(0);
-            }
-            current.append(line).append('\n');
-        }
-        if (!current.isEmpty()) {
-            chunks.add(current.toString().trim());
-        }
-        return chunks;
-    }
 }

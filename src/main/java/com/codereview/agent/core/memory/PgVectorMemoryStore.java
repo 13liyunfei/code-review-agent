@@ -51,9 +51,9 @@ import java.util.Map;
  */
 public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
 
-    private static final Logger log = LoggerFactory.getLogger(PgVectorMemoryStore.class);
+    protected static final Logger log = LoggerFactory.getLogger(PgVectorMemoryStore.class);
 
-    private final EmbeddingClient embeddingClient;
+    protected final EmbeddingClient embeddingClient;
     private final HikariDataSource hikari;
     private final DataSource dataSource;
     private final int vectorDim;
@@ -110,7 +110,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
      * </ol>
      */
     @PostConstruct
-    public void init() {
+    protected void init() {
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
             // 启用 pgvector 扩展
@@ -132,7 +132,17 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_memory_agent ON memory_store (agent_type)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_memory_team ON memory_store (team_id)");
 
-            log.info("[PgVector] 表与索引就绪（vector({}), ivfflat 索引）", vectorDim);
+            // 全文检索向量列（BM25 / 混合检索用）：simple 词典保证中文按字符切分可用
+            if (!columnExists(conn, "search_vector")) {
+                stmt.execute("ALTER TABLE memory_store ADD COLUMN search_vector tsvector");
+                log.info("[PgVector] 迁移：已补充 search_vector 列（混合检索 BM25 用）");
+            }
+            stmt.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_memory_tsv
+                    ON memory_store USING gin (search_vector)
+                    """);
+
+            log.info("[PgVector] 表与索引就绪（vector({}), ivfflat 索引, gin(tsvector)）", vectorDim);
         } catch (SQLException e) {
             throw new IllegalStateException("[PgVector] 初始化失败: " + e.getMessage(), e);
         }
@@ -183,10 +193,11 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
                     metadata  JSONB DEFAULT '{}',
                     level     VARCHAR(20) NOT NULL,
                     created_at TIMESTAMPTZ DEFAULT now(),
-                    embedding vector(%d)
+                    embedding vector(%d),
+                    search_vector tsvector
                 )
                 """.formatted(vectorDim));
-        log.info("[PgVector] 已创建 memory_store 表（vector({})）", vectorDim);
+        log.info("[PgVector] 已创建 memory_store 表（vector({}) + tsvector）", vectorDim);
     }
 
     /** 存量表迁移：补 team_id 列 + embedding 维度对齐（幂等）。 */
@@ -234,8 +245,8 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
         Instant createdAt = entry.createdAt() != null ? entry.createdAt() : Instant.now();
 
         String sql = """
-                INSERT INTO memory_store (agent_type, team_id, content, metadata, level, created_at, embedding)
-                VALUES (?, ?, ?, ?::jsonb, ?, ?, ?::vector)
+                INSERT INTO memory_store (agent_type, team_id, content, metadata, level, created_at, embedding, search_vector)
+                VALUES (?, ?, ?, ?::jsonb, ?, ?, ?::vector, to_tsvector('simple', ?))
                 RETURNING id
                 """;
 
@@ -248,6 +259,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
             ps.setString(5, entry.level().name());
             ps.setObject(6, java.sql.Timestamp.from(createdAt));
             ps.setString(7, vectorStr);
+            ps.setString(8, entry.content());
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -276,9 +288,10 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
         String vectorStr = toVectorString(q);
         teamId = teamId == null || teamId.isBlank() ? Teams.DEFAULT : teamId;
 
-        // 团队过滤：始终限定本团队；RAG 检索（includeGlobal）额外纳入全局基线
+        // 团队过滤：始终限定本团队；RAG 检索（includeGlobal）额外纳入全局基线。
+        // 使用参数化占位符（不拼常量进 SQL）。
         String teamFilter = includeGlobal
-                ? "(team_id = ? OR team_id = '" + Teams.GLOBAL + "')"
+                ? "(team_id = ? OR team_id = ?)"
                 : "team_id = ?";
 
         String sql;
@@ -310,12 +323,18 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
             if (agentType == null) {
                 ps.setString(idx++, vectorStr);
                 ps.setString(idx++, teamId);
+                if (includeGlobal) {
+                    ps.setString(idx++, Teams.GLOBAL);
+                }
                 ps.setString(idx++, vectorStr);
                 ps.setInt(idx++, topK);
             } else {
                 ps.setString(idx++, vectorStr);
                 ps.setString(idx++, agentType);
                 ps.setString(idx++, teamId);
+                if (includeGlobal) {
+                    ps.setString(idx++, Teams.GLOBAL);
+                }
                 ps.setString(idx++, vectorStr);
                 ps.setInt(idx++, topK);
             }
@@ -376,14 +395,14 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
 
     // ===================== 内部工具方法 =====================
 
-    private Connection getConnection() throws SQLException {
+    protected Connection getConnection() throws SQLException {
         return dataSource.getConnection();
     }
 
     /**
      * 将 float[] 序列化为 pgvector 文本格式 {@code [v1,v2,…]}。
      */
-    private String toVectorString(float[] vec) {
+    protected String toVectorString(float[] vec) {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < vec.length; i++) {
             if (i > 0) sb.append(',');
@@ -395,7 +414,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
     /**
      * 将 Map 序列化为 JSON 字符串。
      */
-    private String toJson(Map<String, String> map) {
+    protected String toJson(Map<String, String> map) {
         if (map == null || map.isEmpty()) {
             return "{}";
         }
@@ -409,7 +428,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
     /**
      * 将 JSON 字符串反序列化为 Map。
      */
-    private Map<String, String> fromJson(String json) {
+    protected Map<String, String> fromJson(String json) {
         if (json == null || json.isBlank()) {
             return Collections.emptyMap();
         }

@@ -235,7 +235,9 @@ Developer opens/updates a PR
 
 Auto-fix suggestions are written back to the PR as ```` ```suggestion ```` code blocks; **only inline code-review comments render the "Apply" button** (top-level PR comments don't).
 
-> **Gitea 1.27 API change**: the standalone `POST /pulls/{index}/comments` endpoint was removed, and `POST /reviews/{id}/comments` only keeps the GET list. So inline comments can only be written **in one shot** when creating the review, via the `comments` array: `GiteaApiClient.postReviewComments(...)` calls `POST /repos/{owner}/{repo}/pulls/{index}/reviews` with `event=COMMENT` to submit the review plus all inline comments at once (each `ReviewCommentItem` carries `path` / `line`(side=RIGHT) / `body`). When a line can't be anchored, fall back to the top-level overview comment so nothing is lost.
+> **Gitea 1.27 API change**: the standalone `POST /pulls/{index}/comments` endpoint was removed, and `POST /reviews/{id}/comments` only keeps the GET list (returns **405**). So inline comments can only be written **in one shot** when creating the review, via the `comments` array: `GiteaApiClient.postReviewComments(...)` calls `POST /repos/{owner}/{repo}/pulls/{index}/reviews` with `event=COMMENT` to submit the review plus all inline comments at once (each `ReviewCommentItem` carries `path` / `line`(side=RIGHT) / `body`).
+>
+> ⚠️ **Known limitation (verified E2E on Gitea 1.27)**: in practice the `line` / `side` fields are **silently dropped to `null`** when comments are submitted together with a PENDING review, so all comments degrade to **file-level** comments (`IsCodeComment()=false`). As a result the **"Apply" button does not render** on Gitea 1.27 through the REST API — `suggestion` blocks are shown as plain code blocks only. The engine therefore also writes the adoptable fix into the **top-level overview comment** (auto-fix summary) and file-level `suggestion` blocks for manual copy. To get a real line-anchored "Apply" experience you would need a Gitea version that restores the inline-comment API, or a non-REST path.
 
 ## IDE (IntelliJ IDEA) shows red errors everywhere
 
@@ -297,6 +299,46 @@ primaryChatModel (models[0]) → CodeReviewAiService (AiServices structured outp
 > 2. Or add `application.yml` to `.gitignore` and use a local override file `application-local.yml`.
 
 Once real models are enabled, `ModelGateway` prints the online vendors; findings marked with source **LLM** in the final report are produced by live inference of the corresponding model (rule-based findings are still supplemented by local deterministic detection).
+
+## RAG & Advanced Retrieval
+
+The team-knowledge + coding-standards RAG pipeline was rebuilt around a pluggable `KnowledgeStore` abstraction (`InMemoryKnowledgeStore` for local / `PgKnowledgeStore` for PostgreSQL + pgvector), with **hybrid retrieval (dense vector + BM25 keyword) on by default**, a **cross-encoder rerank stage**, and a **similarity gate** that suppresses low-relevance noise.
+
+```
+sources ─▶ StructuredChunker (split by heading/code fence) ─▶ embed ─▶ KnowledgeStore
+                                                                       │
+query ─▶ hybrid retrieve (vector ∪ BM25, top-K) ─▶ Reranker (cross-encoder) ─▶ min-similarity gate ─▶ prompt
+```
+
+- **`StructuredChunker`** preserves markdown structure (headings + fenced code blocks) so retrieval returns coherent, self-contained snippets instead of arbitrary character slices.
+- **`Reranker`** interface with two implementations: `ApiReranker` (Cohere/Jina cross-encoder) and `HeuristicReranker` (offline lexical/positional scorer). `ApiReranker` **auto-degrades to `HeuristicReranker` when the API key is absent** — the review chain never blocks on rerank.
+- **`RagEvaluator`** optionally logs precision/recall against ground-truth `expectedId` metadata, so retrieval quality can be regression-tested.
+- **`min-similarity`** (default `0.3`) drops candidates below the threshold before they reach the prompt — enabling "selective abstain" to keep irrelevant knowledge out of the context.
+
+### Configuration (`review.rag` / `review.egress` in `application.yml`)
+
+```yaml
+review:
+  rag:
+    rerank:
+      enabled: true                 # cross-encoder rerank on (auto-degrades to heuristic if no key)
+      provider: cohere              # cohere | jina
+      base-url: ${RERANK_BASE_URL:https://api.cohere.com/v2/rerank}
+      api-key: ${RERANK_API_KEY:}   # leave empty → offline heuristic rerank
+      model: ${RERANK_MODEL:rerank-english-v3.0}
+      timeout-ms: 5000
+    min-similarity: ${RAG_MIN_SIMILARITY:0.3}   # 0.0 = no gate
+    eval-enabled: ${RAG_EVAL_ENABLED:true}
+  # Egress: explicit per-dependency egress control (does NOT hijack localhost PG/Redis/Gitea)
+  egress:
+    rerank:
+      mode: ${EGRESS_RERANK_MODE:direct}        # direct | system | proxy
+      proxy-url: ${RERANK_PROXY:}               # used only when mode=proxy
+```
+
+> 🔐 **Production credentials**: `RERANK_API_KEY` / `TOKENHUB_API_KEY` must be injected from a Secret Manager (Vault / AWS Secrets Manager / Doppler). They are **never** committed — `.env` is git-ignored (see `.env.example`).
+>
+> 🌐 **GFW / egress note**: Cohere/Jina endpoints are blocked on some networks. Use `EGRESS_RERANK_MODE=proxy` + `RERANK_PROXY=http://127.0.0.1:<clash-mixed-port>` (e.g. Clash Verge mixed-port `7897`) to route **only** the rerank request through an explicit proxy, without hijacking localhost PostgreSQL/Redis/Gitea connections. `direct` (default) is correct for servers in a compliant network or behind an internal AI Gateway.
 
 ## Architecture Overview
 
@@ -731,6 +773,7 @@ src/main/java/com/codereview/agent/
     ├── tool/         # ToolDefinition / ToolRouter (intent→whitelist) / ToolCallValidator
     ├── security/     # injection detection (keyword/semantic/anomaly) + prompt hardening (XML/Canary)
     ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG
+    ├── rag/          # RAG retrieval overhaul: KnowledgeStore (InMemory/Pg) / StructuredChunker / Reranker (ApiReranker+HeuristicReranker) / RagEvaluator / RagContextBuilder
     ├── llm/          # LlmClient / ModelGateway (multi-vendor routing+quota+failover) / LangChain4jChatProvider / MockProvider / NoOpChatModel / LoggingChatModelListener / EmbeddingClient / aiservice/ (CodeReviewAiService structured output + ChatMemory)
     ├── trace/        # TraceContext (SLF4J MDC traceId, cross-thread wrap propagation, full-chain tracing)
     ├── trajectory/   # ReviewEvent / ReviewEventLog / ReviewTrajectoryRecorder (event-sourced review trajectory, JSONL)

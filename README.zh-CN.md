@@ -243,22 +243,25 @@ docker exec -u git gitea gitea admin user generate-access-token --username revie
 
 自动修复建议以 ```` ```suggestion ```` 代码块回写到 PR，**只有在代码评审行内评论里才会渲染「应用建议」(Apply) 按钮**（顶层 PR 评论不会显示）。
 
-> **Gitea 1.27 API 变更**：已移除独立的 `POST /pulls/{index}/comments` 接口，且 `POST /reviews/{id}/comments` 仅保留 GET 列表。  
+> **Gitea 1.27 API 变更**：已移除独立的 `POST /pulls/{index}/comments` 接口，且 `POST /reviews/{id}/comments` 仅保留 GET 列表（调用返回 **405**）。  
 > 因此行内评论只能在「创建评审」时通过 `comments` 数组**一次性写入**：`GiteaApiClient.postReviewComments(...)` 调用  
-> `POST /repos/{owner}/{repo}/pulls/{index}/reviews`，以 `event=COMMENT` 一次性提交评审 + 所有行内评论（每条 `ReviewCommentItem` 含 `path` / `line`(side=RIGHT) / `body`）。  
-> 行无法锚定到具体行时，建议回退到顶层概览评论，不丢失内容。
+> `POST /repos/{owner}/{repo}/pulls/{index}/reviews`，以 `event=COMMENT` 一次性提交评审 + 所有行内评论（每条 `ReviewCommentItem` 含 `path` / `line`(side=RIGHT) / `body`）。
+>
+> ⚠️ **已知限制（已在 Gitea 1.27 实测）**：当评论随 PENDING 评审一并提交时，`line` / `side` 字段会被 Gitea **静默丢弃为 `null`**，所有评论退化为**文件级**评论（`IsCodeComment()=false`）。  
+> 结果：**经 REST API 的「应用建议」(Apply) 按钮在 1.27 下不会渲染**，`suggestion` 块仅作为普通代码块展示。  
+> 因此引擎同时把可采纳修复写入**顶层概览评论**（auto-fix 摘要）+ 文件级 `suggestion` 块供人工复制。若需真正的行内 Apply 体验，须升级到恢复行内评论 API 的 Gitea 版本，或走非 REST 路径。
 
 ## IDE（IntelliJ IDEA）打开后若满屏爆红
 
 命令行可编译、但 IDE 满屏报错，几乎都是 **IDE 的 JDK / 语言级别低于 16，或未加载 Maven 依赖**所致——  
 本项目大量使用 Java 16+ 语法（`record`、`switch` 表达式 `->`、文本块 `"""`），低于该版本会被 IDE 标红。
 
-1. **确认 JDK**：`File → Project Structure → Project SDK` 选择 **21**（如 Corretto 21）；
-2. **确认语言级别**：同一窗口 `Project → Language Level` 设为 `21`；
+1. **确认 JDK**：`File → Project Structure → Project SDK` 选择 **17**（如 Corretto / Zulu 17）；
+2. **确认语言级别**：同一窗口 `Project → Language Level` 设为 `17`；
 3. **重新加载 Maven**：右键 `pom.xml → Maven → Reload Project`（或 Maven 工具窗口的刷新按钮）；
 4. 仍不行：`File → Invalidate Caches… → Invalidate and Restart`，再重新加载 Maven。
 
-> 注意：Spring Boot 3.3 最低要求 Java 17；本工程 `maven.compiler.release=21`，编译需 JDK 21。
+> 注意：Spring Boot 3.3 最低要求 Java 17；本工程统一使用 **Java 17**（`maven.compiler.release=17`，仅用 `record` 等 17 特性），编译需 JDK 17+。IDEA 2022.2 不识别 Java 21 项目语言级别，故锁定 17 避免 reimport 后 bytecode 被回退。
 
 ## 接入真实大模型（TokenHub 多模型，via LangChain4j）
 
@@ -312,6 +315,46 @@ primaryChatModel（取 models[0]）→ CodeReviewAiService(AiServices 结构化�
 > 当前仓库的 `application.yml` 已写入一个可用 Key 用于演示，请在上线前移除或替换。
 
 启用真实模型后，`ModelGateway` 打印当前在线供应商；最终审查报告中标注 **来源 LLM** 的发现即由对应模型实时推理产生（规则型发现仍由本地确定性检测补充）。
+
+## RAG 与高级检索
+
+团队知识库 + 编码规范手册的 RAG 管线围绕可插拔的 `KnowledgeStore` 抽象（`InMemoryKnowledgeStore` 用于本地 / `PgKnowledgeStore` 用于 PostgreSQL + pgvector）重建，默认开启**混合检索（稠密向量 + BM25 关键词）**，并引入 **Cross-Encoder 重排** 与 **相似度闸门** 抑制低相关噪声。
+
+```
+源文档 ─▶ StructuredChunker（按标题/代码围栏切分） ─▶ 向量化 ─▶ KnowledgeStore
+                                                                  │
+查询 ─▶ 混合召回（向量 ∪ BM25，top-K） ─▶ Reranker（cross-encoder） ─▶ min-similarity 闸门 ─▶ prompt
+```
+
+- **`StructuredChunker`**：保留 Markdown 结构（标题 + 围栏代码块），让召回返回语义完整、自洽的片段，而非任意字符切片。
+- **`Reranker`** 接口两种实现：`ApiReranker`（Cohere/Jina cross-encoder）与 `HeuristicReranker`（离线词法/位置打分）。**API Key 缺失时 `ApiReranker` 自动降级到 `HeuristicReranker`**——审查链路永不因重排而阻塞。
+- **`RagEvaluator`**：在携带 ground-truth `expectedId` 元数据时可选记录 precision/recall，便于检索质量做回归测试。
+- **`min-similarity`**（默认 `0.3`）：在候选进入 prompt 前丢弃低于阈值的片段，实现"选择性 abstain"以保持上下文干净。
+
+### 配置（`application.yml` 的 `review.rag` / `review.egress`）
+
+```yaml
+review:
+  rag:
+    rerank:
+      enabled: true                 # 开启 cross-encoder 重排（无 key 时自动降级 heuristic）
+      provider: cohere              # cohere | jina
+      base-url: ${RERANK_BASE_URL:https://api.cohere.com/v2/rerank}
+      api-key: ${RERANK_API_KEY:}   # 留空 → 离线 heuristic 重排
+      model: ${RERANK_MODEL:rerank-english-v3.0}
+      timeout-ms: 5000
+    min-similarity: ${RAG_MIN_SIMILARITY:0.3}   # 0.0 = 不拦截
+    eval-enabled: ${RAG_EVAL_ENABLED:true}
+  # Egress：按依赖显式出口管控（绝不劫持 localhost 的 PG/Redis/Gitea）
+  egress:
+    rerank:
+      mode: ${EGRESS_RERANK_MODE:direct}        # direct | system | proxy
+      proxy-url: ${RERANK_PROXY:}               # 仅 mode=proxy 时生效
+```
+
+> 🔐 **生产凭证**：`RERANK_API_KEY` / `TOKENHUB_API_KEY` 必须由 Secret Manager（Vault / AWS Secrets Manager / Doppler）注入环境变量，**绝不入库**。`.env` 已被 git-ignore 忽略（见 `.env.example`）。
+>
+> 🌐 **GFW / 出口说明**：Cohere/Jina 端点在某些网络下被封锁。可用 `EGRESS_RERANK_MODE=proxy` + `RERANK_PROXY=http://127.0.0.1:<clash-mixed-port>`（如 Clash Verge 的 mixed-port `7897`）仅让**重排请求**走显式代理，不会劫持 localhost 的 PostgreSQL/Redis/Gitea 连接。`direct`（默认）适用于合规网络内直出、或经内部 AI Gateway（Envoy AI Gateway / LiteLLM Proxy 等）统一持有供应商 key 的场景。
 
 ## 架构总览
 
@@ -775,6 +818,7 @@ src/main/java/com/codereview/agent/
     ├── tool/         # ToolDefinition / ToolRouter（意图→白名单）/ ToolCallValidator
     ├── security/     # 注入检测（关键词/语义/异常）+ Prompt 硬化（XML/Canary）
     ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG
+    ├── rag/          # RAG 检索重构：KnowledgeStore（内存/Pg）/ StructuredChunker / Reranker（ApiReranker+HeuristicReranker）/ RagEvaluator / RagContextBuilder
     ├── llm/          # LlmClient / ModelGateway（多供应商路由+配额+failover）/ LangChain4jChatProvider / MockProvider / NoOpChatModel / LoggingChatModelListener / EmbeddingClient / aiservice/（CodeReviewAiService 结构化输出 + ChatMemory）
     ├── trace/        # TraceContext（SLF4J MDC traceId，跨线程 wrap 传播，全链路追踪）
     ├── trajectory/   # ReviewEvent / ReviewEventLog / ReviewTrajectoryRecorder（事件源审查轨迹，JSONL 落盘）

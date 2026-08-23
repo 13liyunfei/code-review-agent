@@ -64,7 +64,9 @@ public class ReviewWorkflowEngine {
             }
             note.append("🔴 **存在 ").append(blockers).append(" 个 BLOCKER，已进入强制审批流**。");
             if (issueNum > 0) {
-                note.append("已创建整改工单 **#").append(issueNum).append("** 跟踪。\n");
+                // 用裸 #号引用：Gitea 的 issue/PR auto-link 会把 #n 自动渲染为站内可点击链接
+                // （且不会像绝对 URL 那样被域名白名单过滤、也不会像相对路径那样被二次拼接 base 导致 404）
+                note.append("已创建整改工单 📋 #").append(issueNum).append(" 跟踪。\n");
             }
         } else {
             if (headSha != null && !headSha.isBlank()) {

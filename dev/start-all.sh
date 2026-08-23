@@ -52,6 +52,8 @@ GITEA_TOKEN="${GITEA_API_TOKEN:-${GITEA_TOKEN:-}}"
 GITEA_WEBHOOK_SECRET="${GITEA_WEBHOOK_SECRET:-}"
 TOKENHUB_API_KEY="${TOKENHUB_API_KEY:-}"
 REVIEW_API_TOKEN="${REVIEW_API_TOKEN:-}"
+# Cohere rerank 真实 API Key（Free Trial）；缺省时引擎自动降级为启发式重排
+RERANK_API_KEY="${RERANK_API_KEY:-}"
 if [ -z "$GITEA_TOKEN" ] || [ -z "$TOKENHUB_API_KEY" ]; then
   echo "WARN: 缺少 GITEA_API_TOKEN / TOKENHUB_API_KEY，请在 .env 或环境变量中提供（详见 .env.example）" >&2
 fi
@@ -160,6 +162,7 @@ export GITEA_API_TOKEN="$GITEA_TOKEN"
 export GITEA_WEBHOOK_SECRET="$GITEA_WEBHOOK_SECRET"
 export TOKENHUB_API_KEY="$TOKENHUB_API_KEY"
 export REVIEW_API_TOKEN="$REVIEW_API_TOKEN"
+export RERANK_API_KEY="$RERANK_API_KEY"
 nohup ./mvnw spring-boot:run \
   -Dspring-boot.run.profiles="$SPRING_PROFILE" \
   -Dspring-boot.run.arguments="--server.port=$APP_PORT --gitea.base-url=$GITEA_URL" \

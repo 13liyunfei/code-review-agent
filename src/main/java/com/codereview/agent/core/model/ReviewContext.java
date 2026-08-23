@@ -13,6 +13,7 @@ import com.codereview.agent.tenant.Teams;
  * @param branch        目标分支
  * @param teamId        所属团队 / 租户标识（用于规则、知识、记忆、历史、反馈的隔离）
  * @param impactSummary 变更影响面摘要（由 {@code ImpactAnalyzer} 计算，注入 Agent 提示词；可为空）
+ * @param ragContext    RAG 检索到的相关规范/历史知识（由 {@code RagContextBuilder} 构建，注入 Agent 提示词；可为空）
  */
 public record ReviewContext(
         long prId,
@@ -21,7 +22,8 @@ public record ReviewContext(
         int changedFiles,
         String branch,
         String teamId,
-        String impactSummary) {
+        String impactSummary,
+        String ragContext) {
 
     /**
      * 便捷构造：仅提供核心标识，团队回退到默认团队。
@@ -31,14 +33,14 @@ public record ReviewContext(
      * @param author 作者
      */
     public ReviewContext(long prId, String repo, String author) {
-        this(prId, repo, author, 0, "main", Teams.DEFAULT, "");
+        this(prId, repo, author, 0, "main", Teams.DEFAULT, "", "");
     }
 
     /**
      * 便捷构造：显式指定分支与团队。
      */
     public ReviewContext(long prId, String repo, String author, String branch, String teamId) {
-        this(prId, repo, author, 0, branch, teamId, "");
+        this(prId, repo, author, 0, branch, teamId, "", "");
     }
 
     /**
@@ -49,6 +51,17 @@ public record ReviewContext(
      */
     public ReviewContext withImpactSummary(String impactSummary) {
         return new ReviewContext(prId, repo, author, changedFiles, branch, teamId,
-                impactSummary == null ? "" : impactSummary);
+                impactSummary == null ? "" : impactSummary, ragContext == null ? "" : ragContext);
+    }
+
+    /**
+     * 拷贝式更新：返回附带 RAG 上下文的新上下文（记录不可变，采用拷贝式更新）。
+     *
+     * @param ragContext RAG 检索到的相关规范/历史知识
+     * @return 新上下文
+     */
+    public ReviewContext withRagContext(String ragContext) {
+        return new ReviewContext(prId, repo, author, changedFiles, branch, teamId,
+                impactSummary == null ? "" : impactSummary, ragContext == null ? "" : ragContext);
     }
 }

@@ -132,13 +132,59 @@ review:
   # 切换模型时需同步把 pgvector.vector-dim 改为对应维度（存量表会自动迁移重建向量列）。
   llm:
     embedding:
-      enabled: false
+      # 默认 true：有 TokenHub Key 时使用真实语义向量（业界最佳实践，检索质量远超哈希词袋）；
+      # 无 Key 时自动降级 SimpleHashEmbeddingClient（离线哈希），保证链路不中断。
+      enabled: true
       # dev profile 覆盖为 true，并使用真实 TokenHub Embedding。
       base-url: ""
       api-key: ""
       model: kinfra-text-embedding-0.6b
       # 仅用于日志/维度对齐提示，不传给模型（TokenHub 不支持 dimensions 参数）
       dim: 1024
+
+  # ===== RAG 高级检索配置（对标业界最佳实践）=====
+  # 混合检索（向量 + BM25）已在 KnowledgeStore 实现中默认开启（无需开关）；
+  # 以下控制重排与阈值过滤。
+  rag:
+    # Cross-Encoder 重排（质量闸门）：默认开启（enabled=true），但 api-key 为空时
+    # ApiReranker 自动降级到 HeuristicReranker（离线可用，绝不阻断审查链路）。
+    # 生产建议配置 Cohere/Jina：将 RERANK_API_KEY 注入且填 base-url。
+    rerank:
+      enabled: ${RERANK_ENABLED:true}
+      provider: cohere          # cohere | jina
+      base-url: ${RERANK_BASE_URL:https://api.cohere.com/v2/rerank}
+      api-key: ${RERANK_API_KEY:}
+      model: ${RERANK_MODEL:rerank-english-v3.0}
+      timeout-ms: 5000
+    # 相似度阈值：低于此值的候选块不注入 prompt（选择性回答 abstain，抑制噪声）。
+    # 0.0 表示不拦截；真实向量下建议 0.2~0.4（已设为 0.3 启用 abstain）。
+    min-similarity: ${RAG_MIN_SIMILARITY:0.3}
+    # 是否记录 ground-truth 召回评估指标（需候选携带 expectedId 元数据）；
+    # true 时 RagEvaluator 在 evalEnabled 下计算 precision/recall，配合回归基线。
+    eval-enabled: ${RAG_EVAL_ENABLED:true}
+
+  # ===== 受控出口（Egress）配置 =====
+  # 大厂「显式出口管控」实践：每个外部 SaaS 依赖（LLM / Rerank）各自声明出口方式，
+  # 互不干扰，也绝不劫持内部服务（PostgreSQL / Redis / Gitea 始终直连，与本段无关）。
+  # 取代原先脆弱的全局 bypass-system-proxy 布尔。
+  #
+  # 三种模式（EgressMode）：
+  #   direct  : 强制直连（忽略系统代理）。【生产默认】服务器在合规网络内直接出网，
+  #             或 base-url 指向公司内部 AI Gateway（Envoy AI Gateway / LiteLLM Proxy 等），
+  #             由网关统一持有供应商 key、做限流/重试/计费/审计——业务代码零 key、零供应商耦合。
+  #   system  : 继承 JVM 系统代理（http.proxyHost 等）。仅确实需要走机器级代理出网时使用。
+  #   proxy   : 仅本出站请求走显式 proxy-url（如开发机 Clash http://127.0.0.1:52320），
+  #             精准代理单个外部依赖，不劫持 localhost。
+  #
+  # 生产凭证：RERANK_API_KEY / TOKENHUB_API_KEY 务必由 Secret Manager（Vault / AWS Secrets Manager /
+  # Doppler）注入环境变量，绝不入库。
+  egress:
+    llm:
+      mode: ${EGRESS_LLM_MODE:direct}
+    rerank:
+      mode: ${EGRESS_RERANK_MODE:direct}
+      # 仅 mode=proxy 时生效；开发机经 Clash 出网可设 RERANK_PROXY=http://127.0.0.1:52320
+      proxy-url: ${RERANK_PROXY:}
 
 # ===== 演示模式 =====
 # 设为 true 时启动后执行硬编码样例审查（不走 Webhook）；默认关闭

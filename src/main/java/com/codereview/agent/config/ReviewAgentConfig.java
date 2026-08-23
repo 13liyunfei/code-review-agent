@@ -38,6 +38,8 @@ import com.codereview.agent.core.skill.impl.PatternSkill;
 import com.codereview.agent.core.skill.impl.SqlInjectionSkill;
 import com.codereview.agent.core.tool.ToolDefinition;
 import com.codereview.agent.core.tool.ToolRouter;
+import com.codereview.agent.core.http.EgressHttpClientFactory;
+import com.codereview.agent.core.http.EgressProperties;
 import com.codereview.agent.tenant.TeamProperties;
 import com.codereview.agent.tenant.TeamResolver;
 import dev.langchain4j.http.client.jdk.JdkHttpClientBuilder;
@@ -54,7 +56,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
-import java.net.ProxySelector;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -70,18 +71,16 @@ import java.util.regex.Pattern;
  * （如仅安全 Agent 挂载安全类 Skill），符合 Spring 最佳实践。
  */
 @Configuration
-@EnableConfigurationProperties({TeamProperties.class, TokenHubProperties.class})
+@EnableConfigurationProperties({TeamProperties.class, TokenHubProperties.class, EgressProperties.class})
 public class ReviewAgentConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewAgentConfig.class);
 
     /**
-     * 是否让 LangChain4j 的 HTTP 客户端忽略系统代理（HTTP_PROXY/HTTPS_PROXY）。
-     * 本机常因代理指向无法直连 TokenHub 的本地代理而导致请求超时，故默认 true（直连）。
-     * 若生产必须经由代理出网，可设 review.llm.http.bypass-system-proxy=false。
+     * 受控出口配置——所有外部 SaaS 出站依赖（LLM / Rerank）统一从此读取出口策略，
+     * 取代原先脆弱的全局 bypass-system-proxy 布尔。内部服务（PG/Redis）不受影响。
+     * 由类级 {@code @EnableConfigurationProperties(EgressProperties.class)} 绑定。
      */
-    @Value("${review.llm.http.bypass-system-proxy:true}")
-    private boolean bypassSystemProxy;
 
     /**
      * 大模型客户端（LangChain4j 统一模型网关）：由 {@link TokenHubProperties} 驱动。
@@ -92,12 +91,12 @@ public class ReviewAgentConfig {
      * 未配置 Key 时仅剩 Mock 兜底，保证链路不中断。
      */
     @Bean
-    public LlmClient llmClient(TokenHubProperties tokenHub) {
+    public LlmClient llmClient(TokenHubProperties tokenHub, EgressProperties egress) {
         List<ModelProvider> providers = new ArrayList<>();
         Duration timeout = Duration.ofSeconds(tokenHub.getTimeoutSeconds());
         for (TokenHubProperties.ModelSpec spec : tokenHub.getModels()) {
             providers.add(new LangChain4jChatProvider(spec.getName(),
-                    buildOpenAiChatModel(tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(), timeout),
+                    buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(), timeout),
                     tokenHub.hasKey()));
         }
         providers.add(new MockProvider()); // 兜底终点，保证链路不中断
@@ -110,12 +109,12 @@ public class ReviewAgentConfig {
      * 主聊天模型（供 AiServices 使用）：取 TokenHub 配置的第一个模型；无 Key 时为 NoOp 占位。
      */
     @Bean
-    public ChatModel primaryChatModel(TokenHubProperties tokenHub) {
+    public ChatModel primaryChatModel(TokenHubProperties tokenHub, EgressProperties egress) {
         if (!tokenHub.hasKey() || tokenHub.getModels().isEmpty()) {
             return new NoOpChatModel();
         }
         TokenHubProperties.ModelSpec spec = tokenHub.getModels().get(0);
-        return buildOpenAiChatModel(tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
+        return buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
                 Duration.ofSeconds(tokenHub.getTimeoutSeconds()));
     }
 
@@ -139,20 +138,21 @@ public class ReviewAgentConfig {
      */
     @Bean
     @Primary
-    public EmbeddingClient embeddingClient(@Value("${review.llm.embedding.enabled:false}") boolean enabled,
+    public EmbeddingClient embeddingClient(@Value("${review.llm.embedding.enabled:true}") boolean enabled,
                                            @Value("${review.llm.embedding.base-url:}") String baseUrl,
                                            @Value("${review.llm.embedding.api-key:}") String apiKey,
                                            @Value("${review.llm.embedding.model:kinfra-text-embedding-4b}") String model,
                                            @Value("${review.llm.embedding.dim:2560}") int dim,
-                                           TokenHubProperties tokenHub) {
+                                           TokenHubProperties tokenHub,
+                                           EgressProperties egress) {
         if (enabled) {
             String key = (apiKey == null || apiKey.isBlank()) ? tokenHub.getApiKey() : apiKey;
             String url = (baseUrl == null || baseUrl.isBlank()) ? tokenHub.getBaseUrl() : baseUrl;
             if (key != null && !key.isBlank()) {
-                // 关键：注入忽略系统代理的 HttpClient，避免本机 HTTP_PROXY 把请求转给无法直连 TokenHub 的本地代理而超时
+                // 受控出口：注入按 review.egress.llm.mode 配置的 HttpClient（默认 DIRECT 直连）
                 OpenAiEmbeddingModel em = OpenAiEmbeddingModel.builder()
                         .baseUrl(url).apiKey(key).modelName(model)
-                        .httpClientBuilder(llmHttpClientBuilder())
+                        .httpClientBuilder(llmHttpClientBuilder(egress))
                         .build();
                 log.info("已启用 LangChain4j 真实语义向量（model={}, 期望维度={}，请保持 pgvector.vector-dim 一致）", model, dim);
                 return new LangChain4jEmbeddingClient(em);
@@ -163,23 +163,58 @@ public class ReviewAgentConfig {
     }
 
     /**
-     * 构造 LangChain4j 的 HTTP 客户端构造器。
-     *
-     * <p>默认忽略系统代理（{@code ProxySelector.of(null)} 强制直连），避免本机 HTTP_PROXY/HTTPS_PROXY
-     * 把到 TokenHub 的请求转发给无法直连的本地代理而超时；无论以 IDEA / 脚本 / 容器何种方式启动均生效。
-     * 设 {@code bypassSystemProxy=false} 时回退为默认（继承系统代理，供必须经代理出网的生产环境使用）。
+     * RAG 重排器（质量闸门）：默认启发式（离线可用）；配置 {@code review.rag.rerank.enabled=true}
+     * 且提供 API 时切换为 Cohere/Jina cross-encoder，失败自动降级启发式。
      */
-    private dev.langchain4j.http.client.HttpClientBuilder llmHttpClientBuilder() {
-        if (!bypassSystemProxy) {
-            return new JdkHttpClientBuilder();
+    @Bean
+    public com.codereview.agent.core.rag.Reranker reranker(
+            EgressProperties egress,
+            @Value("${review.rag.rerank.enabled:false}") boolean enabled,
+            @Value("${review.rag.rerank.provider:cohere}") String provider,
+            @Value("${review.rag.rerank.base-url:}") String baseUrl,
+            @Value("${review.rag.rerank.api-key:}") String apiKey,
+            @Value("${review.rag.rerank.model:rerank-english-v3.0}") String model,
+            @Value("${review.rag.rerank.timeout-ms:2000}") int timeoutMs) {
+        com.codereview.agent.core.rag.HeuristicReranker fallback =
+                new com.codereview.agent.core.rag.HeuristicReranker();
+        if (enabled && baseUrl != null && !baseUrl.isBlank() && apiKey != null && !apiKey.isBlank()) {
+            log.info("已启用 API 重排器（provider={}, model={}, 出口模式={}），失败自动降级启发式",
+                    provider, model, egress.getRerank().getMode());
+            return new com.codereview.agent.core.rag.ApiReranker(
+                    provider, baseUrl, apiKey, model, timeoutMs, fallback, egress.getRerank());
         }
-        java.net.http.HttpClient.Builder jdkBuilder = java.net.http.HttpClient.newBuilder()
-                .proxy(ProxySelector.of(null))
-                .connectTimeout(Duration.ofSeconds(10));
+        log.info("RAG 重排器：使用启发式（离线可用；配置 review.rag.rerank.* 启用 API cross-encoder）");
+        return fallback;
+    }
+
+    /**
+     * RAG 评估与阈值过滤组件（选择性回答 abstain + 可观测）。
+     * {@code review.rag.min-similarity} 默认 0.0（不拦截，向后兼容）；调高可抑制噪声块。
+     */
+    @Bean
+    public com.codereview.agent.core.rag.RagEvaluator ragEvaluator(
+            @Value("${review.rag.min-similarity:0.0}") double minSimilarity,
+            @Value("${review.rag.eval-enabled:false}") boolean evalEnabled) {
+        log.info("已装配 RagEvaluator（minSimilarity={}, evalEnabled={}）", minSimilarity, evalEnabled);
+        return new com.codereview.agent.core.rag.RagEvaluator(minSimilarity, evalEnabled);
+    }
+
+    /**
+     * 构造 LangChain4j 的 HTTP 客户端构造器（大模型网关出口）。
+     *
+     * <p>出口策略由 {@code review.egress.llm.mode} 显式声明（DIRECT/SYSTEM/PROXY），
+     * 取代原先脆弱的全局 bypass-system-proxy 布尔。默认 DIRECT 直连（生产形态），
+     * 若 {@code base-url} 指向公司内部 AI Gateway 则由网关统一管控供应商 key 与限流；
+     * 开发机经 Clash 等本地代理出网时设 {@code mode=proxy} + {@code proxy-url}。
+     */
+    private dev.langchain4j.http.client.HttpClientBuilder llmHttpClientBuilder(EgressProperties egress) {
+        java.net.http.HttpClient.Builder jdkBuilder =
+                EgressHttpClientFactory.buildBuilder(egress.getLlm(), "llm");
         return new JdkHttpClientBuilder().httpClientBuilder(jdkBuilder);
     }
 
-    private ChatModel buildOpenAiChatModel(String baseUrl, String apiKey, String model, Duration timeout) {
+    private ChatModel buildOpenAiChatModel(EgressProperties egress,
+                                           String baseUrl, String apiKey, String model, Duration timeout) {
         // 挂 LoggingChatModelListener：在模型边界统一记录 LLM 请求/响应（覆盖 AiServices 与文本两条路径）
         return OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
@@ -187,7 +222,7 @@ public class ReviewAgentConfig {
                 .modelName(model)
                 .temperature(0.2)
                 .timeout(timeout)
-                .httpClientBuilder(llmHttpClientBuilder())
+                .httpClientBuilder(llmHttpClientBuilder(egress))
                 .listeners(new LoggingChatModelListener())
                 .build();
     }
@@ -383,8 +418,10 @@ public class ReviewAgentConfig {
                                   @org.springframework.beans.factory.annotation.Qualifier("agentExecutor") Executor agentExecutor,
                                   com.codereview.agent.core.impact.ImpactAnalyzer impactAnalyzer,
                                   com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder trajectoryRecorder,
-                                  com.codereview.agent.core.enhance.ReviewEnhancements enhancements) {
+                                  com.codereview.agent.core.enhance.ReviewEnhancements enhancements,
+                                  com.codereview.agent.core.memory.RagContextBuilder ragContextBuilder) {
         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
-                historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder, enhancements);
+                historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,
+                enhancements, ragContextBuilder);
     }
 }

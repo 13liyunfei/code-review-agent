@@ -2,9 +2,7 @@ package com.codereview.agent.core.admin;
 
 import com.codereview.agent.core.admin.dto.KnowledgeInfo;
 import com.codereview.agent.core.admin.dto.KnowledgeUpload;
-import com.codereview.agent.core.memory.MemoryEntry;
-import com.codereview.agent.core.memory.MemoryLevel;
-import com.codereview.agent.core.memory.MemoryStore;
+import com.codereview.agent.core.rag.KnowledgeStore;
 import com.codereview.agent.tenant.Teams;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -33,15 +31,14 @@ import java.util.UUID;
 public class KnowledgeIngestionService {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeIngestionService.class);
-    private static final int CHUNK_SIZE = 300;
 
-    private final MemoryStore memoryStore;
+    private final KnowledgeStore knowledgeStore;
     private final Path dataDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public KnowledgeIngestionService(MemoryStore memoryStore,
+    public KnowledgeIngestionService(KnowledgeStore knowledgeStore,
                                     @Value("${review.data-dir:./data}") String dataDir) {
-        this.memoryStore = memoryStore;
+        this.knowledgeStore = knowledgeStore;
         this.dataDir = Path.of(dataDir);
     }
 
@@ -61,17 +58,17 @@ public class KnowledgeIngestionService {
         int chunkCount = 0;
 
         if (indexed) {
-            List<String> chunks = split(upload.text(), CHUNK_SIZE);
             String source = upload.source() != null ? upload.source()
                     : (upload.originalFilename() != null ? upload.originalFilename() : "knowledge");
             String type = upload.type() != null ? upload.type() : "document";
-            for (String c : chunks) {
-                memoryStore.save(new MemoryEntry(null, "RAG", t, c,
-                        Map.of("source", source, "kbId", id, "type", type, "teamId", t),
-                        MemoryLevel.LONG_TERM, Instant.now(), null));
-            }
-            chunkCount = chunks.size();
-            log.info("[KB] 团队 {} 已索引 {} 段到 RAG 知识库（kbId={}）", t, chunkCount, id);
+            // 结构感知切块 + 富元数据：交由 KnowledgeStore.saveKnowledge 完成（层级 + 重叠 + section）
+            Map<String, String> meta = new java.util.LinkedHashMap<>();
+            meta.put("source", source);
+            meta.put("kbId", id);
+            meta.put("type", type);
+            meta.put("teamId", t);
+            chunkCount = knowledgeStore.saveKnowledge(t, upload.text(), meta);
+            log.info("[KB] 团队 {} 已结构化索引 {} 段到 RAG 知识库（kbId={}）", t, chunkCount, id);
         }
 
         // 落盘原始文件（优先用已保存的临时路径）或纯文本
@@ -122,7 +119,7 @@ public class KnowledgeIngestionService {
         if (!Files.exists(dir)) {
             return;
         }
-        memoryStore.deleteByMetadata(teamId, "kbId", id);
+        knowledgeStore.deleteByMetadata(teamId, "kbId", id);
         try (var stream = Files.list(dir)) {
             for (Path p : stream.toList()) {
                 String fn = p.getFileName().toString();
@@ -137,22 +134,6 @@ public class KnowledgeIngestionService {
     private KnowledgeInfo toInfo(KnowledgeMeta m) {
         return new KnowledgeInfo(m.id(), m.filename(), m.source(), m.category(),
                 m.type(), m.indexed(), m.chunkCount(), m.sizeBytes(), m.createdAt());
-    }
-
-    private List<String> split(String text, int maxChars) {
-        List<String> chunks = new ArrayList<>();
-        StringBuilder cur = new StringBuilder();
-        for (String line : text.split("\n")) {
-            if (cur.length() + line.length() + 1 > maxChars && !cur.isEmpty()) {
-                chunks.add(cur.toString().trim());
-                cur.setLength(0);
-            }
-            cur.append(line).append('\n');
-        }
-        if (!cur.isEmpty()) {
-            chunks.add(cur.toString().trim());
-        }
-        return chunks;
     }
 
     private String sanitize(String s) {

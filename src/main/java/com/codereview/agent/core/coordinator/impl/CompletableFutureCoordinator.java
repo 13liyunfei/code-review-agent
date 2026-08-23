@@ -23,6 +23,7 @@ import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.PullRequest;
 import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.model.ReviewReport;
+import com.codereview.agent.core.memory.RagContextBuilder;
 import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.report.VerificationResult;
@@ -84,6 +85,8 @@ public class CompletableFutureCoordinator implements Coordinator {
     private final VetoPolicy vetoPolicy;
     /** 工具分级门控（P1-⑦，可空）。 */
     private final ToolGate toolGate;
+    /** RAG 上下文构建器（可空：为 null 时跳过 RAG 注入，审查仍可用）。 */
+    private final RagContextBuilder ragContextBuilder;
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
@@ -112,6 +115,16 @@ public class CompletableFutureCoordinator implements Coordinator {
                                        AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
                                        ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
                                        ReviewEnhancements enhancements) {
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer,
+                agentExecutor, impactAnalyzer, recorder, enhancements, null);
+    }
+
+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
+                                       ReviewEnhancements enhancements,
+                                       RagContextBuilder ragContextBuilder) {
         this.agents = agents;
         this.reportGenerator = reportGenerator;
         this.feedbackStore = feedbackStore;
@@ -123,6 +136,7 @@ public class CompletableFutureCoordinator implements Coordinator {
         this.resumeStore = enhancements == null ? null : enhancements.resumeStore();
         this.vetoPolicy = enhancements == null ? null : enhancements.vetoPolicy();
         this.toolGate = enhancements == null ? null : enhancements.toolGate();
+        this.ragContextBuilder = ragContextBuilder;
     }
 
     /** 生效的审查强度 Profile（未配置 / 非法时回退 ADVISORY）。 */
@@ -187,7 +201,28 @@ public class CompletableFutureCoordinator implements Coordinator {
 
         // 上下文影响面切片：计算变更方法的上游调用方，注入 Agent 提示词（对齐 codex context-fragments）
         String impactSummary = (impactAnalyzer != null) ? impactAnalyzer.summarize(diffs) : "";
-        ReviewContext enrichedCtx = ctx.withImpactSummary(impactSummary);
+        // RAG 增强：检索团队相关规范/历史知识，注入 Agent 提示词（对齐业界 RAG 最佳实践）
+        // 仅在 RagContextBuilder 可用时执行；异常不阻断主审查链路
+        final String ragContext;
+        if (ragContextBuilder != null) {
+            String built;
+            try {
+                built = ragContextBuilder.buildContext(teamId, "MULTI-AGENT", diffs);
+            } catch (Exception e) {
+                log.warn("[Coordinator] RAG 上下文构建失败，跳过注入（不影响主审查）：{}", e.getMessage());
+                built = "";
+            }
+            ragContext = built == null ? "" : built;
+            if (recorder != null && !ragContext.isBlank()) {
+                recorder.append(runId, "context.injected", Map.of(
+                        "type", "rag-knowledge", "summaryLength", ragContext.length()));
+            }
+        } else {
+            ragContext = "";
+        }
+        final ReviewContext enrichedCtx = ctx
+                .withImpactSummary(impactSummary)
+                .withRagContext(ragContext);
         if (recorder != null && !impactSummary.isBlank()) {
             recorder.append(runId, "context.injected", Map.of(
                     "type", "impact-surface", "summaryLength", impactSummary.length()));

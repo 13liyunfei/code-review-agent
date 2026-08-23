@@ -5,6 +5,9 @@ import com.codereview.agent.core.memory.InMemoryVectorStore;
 import com.codereview.agent.core.memory.MemoryStore;
 import com.codereview.agent.core.memory.PgVectorMemoryStore;
 import com.codereview.agent.core.mq.InMemoryMessageQueue;
+import com.codereview.agent.core.rag.InMemoryKnowledgeStore;
+import com.codereview.agent.core.rag.KnowledgeStore;
+import com.codereview.agent.core.rag.PgKnowledgeStore;
 import com.codereview.agent.core.mq.MessageQueue;
 import com.codereview.agent.core.mq.RedisMessageQueue;
 import org.slf4j.Logger;
@@ -61,6 +64,42 @@ public class InfrastructureConfig {
     public MemoryStore inMemoryVectorStore(EmbeddingClient embeddingClient) {
         log.warn("未启用 pgvector，回退到 InMemoryVectorStore（数据不持久化，重启丢失）");
         return new InMemoryVectorStore(embeddingClient);
+    }
+
+    // ===================== RAG 知识库（KnowledgeStore，与 MemoryStore 分层） =====================
+
+    /**
+     * 生产实现：PostgreSQL + pgvector + tsvector 混合检索知识库。
+     *
+     * <p>仅当 {@code pgvector.enabled=true} 时激活；复用同一 PG 连接与 {@code memory_store} 表，
+     * 但检索限定 {@code agent_type=RAG} 并叠加 BM25（tsvector）+ 向量 RRF 融合，
+     * 与经验/记忆（{@code MemoryStore}）在调用方分层，互不串扰。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "pgvector.enabled", havingValue = "true")
+    public KnowledgeStore pgKnowledgeStore(EmbeddingClient embeddingClient,
+                                           MemoryStore memoryStore,
+                                           @Value("${pgvector.host:localhost}") String host,
+                                           @Value("${pgvector.port:5432}") int port,
+                                           @Value("${pgvector.database:codereview}") String database,
+                                           @Value("${pgvector.username:}") String username,
+                                           @Value("${pgvector.password:}") String password,
+                                           @Value("${pgvector.vector-dim:256}") int vectorDim) {
+        log.info("已启用 PgKnowledgeStore（混合检索：向量+BM25+RRF，{}:{}/{}, dim={}）",
+                host, port, database, vectorDim);
+        return new PgKnowledgeStore(embeddingClient, memoryStore, host, port, database, username, password, vectorDim);
+    }
+
+    /**
+     * 离线实现：内存混合检索知识库（BM25 + 向量 + RRF，完整能力，可离线运行与测试）。
+     *
+     * <p>当 {@code pgvector.enabled} 缺失或为 false 时激活（matchIfMissing=true）。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "pgvector.enabled", havingValue = "false", matchIfMissing = true)
+    public KnowledgeStore inMemoryKnowledgeStore(EmbeddingClient embeddingClient) {
+        log.warn("未启用 pgvector，RAG 知识库回退到 InMemoryKnowledgeStore（混合检索能力齐全，数据不持久化）");
+        return new InMemoryKnowledgeStore(embeddingClient);
     }
 
     // ===================== 消息队列（MessageQueue） =====================

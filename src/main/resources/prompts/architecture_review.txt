@@ -10,6 +10,9 @@ ${diffs}
 【变更影响面】
 ${impactSummary}
 
+【相关规范与历史知识（RAG 检索，仅供参考，不替代代码事实）】
+${ragContext}
+
 【输出要求】
 请基于以上代码，聚焦架构设计维度（分层合理性、耦合度、依赖管理、抽象是否合理、设计模式运用），
 列出发现的问题。严格按 JSON 数组格式输出（字段同安全模板：severity/file/line/title/description/suggestion/confidence/source），
