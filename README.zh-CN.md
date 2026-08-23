@@ -358,79 +358,19 @@ review:
 
 ## 架构总览
 
+本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识后管链路）。
+
 ### 分层架构（静态结构）
 
 ![分层架构](docs/architecture-layered.svg)
 
-```
-                  ┌──────────────┐
-   PR 触发 ──────▶ │  Coordinator │  （星型拓扑中心：并行调度 + 聚合仲裁 + 分级定档）
-                  └──────┬───────┘
-        ┌────────┬───────┼────────┬────────┬────────┐
-        ▼        ▼       ▼        ▼        ▼        ▼
-     Logic    Security  Performance Style  Architecture  （5 个专业审查 Agent）
-        │        │       │        │        │
-        └────────┴───┬───┴────────┴────────┘
-                      ▼
-        ┌─────────────────────────────────────┐
-        │ Prompt模板 │ Skills插件 │ 工具路由    │
-        │ 注入防护   │ RAG/记忆  │ 4级降级链   │
-        └─────────────────────────────────────┘
-```
-
-### 端到端调用链路（分层总览）
-
-```
-┌─────────────┐   Webhook(PR/MR)    ┌──────────────────────────────────────────────┐
-│ Gitea/GitLab│ ──────────────────▶ │ integration/gitea|gitlab (WebhookController) │
-└─────────────┘                     └───────────────┬──────────────────────────────┘
-                                                      │ ① 解析 owner/repo，生成 traceId(MDC)
-                                                      ▼
-                                            ┌───────────────────────┐
-                                            │  TeamResolver          │ 多租户：owner/repo → teamId
-                                            │  (review.teams.mapping)│ default / __global__ 回退
-                                            └───────────┬───────────┘
-                                                        ▼
-                                            ┌───────────────────────┐
-                                            │  ReviewService(编排)   │
-                                            │  diff → Coordinator   │
-                                            └───────────┬───────────┘
-                                                        ▼
-                                            ┌───────────────────────┐
-                                            │  Coordinator           │ 并行调度 5 Agent + AdvancedAnalyzer
-                                            │  (CompletableFuture)   │ 聚合/去重/冲突仲裁/分级定档 (runId=traceId)
-                                            └───────────┬───────────┘
-                                  ┌─────────────────────┼─────────────────────┐
-                                  ▼                     ▼                     ▼
-                          ┌──────────────┐     ┌──────────────────┐    ┌──────────────┐
-                          │ 5 审查 Agent  │     │ AdvancedAnalyzer  │    │ AutoFixEngine │
-                          │(抽象基类+LLM) │     │(AST/调用链/SCA)   │    │(suggestion)  │
-                          └──────┬───────┘     └──────────────────┘    └──────────────┘
-                                 │ LLM 请求（结构化 AiServices + 文本回退）
-                                 ▼
-                          ┌──────────────────────────────────────────────┐
-                          │ ModelGateway + LangChain4jChatProvider        │
-                          │ (TokenHub: hy3 / deepseek-v4-flash / glm-5.2) │  ChatModelListener 记 LLM 日志
-                          │ + MockProvider 兜底                            │
-                          └───────────────────────┬──────────────────────┘
-                                                  ▼
-                          ┌──────────────────────────────────────────────┐
-                          │ 向量库 RAG（PgVectorMemoryStore，含 team_id）    │
-                          │ 全局基线 + 团队记忆/经验                         │
-                          └───────────────────────┬──────────────────────┘
-                                                  ▼
-                                            ┌───────────────────────┐
-                                            │  ReportGenerator      │
-                                            │  报告+回写(评论/Apply) │
-                                            └───────────────────────┘
-
-  旁路：管理控制台(code-review-console :8081) ──RestTemplate+X-Team-Id──▶ 引擎 /api/admin/*（技能/知识/统计）
-  可观测：每行日志带 [traceId=...]，grep traceId 即可还原上述完整链路与耗时。
-```
+*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 5 个专业审查 Agent → 能力支撑层 → 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
 
 ### 端到端流程 & 管理控制台后管（技能时长、团队知识）
 
 ![端到端流程与管理控制台](docs/architecture-flow-console.svg)
+
+*图 2 — B1 实时审查泳道（① PR 推送 → ⑪ 行内评论，每个环节日志携带 `traceId`）；B2 后管链路：管理控制台 `code-review-console`（:8081）驱动引擎 `SkillAdminController`（含 ⏱ 时长/调用统计）、`KnowledgeController`（团队文档上传 → StructuredChunker 结构切块 → Pg 向量索引）、`StatsController`，团队知识库在审查时回流进 RAG 检索增强。*
 
 ## 多租户（团队）隔离架构
 

@@ -342,81 +342,19 @@ review:
 
 ## Architecture Overview
 
+The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge backend).
+
 ### Layered architecture (static structure)
 
-![Layered architecture](docs/architecture-layered.svg)
+![Layered architecture](docs/architecture-layered-en.svg)
 
-```
-                  ┌──────────────┐
-   PR trigger ───▶ │  Coordinator │  (star-topology hub: parallel scheduling + aggregation/arbitration + tiering)
-                  └──────┬───────┘
-        ┌────────┬───────┼────────┬────────┬────────┐
-        ▼        ▼       ▼        ▼        ▼        ▼
-     Logic    Security  Performance Style  Architecture  (5 specialized review agents)
-        │        │       │        │        │
-        └────────┴───┬───┴────────┴────────┘
-                      ▼
-        ┌─────────────────────────────────────┐
-        │ Prompt templates │ Skill plug-ins   │
-        │ Tool routing     │ injection defense │
-        │ RAG/memory       │ 4-level degrade  │
-        └─────────────────────────────────────┘
-```
-
-### End-to-end call chain (layered overview)
-
-```
-┌─────────────┐   Webhook(PR/MR)    ┌──────────────────────────────────────────────┐
-│ Gitea/GitLab│ ──────────────────▶ │ integration/gitea|gitlab (WebhookController) │
-└─────────────┘                     └───────────────┬──────────────────────────────┘
-                                                      │ ① resolve owner/repo, generate traceId (MDC)
-                                                      ▼
-                                            ┌───────────────────────┐
-                                            │  TeamResolver          │ multi-tenant: owner/repo → teamId
-                                            │  (review.teams.mapping)│ fallback default / __global__
-                                            └───────────┬───────────┘
-                                                        ▼
-                                            ┌───────────────────────┐
-                                            │  ReviewService (orchestration) │
-                                            │  diff → Coordinator   │
-                                            └───────────┬───────────┘
-                                                        ▼
-                                            ┌───────────────────────┐
-                                            │  Coordinator           │ schedules 5 agents + AdvancedAnalyzer in parallel
-                                            │  (CompletableFuture)   │ aggregate/dedupe/arbitrate/tier (runId=traceId)
-                                            └───────────┬───────────┘
-                                  ┌─────────────────────┼─────────────────────┐
-                                  ▼                     ▼                     ▼
-                          ┌──────────────┐     ┌──────────────────┐    ┌──────────────┐
-                          │ 5 review agents│     │ AdvancedAnalyzer  │    │ AutoFixEngine │
-                          │(abstract base │     │(AST/call-graph/SCA)│   │(suggestion)  │
-                          │    + LLM)     │     └──────────────────┘    └──────────────┘
-                          └──────┬───────┘
-                                 │ LLM requests (structured AiServices + text fallback)
-                                 ▼
-                          ┌──────────────────────────────────────────────┐
-                          │ ModelGateway + LangChain4jChatProvider        │
-                          │ (TokenHub: hy3 / deepseek-v4-flash / glm-5.2) │  ChatModelListener logs LLM
-                          │ + MockProvider fallback                       │
-                          └───────────────────────┬──────────────────────┘
-                                                  ▼
-                          ┌──────────────────────────────────────────────┐
-                          │ Vector RAG (PgVectorMemoryStore, team_id)     │
-                          │ global baseline + team memory/experience      │
-                          └───────────────────────┬──────────────────────┘
-                                                  ▼
-                                            ┌───────────────────────┐
-                                            │  ReportGenerator       │
-                                            │  report + write-back   │
-                                            └───────────────────────┘
-
-  Side path: console (code-review-console :8081) ──RestTemplate+X-Team-Id──▶ engine /api/admin/* (skills/knowledge/stats)
-  Observability: every log line carries [traceId=...]; grep the traceId to reconstruct the full chain and timing above.
-```
+*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → 5 Agents → Capability → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
 
 ### End-to-end flow & admin console (skills duration, team knowledge)
 
-![End-to-end flow and admin console](docs/architecture-flow-console.svg)
+![End-to-end flow and admin console](docs/architecture-flow-console-en.svg)
+
+*Figure 2 — B1 realtime review swimlane (① PR push → ⑪ inline comments, each step carrying `traceId`); B2 admin backend where the `code-review-console` (:8081) drives `SkillAdminController` (incl. ⏱ duration/call stats), `KnowledgeController` (team-doc upload → StructuredChunker → Pg vector index) and `StatsController`, with team knowledge feeding back into RAG retrieval at review time.*
 
 ## Multi-Tenant (Team) Isolation Architecture
 
