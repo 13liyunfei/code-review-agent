@@ -11,13 +11,13 @@ RAG 与三层记忆、4 级降级链等核心设计。
 
 ## 架构总览
 
-本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`，以及按团队展开的业务方**自定义 Agent**）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识 / 自定义 Agent 后管链路）。
+本系统是一个**星型拓扑的多 Agent 流水线**：Webhook 触发 PR/MR 审查，`CompletableFutureCoordinator` 并行分发给 5 个专业审查 Agent（外加一个 `AdvancedAnalyzer`，以及按团队展开的业务方**自定义 Agent**）执行，对结果做聚合/去重/冲突仲裁，再将报告写回代码托管平台。可选 Agent 通用能力（工具调用、任务拆解 DAG、反思经验库、LLM 评估、扩展机制）通过开关接入流水线。下面两张图分别呈现**静态分层结构**与**端到端运行时流程**（含管理控制台的技能时长 / 团队知识 / 自定义 Agent 后管链路）。
 
 ### 分层架构（静态结构）
 
 ![分层架构](docs/architecture-layered.svg)
 
-*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 专业审查 Agent（5 内置 + 业务方自定义并行）→ 能力支撑层 → 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
+*图 1 — 自顶向下六层：触发层 → 集成层 → 协调层 → 专业审查 Agent（5 内置·工具增强 + 业务方自定义并行）→ 能力支撑层（含工具调用 / 任务规划 / 反思评估扩展）→ 基础设施层；横切关注点（多租户、全链路追踪、4 级降级、Skill 插件化、注入防护、i18n）贯穿所有层级。*
 
 ### 端到端流程 & 管理控制台后管（技能时长、团队知识）
 
@@ -581,6 +581,21 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 复用引擎 `AstAnalyzer` 与 `PatternSkill` 规则集，保证 IDE 与 CI 审查口径一致。由  
 `java -cp ... com.codereview.agent.ide.IdeReviewServer` 启动，编辑器侧接 LSP 客户端即可。
 
+### Agent 通用能力（工具调用 / 任务拆解 / 反思评估 / 扩展机制）
+
+企业级 Agent 能力积木，全部为**可选增强（默认关闭）**——关闭时引擎行为与旧版完全一致。  
+通过 `application.yml` 或 `--review.*.enabled=true` 开启：
+
+| 能力 | 组件 | 开关 |
+| --- | --- | --- |
+| **工具调用循环**——思考→决策→调用→观察→推理；最大迭代防死循环、非法 JSON 优雅降级、工具异常不炸循环 | `toolcalling/AgentTool` + `ToolRegistry` + `ToolCallingLoop` + 内置工具（`current_time` / `regex_scan` / `file_read`·防路径穿越） | `review.tools.agent-loop.enabled` |
+| **任务拆解 & DAG 执行**——LLM 将目标拆成依赖 DAG，按 `assignee` 路由到对应 Agent 拓扑并行执行；上游失败下游跳过，规划失败降级固定并行路径 | `planning/TaskPlanner` + `TaskPlan`（id 唯一/依赖存在/Kahn 无环）+ `DagExecutor` + `TaskPlanningSupport`（织入 `CompletableFutureCoordinator`） | `review.planning.enabled` |
+| **反思与经验库**——审查后沉淀：BLOCKER/MAJOR 发现转为可复用 pattern + 建议，进团队隔离、去重的经验库（可选 LLM 总结） | `memory/ReflectionService` + `memory/ExperienceStore`（保留向量检索 API + 新增文件条目层） | `review.reflection.enabled` |
+| **LLM 评估**——ground-truth precision/recall/F1 + llm-as-judge 逐条真假阳性判定；LLM 不可用时自动跳过 | `eval/LlmJudge`（复用轨迹 JSONL 做数据源） | `review.eval.enabled` |
+| **可插拔组件机制**——`ExtensionPoint`（order 织入序/同名覆盖/线程安全）+ 五类扩展点接口（LlmInterceptor / RagEnhancer / AgentProvider / MemoryStrategy / StageHook） | `extension/ExtensionPoint` + `extension/ExtensionRegistry` | 注册为 Bean |
+
+五项均有单测 + 集成测试覆盖（循环语义、DAG 拓扑序与环拒绝、Coordinator 织入、precision/recall 断言、注册表排序），详见 `docs/test-report-agent-capabilities-2026-08-27.md`。
+
 ### 数据持久化
 
 反馈与历史默认落盘到 `review.data-dir`（默认 `./data`，生成 `feedback.json` / `review-history.json`）；  
@@ -789,7 +804,9 @@ src/main/java/com/codereview/agent/
     ├── mq/           # MessageQueue 接口 + 内存实现 + QueueNames + AgentWorker
     ├── tool/         # ToolDefinition / ToolRouter（意图→白名单）/ ToolCallValidator
     ├── security/     # 注入检测（关键词/语义/异常）+ Prompt 硬化（XML/Canary）
-    ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG
+    ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG / ExperienceStore（团队隔离文件经验条目）/ ReflectionService（审查后反思沉淀）
+    ├── toolcalling/  # AgentTool / ToolRegistry / ToolCallingLoop（思考→决策→调用→观察→推理）+ ToolEquippedAgent 装饰器 + BuiltinTools
+    ├── planning/     # TaskPlanner（LLM 任务拆解）/ TaskPlan（DAG 校验）/ DagExecutor（拓扑并行）/ TaskPlanningSupport（织入 Coordinator）
     ├── rag/          # RAG 检索重构：KnowledgeStore（内存/Pg）/ StructuredChunker / Reranker（ApiReranker+HeuristicReranker）/ RagEvaluator / RagContextBuilder
     ├── llm/          # LlmClient / ModelGateway（多供应商路由+配额+failover）/ LangChain4jChatProvider / MockProvider / NoOpChatModel / LoggingChatModelListener / EmbeddingClient / aiservice/（CodeReviewAiService 结构化输出 + ChatMemory）
     ├── trace/        # TraceContext（SLF4J MDC traceId，跨线程 wrap 传播，全链路追踪）
@@ -800,7 +817,8 @@ src/main/java/com/codereview/agent/
     ├── permission/   # VetoPolicy（权限收敛：BLOCKER 免于误报抑制 / 仲裁覆盖）
     ├── tools/        # ToolGate / ToolExposure（工具分级门控）+ external/（ExternalToolProvider SPI 插件化）
     ├── mailbox/      # TeamMailbox（持久化信箱：send/poll/ack/recoverFor 崩溃重投）
-    ├── eval/         # ReviewReplay（轨迹确定性回放评测）
+    ├── eval/         # ReviewReplay（轨迹确定性回放评测）/ LlmJudge（precision/recall/F1 + llm-as-judge）
+    ├── extension/    # ExtensionPoint（五类扩展点接口）/ ExtensionRegistry（可插拔：order 织入序 + 同名覆盖）
     ├── enhance/      # ReviewEnhancements（Coordinator 可选增强能力聚合入口）
     ├── report/       # ReportGenerator（去重/优先级仲裁/误报抑制/定档）+ ArbitrationPolicy + QualityTrendReporter + VerificationResult
     ├── feedback/     # FeedbackStore 接口 + 文件/内存实现（误报反馈闭环）
@@ -853,6 +871,11 @@ src/main/java/com/codereview/agent/
 | 工具分级门控（DEFERRED 默认拒绝）        | `tools/ToolGate` + `ToolExposure` + `review.tools.*`           |
 | 持久化信箱（多 Agent 委派不丢不重）      | `mailbox/TeamMailbox`（send/poll/ack/recoverFor）              |
 | 确定性回放评测（轨迹回归）              | `eval/ReviewReplay`                                            |
+| 工具调用循环（思考→决策→调用→观察→推理）   | `toolcalling/ToolCallingLoop` + `ToolRegistry` + 内置工具 + `ToolEquippedAgent`（`review.tools.agent-loop.enabled`） |
+| 任务拆解 & DAG 执行（规划→拓扑并行）     | `planning/TaskPlanner` + `TaskPlan` + `DagExecutor` + `TaskPlanningSupport`（`review.planning.enabled`） |
+| 反思与经验库（审查后经验沉淀）          | `memory/ReflectionService` + `ExperienceStore`（`review.reflection.enabled`） |
+| LLM 评估（precision/recall/F1 + llm-as-judge） | `eval/LlmJudge`（`review.eval.enabled`）                |
+| 可插拔组件机制（扩展点）               | `extension/ExtensionPoint` + `ExtensionRegistry`（五类扩展点接口） |
 | 外部工具 SPI（MCP 等插件化接入点）       | `tools/external/ExternalToolProvider` + `ExternalToolRegistry` |
 | 多租户（团队）隔离（全局基线+团队叠加）     | `tenant/*`（Teams/TeamProperties/TeamResolver）+ `review.teams.*` + 控制台 `X-Team-Id` + PG `team_id` |
 | 全链路追踪（可观测性）                   | `core/trace/TraceContext`（MDC traceId 跨线程传播）+ `core/llm/LoggingChatModelListener`（LLM 边界日志） |

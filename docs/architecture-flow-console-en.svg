@@ -45,20 +45,22 @@
   <text class="ts" x="381" y="155" text-anchor="middle" dominant-baseline="central">③ resolve owner/repo</text>
   <text class="ts" x="381" y="171" text-anchor="middle" dominant-baseline="central">→ teamId · traceId</text>
   <path class="a" d="M381 180 L381 210" stroke="#534AB7"/>
-  <rect x="314" y="210" width="134" height="44" rx="8" fill="#CECBF6" stroke="#534AB7"/>
+  <rect x="314" y="210" width="134" height="58" rx="8" fill="#CECBF6" stroke="#534AB7"/>
   <text class="ts" x="381" y="226" text-anchor="middle" dominant-baseline="central">④ Coordinator parallel</text>
-  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 built-in + custom</text>
-  <path class="a" d="M381 254 L381 284" stroke="#BA7517"/>
+  <text class="ts" x="381" y="242" text-anchor="middle" dominant-baseline="central">5 built-in (tool) + custom</text>
+  <text class="ts" x="381" y="258" text-anchor="middle" dominant-baseline="central">opt: Planning DAG</text>
+  <path class="a" d="M381 268 L381 284" stroke="#BA7517"/>
   <rect x="314" y="284" width="134" height="56" rx="8" fill="#FAEEDA" stroke="#BA7517"/>
   <text class="ts" x="381" y="302" text-anchor="middle" dominant-baseline="central">⑤ 5 specialized Agents</text>
   <text class="ts" x="381" y="318" text-anchor="middle" dominant-baseline="central">Logic/Security/</text>
   <text class="ts" x="381" y="334" text-anchor="middle" dominant-baseline="central">Perf/Style/Arch</text>
   <path class="a" d="M448 312 L464 312" stroke="#5F5E5A"/>
-  <rect x="472" y="284" width="160" height="56" rx="8" fill="#D3D1C7" stroke="#5F5E5A"/>
+  <rect x="472" y="284" width="160" height="68" rx="8" fill="#D3D1C7" stroke="#5F5E5A"/>
   <text class="ts" x="552" y="300" text-anchor="middle" dominant-baseline="central">⑥ LLM inference</text>
   <text class="ts" x="552" y="316" text-anchor="middle" dominant-baseline="central">ModelGateway→TokenHub</text>
   <text class="ts" x="552" y="332" text-anchor="middle" dominant-baseline="central">RAG (vec+BM25)</text>
-  <path class="a" d="M552 340 L552 372" stroke="#5F5E5A"/>
+  <text class="ts" x="552" y="348" text-anchor="middle" dominant-baseline="central">opt: ToolCallingLoop</text>
+  <path class="a" d="M552 352 L552 372" stroke="#5F5E5A"/>
   <rect x="472" y="372" width="160" height="50" rx="8" fill="#D3D1C7" stroke="#5F5E5A"/>
   <text class="ts" x="552" y="388" text-anchor="middle" dominant-baseline="central">⑦ write results to PG</text>
   <text class="ts" x="552" y="406" text-anchor="middle" dominant-baseline="central">memory / knowledge vec</text>

@@ -10,13 +10,13 @@ It organizes **5 specialized review agents** in a **star topology**, with a Coor
 
 ## Architecture Overview
 
-The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`, and team-defined **custom agents**) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge / custom-agent backend).
+The system is a star-topology multi-agent pipeline: a webhook triggers a PR/MR review, the `CompletableFutureCoordinator` fans out to 5 specialized review agents (plus an `AdvancedAnalyzer`, and team-defined **custom agents**) in parallel, aggregates/dedupes/arbitrates their findings, and writes the report back to the SCM. Optional agentic enhancements (tool calling, task-decomposition DAG, reflection & experience base, LLM eval, extension registry) plug into the pipeline via switches. Two diagrams below capture the **static structure** and the **end-to-end runtime flow** (including the admin console's skills / team-knowledge / custom-agent backend).
 
 ### Layered architecture (static structure)
 
 ![Layered architecture](docs/architecture-layered-en.svg)
 
-*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → Review agents (5 built-in + business custom in parallel) → Capability → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
+*Figure 1 — Six-layer stack: Trigger → Integration → Coordination → Review agents (5 built-in tool-enhanced + business custom in parallel) → Capability (incl. tool calling / task planning / reflection & eval / extensions) → Infrastructure, with cross-cutting concerns (multi-tenant, tracing, degrade, Skill SPI, injection guard, i18n) spanning all layers.*
 
 ### End-to-end flow & admin console (skills duration, team knowledge)
 
@@ -545,6 +545,20 @@ Runs as a standalone process speaking JSON-RPC 2.0 over stdio (LSP `Content-Leng
 
 It reuses the engine's `AstAnalyzer` and `PatternSkill` rule set, so IDE and CI review standards stay consistent. Start with `java -cp ... com.codereview.agent.ide.IdeReviewServer`; the editor side connects an LSP client.
 
+### Agentic capabilities (tool calling / task planning / reflection & eval / extensions)
+
+Enterprise-grade agentic building blocks, all **optional enhancements (default off)** — when disabled, the engine behaves exactly as before. Switch them on via `application.yml` or `--review.*.enabled=true`:
+
+| Capability | Components | Switch |
+| --- | --- | --- |
+| **Tool Calling loop** — think → decide → call → observe → reason, with max-iteration guard, illegal-JSON fallback and tool-error isolation | `toolcalling/AgentTool` + `ToolRegistry` + `ToolCallingLoop` + built-ins (`current_time` / `regex_scan` / `file_read` with path-traversal guard) | `review.tools.agent-loop.enabled` |
+| **Task decomposition & DAG execution** — LLM decomposes a goal into a dependency DAG, routed to agents by `assignee` and executed topologically in parallel; upstream failure skips downstream, planner failure degrades to the fixed parallel path | `planning/TaskPlanner` + `TaskPlan` (id-unique / dep-exists / Kahn acyclic) + `DagExecutor` + `TaskPlanningSupport` (woven into `CompletableFutureCoordinator`) | `review.planning.enabled` |
+| **Reflection & experience base** — post-review distillation: BLOCKER/MAJOR findings become reusable patterns + advice in a team-isolated, deduped experience store (optionally LLM-summarized) | `memory/ReflectionService` + `memory/ExperienceStore` (vector-retrieval API kept, file-based entries added) | `review.reflection.enabled` |
+| **LLM evaluation** — ground-truth precision/recall/F1 + llm-as-judge true/false-positive adjudication per finding; auto-skips if the LLM is unavailable | `eval/LlmJudge` (reuses trajectory JSONL as the data source) | `review.eval.enabled` |
+| **Pluggable component mechanism** — `ExtensionPoint` (order-based weaving, same-name override, thread-safe) + five extension point interfaces (LlmInterceptor / RagEnhancer / AgentProvider / MemoryStrategy / StageHook) | `extension/ExtensionPoint` + `extension/ExtensionRegistry` | registered as beans |
+
+All five are covered by unit + integration tests (loop semantics, DAG topo-order & cycle rejection, coordinator weaving, precision/recall assertions, registry ordering) — see `docs/test-report-agent-capabilities-2026-08-27.md`.
+
 ### Data persistence
 
 Feedback & history are persisted by default to `review.data-dir` (default `./data`, producing `feedback.json` / `review-history.json`); if the directory is unwritable it falls back to memory so the system never goes down.
@@ -742,7 +756,9 @@ src/main/java/com/codereview/agent/
     ├── mq/           # MessageQueue interface + in-memory impl + QueueNames + AgentWorker
     ├── tool/         # ToolDefinition / ToolRouter (intent→whitelist) / ToolCallValidator
     ├── security/     # injection detection (keyword/semantic/anomaly) + prompt hardening (XML/Canary)
-    ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG
+    ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG / ExperienceStore (team-isolated file entries) / ReflectionService (post-review distillation)
+    ├── toolcalling/  # AgentTool / ToolRegistry / ToolCallingLoop (think→decide→call→observe→reason) + ToolEquippedAgent decorator + BuiltinTools
+    ├── planning/     # TaskPlanner (LLM task decomposition) / TaskPlan (DAG validation) / DagExecutor (topo-parallel) / TaskPlanningSupport (Coordinator weaving)
     ├── rag/          # RAG retrieval overhaul: KnowledgeStore (InMemory/Pg) / StructuredChunker / Reranker (ApiReranker+HeuristicReranker) / RagEvaluator / RagContextBuilder
     ├── llm/          # LlmClient / ModelGateway (multi-vendor routing+quota+failover) / LangChain4jChatProvider / MockProvider / NoOpChatModel / LoggingChatModelListener / EmbeddingClient / aiservice/ (CodeReviewAiService structured output + ChatMemory)
     ├── trace/        # TraceContext (SLF4J MDC traceId, cross-thread wrap propagation, full-chain tracing)
@@ -753,7 +769,8 @@ src/main/java/com/codereview/agent/
     ├── permission/   # VetoPolicy (permission convergence: BLOCKER exempt from false-positive suppression / arbitration override)
     ├── tools/        # ToolGate / ToolExposure (tool-exposure gating) + external/ (ExternalToolProvider SPI plug-in)
     ├── mailbox/      # TeamMailbox (persistent mailbox: send/poll/ack/recoverFor crash redelivery)
-    ├── eval/         # ReviewReplay (deterministic trajectory replay evaluation)
+    ├── eval/         # ReviewReplay (deterministic trajectory replay evaluation) / LlmJudge (precision/recall/F1 + llm-as-judge)
+    ├── extension/    # ExtensionPoint (5 extension point interfaces) / ExtensionRegistry (pluggable, order + same-name override)
     ├── enhance/      # ReviewEnhancements (aggregated entry for optional Coordinator enhancements)
     ├── report/       # ReportGenerator (dedupe/priority arbitration/suppression/tiering) + ArbitrationPolicy + QualityTrendReporter + VerificationResult
     ├── feedback/     # FeedbackStore interface + file/in-memory impls (false-positive feedback loop)
@@ -804,6 +821,11 @@ src/main/java/com/codereview/agent/
 | Tool-exposure gating (DEFERRED denied by default) | `tools/ToolGate` + `ToolExposure` + `review.tools.*` |
 | Persistent mailbox (lossless agent delegation) | `mailbox/TeamMailbox` (send/poll/ack/recoverFor) |
 | Deterministic replay evaluation (trajectory regression) | `eval/ReviewReplay` |
+| Tool calling loop (think → decide → call → observe → reason) | `toolcalling/ToolCallingLoop` + `ToolRegistry` + built-ins + `ToolEquippedAgent` (`review.tools.agent-loop.enabled`) |
+| Task decomposition & DAG execution (plan → topo-parallel) | `planning/TaskPlanner` + `TaskPlan` + `DagExecutor` + `TaskPlanningSupport` (`review.planning.enabled`) |
+| Reflection & experience base (post-review distillation) | `memory/ReflectionService` + `ExperienceStore` (`review.reflection.enabled`) |
+| LLM evaluation (precision/recall/F1 + llm-as-judge) | `eval/LlmJudge` (`review.eval.enabled`) |
+| Pluggable component mechanism (extension points) | `extension/ExtensionPoint` + `ExtensionRegistry` (5 extension point interfaces) |
 | External tool SPI (MCP-style plug-in point) | `tools/external/ExternalToolProvider` + `ExternalToolRegistry` |
 | Multi-tenant (team) isolation (global baseline + overlay) | `tenant/*` (Teams/TeamProperties/TeamResolver) + `review.teams.*` + console `X-Team-Id` + PG `team_id` |
 | Full-chain tracing (observability) | `core/trace/TraceContext` (MDC traceId cross-thread) + `core/llm/LoggingChatModelListener` (LLM boundary logs) |

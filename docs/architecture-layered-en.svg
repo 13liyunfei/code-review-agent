@@ -1,6 +1,6 @@
-<svg viewBox="0 0 680 1160" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+<svg viewBox="0 0 680 1300" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
   <title>code-review-agent — Layered Architecture (static structure)</title>
-  <desc>Top-down six layers: Trigger, Integration, Coordination, specialized review Agents (5 built-in + business custom in parallel), Capability, Infrastructure; cross-cutting concerns on the right.</desc>
+  <desc>Six layers top-down: Trigger, Integration, Coordination, Review Agents (5 built-in + custom parallel), Capability (incl. new Tool Calling / Planning / Reflection &amp; Eval / Extension), Infrastructure; cross-cutting concerns on the right.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -16,7 +16,7 @@
   </style>
 
   <text class="th" x="40" y="28" font-size="15">code-review-agent — Layered Architecture (static structure)</text>
-  <text class="ts" x="40" y="46">Open-source multi-agent collaborative code review engine · top-down six layers + cross-cutting concerns</text>
+  <text class="ts" x="40" y="46">Open-source multi-agent code review engine · six layers + cross-cutting concerns (incl. agentic capabilities: tool calling / task planning / reflection &amp; eval / extensions)</text>
 
   <!-- LAYER 1 TRIGGER -->
   <rect x="40" y="64" width="600" height="74" rx="14" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
@@ -48,13 +48,13 @@
   <rect x="58" y="288" width="280" height="42" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text class="th" x="198" y="309" text-anchor="middle" dominant-baseline="central">CompletableFutureCoordinator</text>
   <rect x="352" y="288" width="280" height="42" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text class="ts" x="492" y="303" text-anchor="middle" dominant-baseline="central">Parallel scheduling · aggregation · dedup · arbitration</text>
-  <text class="ts" x="492" y="319" text-anchor="middle" dominant-baseline="central">Severity profiling · timeout / partial-failure tolerance</text>
+  <text class="ts" x="492" y="303" text-anchor="middle" dominant-baseline="central">Parallel dispatch · aggregation · dedupe · arbitration</text>
+  <text class="ts" x="492" y="319" text-anchor="middle" dominant-baseline="central">Optional: Planning DAG routing · tiering · partial failure</text>
   <path class="a" d="M340 342 L340 356" stroke="#534AB7"/>
 
   <!-- LAYER 4 AGENTS (5 built-in lanes + custom-agent lane) -->
   <rect x="40" y="356" width="600" height="124" rx="14" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
-  <text class="lay" x="56" y="376" fill="#854F0B">④ Review agents · 5 built-in + business custom in parallel</text>
+  <text class="lay" x="56" y="376" fill="#854F0B">④ Review Agents · 5 built-in (tool-enhanced) + custom parallel</text>
   <rect x="58" y="386" width="108" height="40" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
   <text class="th" x="112" y="406" text-anchor="middle" dominant-baseline="central">Logic</text>
   <rect x="176" y="386" width="108" height="40" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
@@ -65,83 +65,99 @@
   <text class="th" x="466" y="406" text-anchor="middle" dominant-baseline="central">Style</text>
   <rect x="530" y="386" width="98" height="40" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
   <text class="th" x="579" y="406" text-anchor="middle" dominant-baseline="central">Architecture</text>
-  <!-- business custom agent lane: declarative, expanded per teamId, parallel with built-ins -->
-  <rect x="58" y="434" width="570" height="36" rx="8" fill="#FDF1F4" stroke="#D4537E" stroke-width="1"/>
-  <text class="th" x="70" y="446" fill="#993556">Business custom agents (0~N in parallel)</text>
-  <text class="ts" x="70" y="461">DeclarativeReviewAgent · CustomAgentStore · injection pre-check on save · degrades on failure</text>
+  <!-- tool enhancement decorator -->
+  <text class="ts" x="58" y="432" fill="#854F0B">└ ToolEquippedAgent decorator (optional): ToolCallingLoop gathers intel before review, findings merged</text>
+  <!-- custom agent lane -->
+  <rect x="58" y="440" width="570" height="32" rx="8" fill="#FDF1F4" stroke="#D4537E" stroke-width="1"/>
+  <text class="ts" x="70" y="450" fill="#993556">Business custom agents (0~N parallel)</text>
+  <text class="ts" x="70" y="464">DeclarativeReviewAgent · CustomAgentStore · injection pre-check · degradable</text>
   <path class="a" d="M340 480 L340 494" stroke="#BA7517"/>
 
   <!-- LAYER 5 CAPABILITY -->
-  <rect x="40" y="494" width="600" height="320" rx="14" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="lay" x="56" y="514" fill="#3B6D11">⑤ Capability layer (focus of this refactor)</text>
-  <rect x="58" y="524" width="280" height="138" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <rect x="40" y="494" width="600" height="428" rx="14" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="lay" x="56" y="514" fill="#3B6D11">⑤ Capability layer (incl. new agentic capabilities)</text>
+  <rect x="58" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="74" y="542" fill="#27500A">Core analysis &amp; auto-fix</text>
   <text class="ts" x="74" y="560">• AstAnalyzer / CallGraphAnalyzer</text>
-  <text class="ts" x="74" y="578">• ScaScanner (dependency security)</text>
-  <text class="ts" x="74" y="596">• AdvancedAnalyzer (6-way aggregate)</text>
+  <text class="ts" x="74" y="578">• ScaScanner (component security)</text>
+  <text class="ts" x="74" y="596">• AdvancedAnalyzer (6-way aggregation)</text>
   <text class="ts" x="74" y="614">• AutoFixEngine + Sandbox probe</text>
   <text class="ts" x="74" y="632">• YamlRuleEngine / ImpactAnalyzer</text>
-  <rect x="352" y="524" width="280" height="138" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="th" x="368" y="542" fill="#27500A">RAG &amp; memory (refactored)</text>
-  <text class="ts" x="368" y="560">• KnowledgeStore (memory/Pg)</text>
+  <rect x="352" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="th" x="368" y="542" fill="#27500A">RAG &amp; memory (rebuilt)</text>
+  <text class="ts" x="368" y="560">• KnowledgeStore (in-memory/Pg)</text>
   <text class="ts" x="368" y="578">• StructuredChunker</text>
   <text class="ts" x="368" y="596">• Reranker: Cohere API + Heuristic</text>
   <text class="ts" x="368" y="614">• RagEvaluator recall eval</text>
   <text class="ts" x="368" y="632">• min-similarity gate · hybrid retrieval</text>
-  <rect x="58" y="676" width="280" height="124" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="th" x="74" y="694" fill="#27500A">Human-in-loop &amp; quality loop</text>
-  <text class="ts" x="74" y="712">• ReviewWorkflowEngine</text>
-  <text class="ts" x="74" y="730">• ReportGenerator + write-back</text>
-  <text class="ts" x="74" y="748">• FeedbackStore / Calibration</text>
-  <text class="ts" x="74" y="766">• Remediation tickets / Apply</text>
-  <rect x="352" y="676" width="280" height="124" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="th" x="368" y="694" fill="#27500A">Cross-cutting · security &amp; resilience</text>
-  <text class="ts" x="368" y="712">• security: injection detection/hardening</text>
-  <text class="ts" x="368" y="730">• custom-agent: skeleton not overridable</text>
-  <text class="ts" x="368" y="748">• degrade: 4-level chain</text>
-  <text class="ts" x="368" y="766">• permission: Veto policy</text>
-  <path class="a" d="M340 814 L340 828" stroke="#639922"/>
+  <rect x="58" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
+  <text class="th" x="74" y="674" fill="#854F0B">Tool calling &amp; task planning (new)</text>
+  <text class="ts" x="74" y="692">• ToolCallingLoop decision loop</text>
+  <text class="ts" x="74" y="710">• ToolRegistry + built-ins (current_time/regex_scan/file_read)</text>
+  <text class="ts" x="74" y="728">• TaskPlanner decomposes goal → DAG</text>
+  <text class="ts" x="74" y="746">• DagExecutor topo-parallel · downstream skipped on failure</text>
+  <text class="ts" x="74" y="764">• TaskPlanningSupport woven into Coordinator</text>
+  <rect x="352" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
+  <text class="th" x="368" y="674" fill="#854F0B">Reflection · Eval · Extension (new)</text>
+  <text class="ts" x="368" y="692">• ReflectionService distills experiences</text>
+  <text class="ts" x="368" y="710">• ExperienceStore (team-isolated/deduped)</text>
+  <text class="ts" x="368" y="728">• LlmJudge: precision/recall/F1 + llm-as-judge</text>
+  <text class="ts" x="368" y="746">• ExtensionPoint + ExtensionRegistry pluggable</text>
+  <text class="ts" x="368" y="764">• 5 extension points: Llm/Rag/Agent/Memory/Stage</text>
+  <rect x="58" y="788" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="th" x="74" y="806" fill="#27500A">Human-in-loop &amp; quality loop</text>
+  <text class="ts" x="74" y="824">• ReviewWorkflowEngine</text>
+  <text class="ts" x="74" y="842">• ReportGenerator + write-back</text>
+  <text class="ts" x="74" y="860">• FeedbackStore / Calibration</text>
+  <text class="ts" x="74" y="878">• Remediation tickets / Apply suggestions</text>
+  <rect x="352" y="788" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="th" x="368" y="806" fill="#27500A">Cross-cutting · security &amp; resilience</text>
+  <text class="ts" x="368" y="824">• security: injection detection/hardening</text>
+  <text class="ts" x="368" y="842">• custom-agent: skeleton not overridable</text>
+  <text class="ts" x="368" y="860">• degrade: 4-level degradation chain</text>
+  <text class="ts" x="368" y="878">• permission: Veto policy</text>
+  <path class="a" d="M340 922 L340 936" stroke="#639922"/>
 
   <!-- LAYER 6 INFRA -->
-  <rect x="40" y="828" width="600" height="120" rx="14" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="lay" x="56" y="848" fill="#444441">⑥ Infrastructure layer</text>
-  <rect x="58" y="858" width="180" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="148" y="882" text-anchor="middle" dominant-baseline="central">PostgreSQL 17</text>
-  <text class="ts" x="148" y="902" text-anchor="middle" dominant-baseline="central">pgvector · team isolation</text>
-  <text class="ts" x="148" y="920" text-anchor="middle" dominant-baseline="central">memory_store / knowledge</text>
-  <rect x="252" y="858" width="170" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="337" y="882" text-anchor="middle" dominant-baseline="central">Redis 8.x</text>
-  <text class="ts" x="337" y="902" text-anchor="middle" dominant-baseline="central">message queue · fail-soft</text>
-  <text class="ts" x="337" y="920" text-anchor="middle" dominant-baseline="central">degrade without blocking</text>
-  <rect x="436" y="858" width="194" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="533" y="882" text-anchor="middle" dominant-baseline="central">TokenHub MaaS</text>
-  <text class="ts" x="533" y="902" text-anchor="middle" dominant-baseline="central">multi-model gateway · failover</text>
-  <text class="ts" x="533" y="920" text-anchor="middle" dominant-baseline="central">Egress control</text>
+  <rect x="40" y="936" width="600" height="120" rx="14" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="lay" x="56" y="956" fill="#444441">⑥ Infrastructure layer</text>
+  <rect x="58" y="966" width="180" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="th" x="148" y="990" text-anchor="middle" dominant-baseline="central">PostgreSQL 17</text>
+  <text class="ts" x="148" y="1010" text-anchor="middle" dominant-baseline="central">pgvector · team isolation</text>
+  <text class="ts" x="148" y="1028" text-anchor="middle" dominant-baseline="central">memory_store / knowledge</text>
+  <rect x="252" y="966" width="170" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="th" x="337" y="990" text-anchor="middle" dominant-baseline="central">Redis 8.x</text>
+  <text class="ts" x="337" y="1010" text-anchor="middle" dominant-baseline="central">message queue · fail-soft</text>
+  <text class="ts" x="337" y="1028" text-anchor="middle" dominant-baseline="central">non-blocking degradation</text>
+  <rect x="436" y="966" width="194" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="th" x="533" y="990" text-anchor="middle" dominant-baseline="central">TokenHub MaaS</text>
+  <text class="ts" x="533" y="1010" text-anchor="middle" dominant-baseline="central">multi-model gateway · failover</text>
+  <text class="ts" x="533" y="1028" text-anchor="middle" dominant-baseline="central">Egress egress control (GFW-resilient)</text>
 
   <!-- CROSS-CUTTING -->
-  <rect x="40" y="962" width="600" height="166" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="lay" x="56" y="982" fill="#993556">Cross-cutting concerns (span all six layers)</text>
-  <rect x="58" y="992" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="127" y="1010" text-anchor="middle" dominant-baseline="central">Multi-tenancy</text>
-  <text class="ts" x="127" y="1028" text-anchor="middle" dominant-baseline="central">owner/repo→teamId</text>
-  <rect x="208" y="992" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="277" y="1010" text-anchor="middle" dominant-baseline="central">End-to-end tracing</text>
-  <text class="ts" x="277" y="1028" text-anchor="middle" dominant-baseline="central">traceId=runId MDC</text>
-  <rect x="358" y="992" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="427" y="1010" text-anchor="middle" dominant-baseline="central">4-level degradation</text>
-  <text class="ts" x="427" y="1028" text-anchor="middle" dominant-baseline="central">DegradationChain</text>
-  <rect x="508" y="992" width="124" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="570" y="1010" text-anchor="middle" dominant-baseline="central">Skill plugins</text>
-  <text class="ts" x="570" y="1028" text-anchor="middle" dominant-baseline="central">SPI registry</text>
-  <rect x="58" y="1054" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="158" y="1072" text-anchor="middle" dominant-baseline="central">Resume &amp; trajectory replay</text>
-  <text class="ts" x="158" y="1090" text-anchor="middle" dominant-baseline="central">ResumeStore / ReviewReplay</text>
-  <rect x="270" y="1054" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="370" y="1072" text-anchor="middle" dominant-baseline="central">Prompt-injection defense</text>
-  <text class="ts" x="370" y="1090" text-anchor="middle" dominant-baseline="central">InjectionDetector · custom-agent precheck</text>
-  <rect x="482" y="1054" width="150" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="557" y="1072" text-anchor="middle" dominant-baseline="central">i18n</text>
-  <text class="ts" x="557" y="1090" text-anchor="middle" dominant-baseline="central">ReviewMessages</text>
+  <rect x="40" y="1070" width="600" height="166" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="lay" x="56" y="1090" fill="#993556">Cross-cutting concerns (span all six layers)</text>
+  <rect x="58" y="1100" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="127" y="1118" text-anchor="middle" dominant-baseline="central">Multi-tenancy</text>
+  <text class="ts" x="127" y="1136" text-anchor="middle" dominant-baseline="central">owner/repo→teamId</text>
+  <rect x="208" y="1100" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="277" y="1118" text-anchor="middle" dominant-baseline="central">Full-chain tracing</text>
+  <text class="ts" x="277" y="1136" text-anchor="middle" dominant-baseline="central">traceId=runId MDC</text>
+  <rect x="358" y="1100" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="427" y="1118" text-anchor="middle" dominant-baseline="central">4-level degradation</text>
+  <text class="ts" x="427" y="1136" text-anchor="middle" dominant-baseline="central">DegradationChain</text>
+  <rect x="508" y="1100" width="124" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="570" y="1118" text-anchor="middle" dominant-baseline="central">Skill plug-ins</text>
+  <text class="ts" x="570" y="1136" text-anchor="middle" dominant-baseline="central">SPI registry</text>
+  <rect x="58" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="158" y="1180" text-anchor="middle" dominant-baseline="central">Resume &amp; trajectory replay</text>
+  <text class="ts" x="158" y="1198" text-anchor="middle" dominant-baseline="central">ResumeStore / ReviewReplay</text>
+  <rect x="270" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="370" y="1180" text-anchor="middle" dominant-baseline="central">Prompt injection defense</text>
+  <text class="ts" x="370" y="1198" text-anchor="middle" dominant-baseline="central">InjectionDetector · custom-agent pre-check</text>
+  <rect x="482" y="1162" width="150" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="557" y="1180" text-anchor="middle" dominant-baseline="central">i18n</text>
+  <text class="ts" x="557" y="1198" text-anchor="middle" dominant-baseline="central">ReviewMessages</text>
 
-  <text class="cap" x="40" y="1150">Admin console code-review-console(:8081) calls engine /api/admin/* via X-Team-Id (see diagram B) · custom-agent list API: GET/POST/PUT/DELETE /api/admin/agents</text>
+  <text class="cap" x="40" y="1266">Management console code-review-console (:8081) calls engine /api/admin/* with X-Team-Id, see architecture diagram B · custom-agent admin: GET/POST/PUT/DELETE /api/admin/agents · new switches: review.planning.enabled / review.reflection.enabled / review.eval.enabled / review.tools.agent-loop.enabled (default off)</text>
 </svg>

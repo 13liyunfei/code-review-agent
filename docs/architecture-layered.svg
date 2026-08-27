@@ -1,6 +1,6 @@
-<svg viewBox="0 0 680 1160" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
+<svg viewBox="0 0 680 1300" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,sans-serif">
   <title>code-review-agent 分层架构（静态结构）</title>
-  <desc>自顶向下六层：触发层、集成层、协调层、专业审查 Agent（5 内置 + 业务方自定义并行）、能力支撑层、基础设施层；右侧横切关注点贯穿。</desc>
+  <desc>自顶向下六层：触发层、集成层、协调层、专业审查 Agent（5 内置 + 业务方自定义并行）、能力支撑层（含本轮新增工具调用/任务规划/反思评估扩展）、基础设施层；右侧横切关注点贯穿。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -16,7 +16,7 @@
   </style>
 
   <text class="th" x="40" y="28" font-size="15">code-review-agent — 分层架构（静态结构）</text>
-  <text class="ts" x="40" y="46">开源多 Agent 协同代码审查引擎 · 自顶向下六层 + 横切关注点</text>
+  <text class="ts" x="40" y="46">开源多 Agent 协同代码审查引擎 · 自顶向下六层 + 横切关注点（含 Agent 通用能力：工具调用 / 任务规划 / 反思评估扩展）</text>
 
   <!-- LAYER 1 TRIGGER -->
   <rect x="40" y="64" width="600" height="74" rx="14" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
@@ -49,12 +49,12 @@
   <text class="th" x="198" y="309" text-anchor="middle" dominant-baseline="central">CompletableFutureCoordinator</text>
   <rect x="352" y="288" width="280" height="42" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text class="ts" x="492" y="303" text-anchor="middle" dominant-baseline="central">并行调度 · 聚合 · 去重 · 冲突仲裁</text>
-  <text class="ts" x="492" y="319" text-anchor="middle" dominant-baseline="central">分级定档 · 超时/部分失败容错</text>
+  <text class="ts" x="492" y="319" text-anchor="middle" dominant-baseline="central">可选：Planning DAG 路由 · 分级定档 · 容错</text>
   <path class="a" d="M340 342 L340 356" stroke="#534AB7"/>
 
   <!-- LAYER 4 AGENTS (5 built-in lanes + custom-agent lane) -->
   <rect x="40" y="356" width="600" height="124" rx="14" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
-  <text class="lay" x="56" y="376" fill="#854F0B">④ 专业审查 Agent · 5 内置 + 业务方自定义并行</text>
+  <text class="lay" x="56" y="376" fill="#854F0B">④ 专业审查 Agent · 5 内置（工具增强）+ 业务方自定义并行</text>
   <rect x="58" y="386" width="108" height="40" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
   <text class="th" x="112" y="406" text-anchor="middle" dominant-baseline="central">Logic</text>
   <rect x="176" y="386" width="108" height="40" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
@@ -65,83 +65,99 @@
   <text class="th" x="466" y="406" text-anchor="middle" dominant-baseline="central">Style</text>
   <rect x="530" y="386" width="98" height="40" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
   <text class="th" x="579" y="406" text-anchor="middle" dominant-baseline="central">Architecture</text>
+  <!-- 工具增强装饰器：审查前 ToolCallingLoop 收集情报 -->
+  <text class="ts" x="58" y="432" fill="#854F0B">└ ToolEquippedAgent 装饰器（可选）：审查前 ToolCallingLoop 收集情报，工具发现并入结果</text>
   <!-- 业务方自定义 Agent 车道：声明式、按 teamId 展开、与内置并行 -->
-  <rect x="58" y="434" width="570" height="36" rx="8" fill="#FDF1F4" stroke="#D4537E" stroke-width="1"/>
-  <text class="th" x="70" y="446" fill="#993556">业务方自定义 Agent（0~N 并行）</text>
-  <text class="ts" x="70" y="461">DeclarativeReviewAgent · CustomAgentStore · 写库前注入预检 · 异常可降级</text>
+  <rect x="58" y="440" width="570" height="32" rx="8" fill="#FDF1F4" stroke="#D4537E" stroke-width="1"/>
+  <text class="ts" x="70" y="450" fill="#993556">业务方自定义 Agent（0~N 并行）</text>
+  <text class="ts" x="70" y="464">DeclarativeReviewAgent · CustomAgentStore · 写库前注入预检 · 异常可降级</text>
   <path class="a" d="M340 480 L340 494" stroke="#BA7517"/>
 
   <!-- LAYER 5 CAPABILITY -->
-  <rect x="40" y="494" width="600" height="320" rx="14" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="lay" x="56" y="514" fill="#3B6D11">⑤ 能力支撑层 · Capability (本次重构重点)</text>
-  <rect x="58" y="524" width="280" height="138" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <rect x="40" y="494" width="600" height="428" rx="14" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="lay" x="56" y="514" fill="#3B6D11">⑤ 能力支撑层 · Capability（含本轮新增 Agent 通用能力）</text>
+  <rect x="58" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="74" y="542" fill="#27500A">核心分析 &amp; 自动修复</text>
   <text class="ts" x="74" y="560">• AstAnalyzer / CallGraphAnalyzer</text>
   <text class="ts" x="74" y="578">• ScaScanner (组件安全)</text>
   <text class="ts" x="74" y="596">• AdvancedAnalyzer (聚合 6 路)</text>
   <text class="ts" x="74" y="614">• AutoFixEngine + Sandbox 探针</text>
   <text class="ts" x="74" y="632">• YamlRuleEngine / ImpactAnalyzer</text>
-  <rect x="352" y="524" width="280" height="138" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <rect x="352" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="368" y="542" fill="#27500A">RAG &amp; 记忆（重构）</text>
   <text class="ts" x="368" y="560">• KnowledgeStore (内存/Pg)</text>
   <text class="ts" x="368" y="578">• StructuredChunker 结构切块</text>
   <text class="ts" x="368" y="596">• Reranker: Cohere API + Heuristic</text>
   <text class="ts" x="368" y="614">• RagEvaluator 召回评测</text>
   <text class="ts" x="368" y="632">• min-similarity 闸门 · 混合检索</text>
-  <rect x="58" y="676" width="280" height="124" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="th" x="74" y="694" fill="#27500A">人机协作 &amp; 质量闭环</text>
-  <text class="ts" x="74" y="712">• ReviewWorkflowEngine</text>
-  <text class="ts" x="74" y="730">• ReportGenerator + 写回</text>
-  <text class="ts" x="74" y="748">• FeedbackStore / Calibration</text>
-  <text class="ts" x="74" y="766">• 整改工单 / Apply 建议</text>
-  <rect x="352" y="676" width="280" height="124" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
-  <text class="th" x="368" y="694" fill="#27500A">横切 · 安全 &amp; 韧性</text>
-  <text class="ts" x="368" y="712">• security: 注入检测/硬化</text>
-  <text class="ts" x="368" y="730">• custom-agent: 骨架不可覆盖</text>
-  <text class="ts" x="368" y="748">• degrade: 4 级降级链</text>
-  <text class="ts" x="368" y="766">• permission: Veto 否决策略</text>
-  <path class="a" d="M340 814 L340 828" stroke="#639922"/>
+  <rect x="58" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
+  <text class="th" x="74" y="674" fill="#854F0B">工具调用 &amp; 任务规划（新增）</text>
+  <text class="ts" x="74" y="692">• ToolCallingLoop 决策循环</text>
+  <text class="ts" x="74" y="710">• ToolRegistry + 内置工具(current_time/regex_scan/file_read)</text>
+  <text class="ts" x="74" y="728">• TaskPlanner 拆解目标 → DAG</text>
+  <text class="ts" x="74" y="746">• DagExecutor 拓扑并行 · 上游失败下游跳过</text>
+  <text class="ts" x="74" y="764">• TaskPlanningSupport 织入 Coordinator</text>
+  <rect x="352" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
+  <text class="th" x="368" y="674" fill="#854F0B">反思 · 评估 · 扩展（新增）</text>
+  <text class="ts" x="368" y="692">• ReflectionService 反思沉淀经验</text>
+  <text class="ts" x="368" y="710">• ExperienceStore 经验库(团队隔离/去重)</text>
+  <text class="ts" x="368" y="728">• LlmJudge: precision/recall/F1 + llm-as-judge</text>
+  <text class="ts" x="368" y="746">• ExtensionPoint + ExtensionRegistry 可插拔</text>
+  <text class="ts" x="368" y="764">• 五类扩展点: Llm/Rag/Agent/Memory/Stage</text>
+  <rect x="58" y="788" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="th" x="74" y="806" fill="#27500A">人机协作 &amp; 质量闭环</text>
+  <text class="ts" x="74" y="824">• ReviewWorkflowEngine</text>
+  <text class="ts" x="74" y="842">• ReportGenerator + 写回</text>
+  <text class="ts" x="74" y="860">• FeedbackStore / Calibration</text>
+  <text class="ts" x="74" y="878">• 整改工单 / Apply 建议</text>
+  <rect x="352" y="788" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
+  <text class="th" x="368" y="806" fill="#27500A">横切 · 安全 &amp; 韧性</text>
+  <text class="ts" x="368" y="824">• security: 注入检测/硬化</text>
+  <text class="ts" x="368" y="842">• custom-agent: 骨架不可覆盖</text>
+  <text class="ts" x="368" y="860">• degrade: 4 级降级链</text>
+  <text class="ts" x="368" y="878">• permission: Veto 否决策略</text>
+  <path class="a" d="M340 922 L340 936" stroke="#639922"/>
 
   <!-- LAYER 6 INFRA -->
-  <rect x="40" y="828" width="600" height="120" rx="14" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="lay" x="56" y="848" fill="#444441">⑥ 基础设施层 · Infrastructure</text>
-  <rect x="58" y="858" width="180" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="148" y="882" text-anchor="middle" dominant-baseline="central">PostgreSQL 17</text>
-  <text class="ts" x="148" y="902" text-anchor="middle" dominant-baseline="central">pgvector · 团队隔离</text>
-  <text class="ts" x="148" y="920" text-anchor="middle" dominant-baseline="central">memory_store / knowledge</text>
-  <rect x="252" y="858" width="170" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="337" y="882" text-anchor="middle" dominant-baseline="central">Redis 8.x</text>
-  <text class="ts" x="337" y="902" text-anchor="middle" dominant-baseline="central">消息队列 · fail-soft</text>
-  <text class="ts" x="337" y="920" text-anchor="middle" dominant-baseline="central">不可用时降级不阻断</text>
-  <rect x="436" y="858" width="194" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="533" y="882" text-anchor="middle" dominant-baseline="central">TokenHub MaaS</text>
-  <text class="ts" x="533" y="902" text-anchor="middle" dominant-baseline="central">多模型网关 · failover</text>
-  <text class="ts" x="533" y="920" text-anchor="middle" dominant-baseline="central">Egress 出口管控(抗 GFW)</text>
+  <rect x="40" y="936" width="600" height="120" rx="14" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="lay" x="56" y="956" fill="#444441">⑥ 基础设施层 · Infrastructure</text>
+  <rect x="58" y="966" width="180" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="th" x="148" y="990" text-anchor="middle" dominant-baseline="central">PostgreSQL 17</text>
+  <text class="ts" x="148" y="1010" text-anchor="middle" dominant-baseline="central">pgvector · 团队隔离</text>
+  <text class="ts" x="148" y="1028" text-anchor="middle" dominant-baseline="central">memory_store / knowledge</text>
+  <rect x="252" y="966" width="170" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="th" x="337" y="990" text-anchor="middle" dominant-baseline="central">Redis 8.x</text>
+  <text class="ts" x="337" y="1010" text-anchor="middle" dominant-baseline="central">消息队列 · fail-soft</text>
+  <text class="ts" x="337" y="1028" text-anchor="middle" dominant-baseline="central">不可用时降级不阻断</text>
+  <rect x="436" y="966" width="194" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text class="th" x="533" y="990" text-anchor="middle" dominant-baseline="central">TokenHub MaaS</text>
+  <text class="ts" x="533" y="1010" text-anchor="middle" dominant-baseline="central">多模型网关 · failover</text>
+  <text class="ts" x="533" y="1028" text-anchor="middle" dominant-baseline="central">Egress 出口管控(抗 GFW)</text>
 
   <!-- CROSS-CUTTING -->
-  <rect x="40" y="962" width="600" height="166" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="lay" x="56" y="982" fill="#993556">横切关注点 · Cross-cutting (贯穿全部六层)</text>
-  <rect x="58" y="992" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="127" y="1010" text-anchor="middle" dominant-baseline="central">多租户隔离</text>
-  <text class="ts" x="127" y="1028" text-anchor="middle" dominant-baseline="central">owner/repo→teamId</text>
-  <rect x="208" y="992" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="277" y="1010" text-anchor="middle" dominant-baseline="central">全链路追踪</text>
-  <text class="ts" x="277" y="1028" text-anchor="middle" dominant-baseline="central">traceId=runId MDC</text>
-  <rect x="358" y="992" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="427" y="1010" text-anchor="middle" dominant-baseline="central">4 级降级</text>
-  <text class="ts" x="427" y="1028" text-anchor="middle" dominant-baseline="central">DegradationChain</text>
-  <rect x="508" y="992" width="124" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="570" y="1010" text-anchor="middle" dominant-baseline="central">Skill 插件化</text>
-  <text class="ts" x="570" y="1028" text-anchor="middle" dominant-baseline="central">SPI 注册</text>
-  <rect x="58" y="1054" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="158" y="1072" text-anchor="middle" dominant-baseline="central">断点续跑 &amp; 轨迹回放</text>
-  <text class="ts" x="158" y="1090" text-anchor="middle" dominant-baseline="central">ResumeStore / ReviewReplay</text>
-  <rect x="270" y="1054" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="370" y="1072" text-anchor="middle" dominant-baseline="central">Prompt 注入防护</text>
-  <text class="ts" x="370" y="1090" text-anchor="middle" dominant-baseline="central">InjectionDetector · 自定义Agent预检</text>
-  <rect x="482" y="1054" width="150" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
-  <text class="th" x="557" y="1072" text-anchor="middle" dominant-baseline="central">i18n 多语言</text>
-  <text class="ts" x="557" y="1090" text-anchor="middle" dominant-baseline="central">ReviewMessages</text>
+  <rect x="40" y="1070" width="600" height="166" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="lay" x="56" y="1090" fill="#993556">横切关注点 · Cross-cutting (贯穿全部六层)</text>
+  <rect x="58" y="1100" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="127" y="1118" text-anchor="middle" dominant-baseline="central">多租户隔离</text>
+  <text class="ts" x="127" y="1136" text-anchor="middle" dominant-baseline="central">owner/repo→teamId</text>
+  <rect x="208" y="1100" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="277" y="1118" text-anchor="middle" dominant-baseline="central">全链路追踪</text>
+  <text class="ts" x="277" y="1136" text-anchor="middle" dominant-baseline="central">traceId=runId MDC</text>
+  <rect x="358" y="1100" width="138" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="427" y="1118" text-anchor="middle" dominant-baseline="central">4 级降级</text>
+  <text class="ts" x="427" y="1136" text-anchor="middle" dominant-baseline="central">DegradationChain</text>
+  <rect x="508" y="1100" width="124" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="570" y="1118" text-anchor="middle" dominant-baseline="central">Skill 插件化</text>
+  <text class="ts" x="570" y="1136" text-anchor="middle" dominant-baseline="central">SPI 注册</text>
+  <rect x="58" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="158" y="1180" text-anchor="middle" dominant-baseline="central">断点续跑 &amp; 轨迹回放</text>
+  <text class="ts" x="158" y="1198" text-anchor="middle" dominant-baseline="central">ResumeStore / ReviewReplay</text>
+  <rect x="270" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="370" y="1180" text-anchor="middle" dominant-baseline="central">Prompt 注入防护</text>
+  <text class="ts" x="370" y="1198" text-anchor="middle" dominant-baseline="central">InjectionDetector · 自定义Agent预检</text>
+  <rect x="482" y="1162" width="150" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
+  <text class="th" x="557" y="1180" text-anchor="middle" dominant-baseline="central">i18n 多语言</text>
+  <text class="ts" x="557" y="1198" text-anchor="middle" dominant-baseline="central">ReviewMessages</text>
 
-  <text class="cap" x="40" y="1150">管理控制台 code-review-console(:8081) 经 X-Team-Id 调用引擎 /api/admin/* 见架构图 B · 自定义 Agent 后管列表：GET/POST/PUT/DELETE /api/admin/agents</text>
+  <text class="cap" x="40" y="1266">管理控制台 code-review-console(:8081) 经 X-Team-Id 调用引擎 /api/admin/* 见架构图 B · 自定义 Agent 后管列表：GET/POST/PUT/DELETE /api/admin/agents · 新能力开关：review.planning.enabled / review.reflection.enabled / review.eval.enabled / review.tools.agent-loop.enabled（默认关）</text>
 </svg>
