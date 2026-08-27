@@ -437,9 +437,18 @@ public class ReviewAgentConfig {
                                   CustomAgentStore customAgentStore,
                                   LlmClient llmClient,
                                   CodeReviewAiService codeReviewAiService,
-                                  InjectionDetector injectionDetector) {
+                                  InjectionDetector injectionDetector,
+                                  org.springframework.core.env.Environment environment) {
+        // 任务规划织入（可选增强）：review.planning.enabled=true 时，LLM 先把审查目标拆解为
+        // 子任务 DAG 再按依赖拓扑并行执行；默认关闭，行为与旧版完全一致
+        com.codereview.agent.core.planning.TaskPlanningSupport planningSupport =
+                new com.codereview.agent.core.planning.TaskPlanningSupport(
+                        new com.codereview.agent.core.planning.TaskPlanner(llmClient),
+                        new com.codereview.agent.core.planning.DagExecutor(agentExecutor),
+                        Boolean.parseBoolean(environment.getProperty("review.planning.enabled", "false")));
         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
                 historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,
-                enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector);
+                enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector,
+                planningSupport);
     }
 }

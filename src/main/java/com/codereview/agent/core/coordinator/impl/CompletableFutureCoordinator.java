@@ -26,6 +26,7 @@ import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
 import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.PullRequest;
+import com.codereview.agent.core.planning.TaskPlanningSupport;
 import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.memory.RagContextBuilder;
@@ -101,6 +102,8 @@ public class CompletableFutureCoordinator implements Coordinator {
     private final CodeReviewAiService aiService;
     /** Prompt 注入检测器（自定义 Agent 防御用，可空）。 */
     private final InjectionDetector injectionDetector;
+    /** 任务规划织入支撑（可空：为 null 或未启用时走固定并行路径）。 */
+    private final TaskPlanningSupport planningSupport;
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
@@ -140,7 +143,7 @@ public class CompletableFutureCoordinator implements Coordinator {
                                        ReviewEnhancements enhancements,
                                        RagContextBuilder ragContextBuilder) {
         this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, agentExecutor,
-                impactAnalyzer, recorder, enhancements, ragContextBuilder, null, null, null, null);
+                impactAnalyzer, recorder, enhancements, ragContextBuilder, null, null, null, null, null);
     }
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
@@ -153,6 +156,22 @@ public class CompletableFutureCoordinator implements Coordinator {
                                        LlmClient llmClient,
                                        CodeReviewAiService aiService,
                                        InjectionDetector injectionDetector) {
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, agentExecutor,
+                impactAnalyzer, recorder, enhancements, ragContextBuilder, customAgentStore,
+                llmClient, aiService, injectionDetector, null);
+    }
+
+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
+                                       ReviewEnhancements enhancements,
+                                       RagContextBuilder ragContextBuilder,
+                                       CustomAgentStore customAgentStore,
+                                       LlmClient llmClient,
+                                       CodeReviewAiService aiService,
+                                       InjectionDetector injectionDetector,
+                                       TaskPlanningSupport planningSupport) {
         this.agents = agents;
         this.reportGenerator = reportGenerator;
         this.feedbackStore = feedbackStore;
@@ -169,6 +188,7 @@ public class CompletableFutureCoordinator implements Coordinator {
         this.llmClient = llmClient;
         this.aiService = aiService;
         this.injectionDetector = injectionDetector;
+        this.planningSupport = planningSupport;
     }
 
     /** 生效的审查强度 Profile（未配置 / 非法时回退 ADVISORY）。 */
@@ -294,8 +314,22 @@ public class CompletableFutureCoordinator implements Coordinator {
         ReviewHistoryEntry previous = historyStore == null ? null
                 : historyStore.getLatest(teamId, pr.repo() + "#" + pr.id()).orElse(null);
 
-        // 1. 为每个 Agent 创建 Future，并行审查（TraceContext.wrap 保证 traceId 跨线程传播）
-        List<CompletableFuture<AgentResult>> futures = effectiveAgents.stream()
+        // 0.9 任务拆解规划（可选增强，review.planning.enabled=true 生效）：LLM 把审查目标拆解为
+        //     子任务 DAG，按依赖拓扑并行执行；空结果 = 未启用 / 规划失败，自动降级固定并行路径
+        List<AgentResult> plannedResults = planningSupport == null ? List.of()
+                : planningSupport.planAndExecute("审查 PR #" + pr.id() + "：" + pr.title(),
+                        diffs, enrichedCtx, effectiveAgents, pr.id(), recorder, runId);
+
+        List<AgentResult> mainResults = new ArrayList<>();
+        if (!plannedResults.isEmpty()) {
+            mainResults.addAll(plannedResults);
+        }
+
+        // 1. 为每个 Agent 创建 Future，并行审查（TraceContext.wrap 保证 traceId 跨线程传播）；
+        //    规划路径已产出结果时跳过固定并行
+        List<CompletableFuture<AgentResult>> futures = List.of();
+        if (plannedResults.isEmpty()) {
+            futures = effectiveAgents.stream()
                 .map(agent -> CompletableFuture.supplyAsync(TraceContext.wrap(() -> {
                     long a0 = System.currentTimeMillis();
                     if (recorder != null) {
@@ -308,6 +342,7 @@ public class CompletableFutureCoordinator implements Coordinator {
                     return new AgentResult(pr.id(), agent.getType(), findings);
                 }), agentExecutor))
                 .toList();
+        }
 
         // 1.1 高级静态分析（AST 结构 / 调用图影响面 / SCA 依赖）并行运行
         CompletableFuture<List<AgentResult>> advancedFuture = advancedAnalyzer == null ? null
@@ -333,7 +368,6 @@ public class CompletableFutureCoordinator implements Coordinator {
                 });
 
         // 3. 收集结果（个别失败 / 超时以空结果占位，保证整体可用）；每个 Agent 完成即保存断点
-        List<AgentResult> mainResults = new ArrayList<>();
         for (CompletableFuture<AgentResult> future : futures) {
             try {
                 mainResults.add(future.join());
