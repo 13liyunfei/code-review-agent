@@ -5,6 +5,7 @@ import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.history.ReviewHistoryStore;
 import com.codereview.agent.core.scheduler.ScheduledScanService;
 import com.codereview.agent.core.workflow.ReviewWorkflowEngine;
+import com.codereview.agent.core.llm.LlmClient;
 import com.codereview.agent.tenant.TeamResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,8 +75,20 @@ public class GiteaConfig {
                                                  Coordinator coordinator,
                                                  AutoFixEngine autoFixEngine,
                                                  ReviewWorkflowEngine workflowEngine,
-                                                 TeamResolver teamResolver) {
-        return new GiteaReviewService(giteaApiClient, coordinator, autoFixEngine, workflowEngine, teamResolver);
+                                                 TeamResolver teamResolver,
+                                                 LlmClient llmClient,
+                                                 org.springframework.core.env.Environment env) {
+        // 可选增强（默认关闭）：经验反思沉淀 + LLM 应用评估
+        var dataDir = java.nio.file.Path.of(env.getProperty("review.data-dir", "./data"));
+        var reflection = Boolean.parseBoolean(env.getProperty("review.reflection.enabled", "false"))
+                ? new com.codereview.agent.core.memory.ReflectionService(
+                        new com.codereview.agent.core.memory.ExperienceStore(null, dataDir), llmClient)
+                : null;
+        var judge = Boolean.parseBoolean(env.getProperty("review.eval.enabled", "false"))
+                ? new com.codereview.agent.core.eval.LlmJudge(llmClient)
+                : null;
+        return new GiteaReviewService(giteaApiClient, coordinator, autoFixEngine, workflowEngine, teamResolver,
+                reflection, judge);
     }
 
     /**

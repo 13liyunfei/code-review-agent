@@ -387,8 +387,24 @@ public class ReviewAgentConfig {
                                          LogicAgent logicAgent,
                                          PerformanceAgent performanceAgent,
                                          StyleAgent styleAgent,
-                                         ArchitectureAgent architectureAgent) {
-        return List.of(securityAgent, logicAgent, performanceAgent, styleAgent, architectureAgent);
+                                         ArchitectureAgent architectureAgent,
+                                         LlmClient llmClient,
+                                         org.springframework.core.env.Environment env) {
+        List<ReviewAgent> agents = List.of(securityAgent, logicAgent, performanceAgent, styleAgent, architectureAgent);
+        // 工具增强织入（可选）：enabled 时每个内置 Agent 外包 ToolEquippedAgent（思考→调工具→观察→推理）
+        if (Boolean.parseBoolean(env.getProperty("review.tools.agent-loop.enabled", "false"))
+                && llmClient != null) {
+            var registry = new com.codereview.agent.core.toolcalling.ToolRegistry();
+            registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.CurrentTimeTool());
+            registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.RegexScanTool());
+            registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.FileReadTool(
+                    java.nio.file.Path.of(env.getProperty("review.data-dir", "./data"))));
+            var loop = new com.codereview.agent.core.toolcalling.ToolCallingLoop(llmClient, registry, 3);
+            return agents.stream()
+                    .map(a -> (ReviewAgent) new com.codereview.agent.core.toolcalling.ToolEquippedAgent(a, loop))
+                    .toList();
+        }
+        return agents;
     }
 
     @Bean

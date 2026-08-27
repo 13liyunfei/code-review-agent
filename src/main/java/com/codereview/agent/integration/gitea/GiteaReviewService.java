@@ -40,6 +40,10 @@ public class GiteaReviewService {
     private final AutoFixEngine autoFixEngine;
     private final ReviewWorkflowEngine workflowEngine;
     private final TeamResolver teamResolver;
+    /** 经验反思服务（可空：为 null 时跳过反思沉淀）。 */
+    private final com.codereview.agent.core.memory.ReflectionService reflectionService;
+    /** LLM 应用评估（可空：为 null 时跳过评估）。 */
+    private final com.codereview.agent.core.eval.LlmJudge judge;
 
     /**
      * 构造审查编排服务。
@@ -53,11 +57,22 @@ public class GiteaReviewService {
     public GiteaReviewService(GiteaApiClient giteaClient, Coordinator coordinator,
                              AutoFixEngine autoFixEngine, ReviewWorkflowEngine workflowEngine,
                              TeamResolver teamResolver) {
+        this(giteaClient, coordinator, autoFixEngine, workflowEngine, teamResolver, null, null);
+    }
+
+    /** 可选增强构造：reflectionService（经验反思）/ judge（LLM 评估）为 null 时跳过对应步骤。 */
+    public GiteaReviewService(GiteaApiClient giteaClient, Coordinator coordinator,
+                             AutoFixEngine autoFixEngine, ReviewWorkflowEngine workflowEngine,
+                             TeamResolver teamResolver,
+                             com.codereview.agent.core.memory.ReflectionService reflectionService,
+                             com.codereview.agent.core.eval.LlmJudge judge) {
         this.giteaClient = giteaClient;
         this.coordinator = coordinator;
         this.autoFixEngine = autoFixEngine;
         this.workflowEngine = workflowEngine;
         this.teamResolver = teamResolver;
+        this.reflectionService = reflectionService;
+        this.judge = judge;
     }
 
     /**
@@ -155,6 +170,25 @@ public class GiteaReviewService {
         log.info("[Gitea审查] PR #{} 审查完成：发现问题 {} 条，行内修复建议已发布 {} 条（共 {} 条可修复），总耗时 {}ms",
                 prNum, report.getFindings().size(), applied, fixes.size(),
                 System.currentTimeMillis() - startTotal);
+
+        // 可选增强：经验反思 + LLM 应用评估（组件为 null / 异常时静默跳过，绝不阻断）
+        try {
+            if (reflectionService != null && report != null) {
+                reflectionService.reflectFromReport(teamId, report);
+            }
+        } catch (Exception e) {
+            log.warn("[Gitea审查] 经验反思失败（忽略）：{}", e.getMessage());
+        }
+        try {
+            if (judge != null && report != null) {
+                var er = judge.evaluate(report, List.of());
+                log.info("[Gitea审查] LLM 评估：precision={} recall={} f1={} {}",
+                        String.format("%.2f", er.precision()), String.format("%.2f", er.recall()),
+                        String.format("%.2f", er.f1()), er.judgeSummary());
+            }
+        } catch (Exception e) {
+            log.warn("[Gitea审查] LLM 评估失败（忽略）：{}", e.getMessage());
+        }
     }
 
     /**
