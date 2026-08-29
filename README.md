@@ -571,7 +571,7 @@ All agentic capabilities above live in a **standalone, framework-free project** 
 </dependency>
 ```
 
-**14 components / 12 capability areas**（对标 2026 主流 Agent 框架标准）：
+**14 components / 12 capability areas**（覆盖生产级 Agent 通用能力域）：
 - 工具决策循环 `ToolCallingLoop` + 内置工具；任务拆解 DAG `TaskPlanner/DagExecutor`
 - 评估 `LlmJudge`（precision/recall + llm-as-judge）+ `EvalDataset/EvalRunner` 回归基准
 - 扩展点 `ExtensionRegistry` + 5 类 SPI（LlmInterceptor / RagEnhancer / AgentProvider / MemoryStrategy / StageHook）

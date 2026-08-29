@@ -429,7 +429,7 @@ Coordinator 按固定优先级权重裁决，高优先级胜出，落败方进�
 - `GET /api/quality-report?range=week|all` 基于历史聚合输出周度 / 全量质量趋势 Markdown：审查次数、问题总数、  
   分级分布、高频规则 Top10、仓库分布、最近审查，供 Tech Lead 持续改进。
 
-### 5. 架构对标增强（deepseek-harness / openai codex 借鉴落地）
+### 5. 架构增强（吸收开源 harness 设计经验）
 
 > 对照两份外部 harness 源码（dsh 事件源 Session / codex RolloutItem 轨迹、context-fragments 按需注入、  
 > suspend/recover_turn 断点续跑、guardian-v2 fail-closed、intersect_permission_profiles 权限收敛、  
@@ -608,7 +608,7 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 </dependency>
 ```
 
-**14 组件 / 12 项能力域**（对标 2026 主流 Agent 框架标准）：
+**14 组件 / 12 项能力域**（覆盖生产级 Agent 通用能力域）：
 - 工具决策循环 `ToolCallingLoop` + 内置工具；任务拆解 DAG `TaskPlanner/DagExecutor`
 - 评估 `LlmJudge`（precision/recall + llm-as-judge）+ `EvalDataset/EvalRunner` 回归基准
 - 扩展点 `ExtensionRegistry` + 5 类 SPI（LlmInterceptor / RagEnhancer / AgentProvider / MemoryStrategy / StageHook）
