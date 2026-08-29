@@ -559,9 +559,9 @@ Enterprise-grade agentic building blocks, all **optional enhancements (default o
 
 All five are covered by unit + integration tests (loop semantics, DAG topo-order & cycle rejection, coordinator weaving, precision/recall assertions, registry ordering) — see `docs/test-report-agent-capabilities-2026-08-27.md`.
 
-### agent-kit: the components as a pluggable Maven artifact
+### agent-kit: standalone component library (separate repo)
 
-All agentic capabilities above live in a **standalone, framework-free module** `agent-kit/` (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
+All agentic capabilities above live in a **standalone, framework-free project** [`agent-kit`](https://github.com/13liyunfei/agent-kit) (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
 
 ```xml
 <dependency>
@@ -571,10 +571,16 @@ All agentic capabilities above live in a **standalone, framework-free module** `
 </dependency>
 ```
 
+**14 components / 12 capability areas**（对标 2026 主流 Agent 框架标准）：
+- 工具决策循环 `ToolCallingLoop` + 内置工具；任务拆解 DAG `TaskPlanner/DagExecutor`
+- 评估 `LlmJudge`（precision/recall + llm-as-judge）+ `EvalDataset/EvalRunner` 回归基准
+- 扩展点 `ExtensionRegistry` + 5 类 SPI（LlmInterceptor / RagEnhancer / AgentProvider / MemoryStrategy / StageHook）
+- 多轮会话 `ChatSession`；流式 `ChatModel.stream()`（JDK Flow）；结构化输出 `StructuredChatModel`
+- **MCP Client**（stdio + JSON-RPC，接入工具生态）；检查点 `CheckpointStore`；可观测 `GenAiTracer`；HITL `ApprovalGate`；模型路由 `ModelRouter`（failover）；注入防护 `InjectionGuardInterceptor`（SPI 实现范例）
+
 - **Model boundary is a single method**: `ChatModel.chat(String)` — this engine's `LlmClient extends ChatModel`, so any project adapts with a one-line adapter.
 - **Eval is domain-agnostic**: `LlmJudge<F extends FindingLike>` consumes any domain finding that implements the `FindingLike` interface (this engine's `Finding` does).
-- **Five SPI extension points** (`LlmInterceptor` / `RagEnhancer` / `AgentProvider` / `MemoryStrategy` / `StageHook`) let consumers layer custom behavior on top of the built-in components via `ExtensionRegistry` (order-based weaving, same-name override).
-- Build once, reuse anywhere: `mvn -f agent-kit/pom.xml install` publishes `com.codereview:agent-kit:0.1.0` locally; see `agent-kit/README.md` for the usage guide.
+- Build once, reuse anywhere: `mvn -f agent-kit/pom.xml install` publishes `com.codereview:agent-kit:0.1.0` locally; see the standalone repo's `README.md` for the usage guide.
 
 ### Data persistence
 

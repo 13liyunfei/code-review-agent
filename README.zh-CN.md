@@ -596,9 +596,9 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 
 五项均有单测 + 集成测试覆盖（循环语义、DAG 拓扑序与环拒绝、Coordinator 织入、precision/recall 断言、注册表排序），详见 `docs/test-report-agent-capabilities-2026-08-27.md`。
 
-### agent-kit：组件以独立 Maven 构件引入
+### agent-kit：独立组件库（独立仓库）
 
-上述 Agent 通用能力全部位于**独立、零框架依赖的 `agent-kit/` 模块**（纯 Java 17，仅 jackson + slf4j），本引擎以普通依赖方式消费——即"类似 Spring Starter 的组件式引入"：
+上述 Agent 通用能力全部位于**独立、零框架依赖的独立仓库 [`agent-kit`](https://gitee.com/13liyunfei/agent-kit)**（纯 Java 17，仅 jackson + slf4j），本引擎以普通依赖方式消费——即"类似 Spring Starter 的组件式引入"：
 
 ```xml
 <dependency>
@@ -608,10 +608,16 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 </dependency>
 ```
 
+**14 组件 / 12 项能力域**（对标 2026 主流 Agent 框架标准）：
+- 工具决策循环 `ToolCallingLoop` + 内置工具；任务拆解 DAG `TaskPlanner/DagExecutor`
+- 评估 `LlmJudge`（precision/recall + llm-as-judge）+ `EvalDataset/EvalRunner` 回归基准
+- 扩展点 `ExtensionRegistry` + 5 类 SPI（LlmInterceptor / RagEnhancer / AgentProvider / MemoryStrategy / StageHook）
+- 多轮会话 `ChatSession`；流式 `ChatModel.stream()`（JDK Flow）；结构化输出 `StructuredChatModel`
+- **MCP Client**（stdio + JSON-RPC，接入工具生态）；检查点 `CheckpointStore`；可观测 `GenAiTracer`；HITL `ApprovalGate`；模型路由 `ModelRouter`（failover）；注入防护 `InjectionGuardInterceptor`（SPI 实现范例）
+
 - **模型边界收敛为单方法**：`ChatModel.chat(String)` —— 本引擎 `LlmClient extends ChatModel`，任何项目一行适配器即可接入。
 - **评估与领域解耦**：`LlmJudge<F extends FindingLike>` 消费任意实现 `FindingLike` 接口的领域发现对象（本引擎的 `Finding` 即实现之）。
-- **五类 SPI 扩展点**（`LlmInterceptor` / `RagEnhancer` / `AgentProvider` / `MemoryStrategy` / `StageHook`）让使用方经 `ExtensionRegistry`（order 织入序 / 同名覆盖）在标准组件之上叠加自定义行为。
-- 一次构建处处复用：`mvn -f agent-kit/pom.xml install` 本地发布 `com.codereview:agent-kit:0.1.0`；使用指南见 `agent-kit/README.md`。
+- 一次构建处处复用：`mvn -f agent-kit/pom.xml install` 本地发布 `com.codereview:agent-kit:0.1.0`；使用指南见独立仓库 `README.md`。
 
 ### 数据持久化
 

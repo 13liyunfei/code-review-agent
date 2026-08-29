@@ -93,17 +93,17 @@
   <rect x="58" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
   <text class="th" x="74" y="674" fill="#854F0B">Tool calling &amp; task planning (new)</text>
   <text class="ts" x="74" y="692">• ToolCallingLoop decision loop</text>
-  <text class="ts" x="74" y="710">• ToolRegistry + built-ins (current_time/regex_scan/file_read)</text>
+  <text class="ts" x="74" y="710">• MCP Client · tool ecosystem</text>
   <text class="ts" x="74" y="728">• TaskPlanner decomposes goal → DAG</text>
-  <text class="ts" x="74" y="746">• DagExecutor topo-parallel · downstream skipped on failure</text>
-  <text class="ts" x="74" y="764">• TaskPlanningSupport woven into Coordinator</text>
+  <text class="ts" x="74" y="746">• DagExecutor topo-parallel · fail-skip</text>
+  <text class="ts" x="74" y="764">• ChatSession multi-turn · streaming</text>
   <rect x="352" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
   <text class="th" x="368" y="674" fill="#854F0B">Reflection · Eval · Extension (new)</text>
   <text class="ts" x="368" y="692">• ReflectionService distills experiences</text>
-  <text class="ts" x="368" y="710">• ExperienceStore (team-isolated/deduped)</text>
-  <text class="ts" x="368" y="728">• LlmJudge: precision/recall/F1 + llm-as-judge</text>
-  <text class="ts" x="368" y="746">• ExtensionPoint + ExtensionRegistry pluggable</text>
-  <text class="ts" x="368" y="764">• 5 extension points: Llm/Rag/Agent/Memory/Stage</text>
+  <text class="ts" x="368" y="710">• LlmJudge + EvalDataset regression</text>
+  <text class="ts" x="368" y="728">• StructuredChatModel structured output</text>
+  <text class="ts" x="368" y="746">• ExtensionPoint + Registry pluggable</text>
+  <text class="ts" x="368" y="764">• Checkpoint · HITL · model router</text>
   <rect x="58" y="788" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="74" y="806" fill="#27500A">Human-in-loop &amp; quality loop</text>
   <text class="ts" x="74" y="824">• ReviewWorkflowEngine</text>

@@ -93,17 +93,17 @@
   <rect x="58" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
   <text class="th" x="74" y="674" fill="#854F0B">工具调用 &amp; 任务规划（新增）</text>
   <text class="ts" x="74" y="692">• ToolCallingLoop 决策循环</text>
-  <text class="ts" x="74" y="710">• ToolRegistry + 内置工具(current_time/regex_scan/file_read)</text>
+  <text class="ts" x="74" y="710">• MCP Client · 工具生态接入</text>
   <text class="ts" x="74" y="728">• TaskPlanner 拆解目标 → DAG</text>
-  <text class="ts" x="74" y="746">• DagExecutor 拓扑并行 · 上游失败下游跳过</text>
-  <text class="ts" x="74" y="764">• TaskPlanningSupport 织入 Coordinator</text>
+  <text class="ts" x="74" y="746">• DagExecutor 拓扑并行 · 失败跳过</text>
+  <text class="ts" x="74" y="764">• ChatSession 多轮 · 流式输出</text>
   <rect x="352" y="656" width="280" height="120" rx="10" fill="#FDF6E3" stroke="#BA7517" stroke-width="0.8"/>
   <text class="th" x="368" y="674" fill="#854F0B">反思 · 评估 · 扩展（新增）</text>
   <text class="ts" x="368" y="692">• ReflectionService 反思沉淀经验</text>
-  <text class="ts" x="368" y="710">• ExperienceStore 经验库(团队隔离/去重)</text>
-  <text class="ts" x="368" y="728">• LlmJudge: precision/recall/F1 + llm-as-judge</text>
-  <text class="ts" x="368" y="746">• ExtensionPoint + ExtensionRegistry 可插拔</text>
-  <text class="ts" x="368" y="764">• 五类扩展点: Llm/Rag/Agent/Memory/Stage</text>
+  <text class="ts" x="368" y="710">• LlmJudge + EvalDataset 回归</text>
+  <text class="ts" x="368" y="728">• StructuredChatModel 结构化输出</text>
+  <text class="ts" x="368" y="746">• ExtensionPoint + Registry 可插拔</text>
+  <text class="ts" x="368" y="764">• Checkpoint · HITL · 模型路由</text>
   <rect x="58" y="788" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="74" y="806" fill="#27500A">人机协作 &amp; 质量闭环</text>
   <text class="ts" x="74" y="824">• ReviewWorkflowEngine</text>

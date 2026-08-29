@@ -37,7 +37,7 @@
     </properties>
 
     <dependencies>
-        <!-- agent-kit：多 Agent 通用能力积木（Tool Calling / Planning DAG / Eval / Extension），独立组件引入 -->
+        <!-- agent-kit（独立仓库）：多 Agent 通用能力积木——工具循环/规划 DAG/评估/扩展点/会话/流式/结构化/MCP/检查点/可观测/HITL/路由/安全 -->
         <dependency>
             <groupId>com.codereview</groupId>
             <artifactId>agent-kit</artifactId>
