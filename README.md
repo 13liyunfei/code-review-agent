@@ -565,7 +565,7 @@ All agentic capabilities above live in a **standalone, framework-free project** 
 
 ```xml
 <dependency>
-    <groupId>com.codereview</groupId>
+    <groupId>io.github.liyunfei</groupId>
     <artifactId>agent-kit</artifactId>
     <version>0.1.0</version>
 </dependency>
