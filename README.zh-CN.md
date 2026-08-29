@@ -1,4 +1,6 @@
-> [English](README.md) | [中文](README.zh-CN.md)
+> [English](README.md) | [中文](README.zh-CN.md) | [📖 在线文档](https://13liyunfei.github.io/code-review-agent/zh/)
+
+[![Docs](https://img.shields.io/badge/docs-github.io/code--review--agent-4D1F7C)](https://13liyunfei.github.io/code-review-agent/zh/)
 
 # 智能代码审查系统（Multi-Agent 协同架构）
 

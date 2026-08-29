@@ -1,6 +1,8 @@
 # Multi-Agent Code Review System
 
-> [English](README.md) | [中文](README.zh-CN.md)
+> [English](README.md) | [中文](README.zh-CN.md) | [📖 Documentation](https://13liyunfei.github.io/code-review-agent/)
+
+[![Docs](https://img.shields.io/badge/docs-github.io/code--review--agent-4D1F7C)](https://13liyunfei.github.io/code-review-agent/)
 
 A Java 17 / Spring Boot 3.3 **multi-agent collaborative code review system**, implemented from the design document *Multi-Agent Collaborative Review*.
 
