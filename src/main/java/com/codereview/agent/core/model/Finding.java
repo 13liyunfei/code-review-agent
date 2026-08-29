@@ -31,7 +31,7 @@ public record Finding(
         String description,
         String suggestion,
         double confidence,
-        String source) {
+        String source) implements com.codereview.kit.eval.FindingLike {
 
     /**
      * 生成去重键：同一文件、同一行区间、同一规则视为同一问题。

@@ -5,6 +5,7 @@ import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
 import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.ReviewContext;
+import com.codereview.kit.toolcalling.ToolCallingLoop;
 import com.codereview.agent.core.model.Severity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

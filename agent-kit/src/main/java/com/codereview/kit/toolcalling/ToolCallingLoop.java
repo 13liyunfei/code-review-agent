@@ -1,6 +1,6 @@
-package com.codereview.agent.core.toolcalling;
+package com.codereview.kit.toolcalling;
 
-import com.codereview.agent.core.llm.LlmClient;
+import com.codereview.kit.ChatModel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -26,13 +26,13 @@ public class ToolCallingLoop {
 
     private static final Logger log = LoggerFactory.getLogger(ToolCallingLoop.class);
 
-    private final LlmClient llm;
+    private final ChatModel chatModel;
     private final ToolRegistry registry;
     private final int maxIterations;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public ToolCallingLoop(LlmClient llm, ToolRegistry registry, int maxIterations) {
-        this.llm = llm;
+    public ToolCallingLoop(ChatModel chatModel, ToolRegistry registry, int maxIterations) {
+        this.chatModel = chatModel;
         this.registry = registry;
         this.maxIterations = Math.max(1, maxIterations);
     }
@@ -44,7 +44,7 @@ public class ToolCallingLoop {
         List<String> transcript = new ArrayList<>();
         List<String> toolCalls = new ArrayList<>();
         for (int i = 1; i <= maxIterations; i++) {
-            String decision = llm.chat(buildPrompt(goal, context, transcript));
+            String decision = chatModel.chat(buildPrompt(goal, context, transcript));
             JsonNode json = tryParse(decision);
             if (json == null || !json.hasNonNull("action")) {
                 // 非法 JSON：降级为最终答案，绝不让业务失败

@@ -37,6 +37,13 @@
     </properties>
 
     <dependencies>
+        <!-- agent-kit：多 Agent 通用能力积木（Tool Calling / Planning DAG / Eval / Extension），独立组件引入 -->
+        <dependency>
+            <groupId>com.codereview</groupId>
+            <artifactId>agent-kit</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+
         <!-- Web 启动器：IoC 容器 + 内嵌 Tomcat + Spring MVC（接收 GitLab Webhook） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

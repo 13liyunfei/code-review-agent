@@ -1,6 +1,6 @@
-package com.codereview.agent.core.toolcalling;
+package com.codereview.kit.toolcalling;
 
-import com.codereview.agent.core.toolcalling.impl.BuiltinTools;
+import com.codereview.kit.toolcalling.BuiltinTools;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToolCallingLoopTest {
 
     /** 脚本化 fake：按序返回预设响应。 */
-    static class FakeLlm implements com.codereview.agent.core.llm.LlmClient {
+    static class FakeLlm implements com.codereview.kit.ChatModel {
         private final Deque<String> script;
         FakeLlm(String... responses) { this.script = new ArrayDeque<>(List.of(responses)); }
         @Override public String chat(String prompt) {

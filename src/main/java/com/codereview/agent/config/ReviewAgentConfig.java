@@ -394,12 +394,12 @@ public class ReviewAgentConfig {
         // 工具增强织入（可选）：enabled 时每个内置 Agent 外包 ToolEquippedAgent（思考→调工具→观察→推理）
         if (Boolean.parseBoolean(env.getProperty("review.tools.agent-loop.enabled", "false"))
                 && llmClient != null) {
-            var registry = new com.codereview.agent.core.toolcalling.ToolRegistry();
-            registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.CurrentTimeTool());
-            registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.RegexScanTool());
-            registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.FileReadTool(
+            var registry = new com.codereview.kit.toolcalling.ToolRegistry();
+            registry.register(new com.codereview.kit.toolcalling.BuiltinTools.CurrentTimeTool());
+            registry.register(new com.codereview.kit.toolcalling.BuiltinTools.RegexScanTool());
+            registry.register(new com.codereview.kit.toolcalling.BuiltinTools.FileReadTool(
                     java.nio.file.Path.of(env.getProperty("review.data-dir", "./data"))));
-            var loop = new com.codereview.agent.core.toolcalling.ToolCallingLoop(llmClient, registry, 3);
+            var loop = new com.codereview.kit.toolcalling.ToolCallingLoop(llmClient, registry, 3);
             return agents.stream()
                     .map(a -> (ReviewAgent) new com.codereview.agent.core.toolcalling.ToolEquippedAgent(a, loop))
                     .toList();
@@ -459,8 +459,8 @@ public class ReviewAgentConfig {
         // 子任务 DAG 再按依赖拓扑并行执行；默认关闭，行为与旧版完全一致
         com.codereview.agent.core.planning.TaskPlanningSupport planningSupport =
                 new com.codereview.agent.core.planning.TaskPlanningSupport(
-                        new com.codereview.agent.core.planning.TaskPlanner(llmClient),
-                        new com.codereview.agent.core.planning.DagExecutor(agentExecutor),
+                        new com.codereview.kit.planning.TaskPlanner(llmClient),
+                        new com.codereview.kit.planning.DagExecutor(agentExecutor),
                         Boolean.parseBoolean(environment.getProperty("review.planning.enabled", "false")));
         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
                 historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,

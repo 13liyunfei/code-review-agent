@@ -1,4 +1,4 @@
-package com.codereview.agent.core.planning;
+package com.codereview.kit.planning;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -1,6 +1,6 @@
-package com.codereview.agent.core.toolcalling.impl;
+package com.codereview.kit.toolcalling;
 
-import com.codereview.agent.core.toolcalling.AgentTool;
+import com.codereview.kit.toolcalling.AgentTool;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,8 +16,8 @@ import java.util.stream.Collectors;
 /**
  * 内置示例工具集（开箱即用的最小工具样例，演示完整 Tool Calling 链路）。
  *
- * <p>新增工具只需实现 {@link AgentTool} 并向 {@link com.codereview.agent.core.toolcalling.ToolRegistry}
- * 注册，决策逻辑由 {@link com.codereview.agent.core.toolcalling.ToolCallingLoop} 通用驱动。
+ * <p>新增工具只需实现 {@link AgentTool} 并向 {@link com.codereview.kit.toolcalling.ToolRegistry}
+ * 注册，决策逻辑由 {@link com.codereview.kit.toolcalling.ToolCallingLoop} 通用驱动。
  */
 public final class BuiltinTools {
 

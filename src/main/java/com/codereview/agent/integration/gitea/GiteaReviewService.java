@@ -43,7 +43,7 @@ public class GiteaReviewService {
     /** 经验反思服务（可空：为 null 时跳过反思沉淀）。 */
     private final com.codereview.agent.core.memory.ReflectionService reflectionService;
     /** LLM 应用评估（可空：为 null 时跳过评估）。 */
-    private final com.codereview.agent.core.eval.LlmJudge judge;
+    private final com.codereview.kit.eval.LlmJudge judge;
 
     /**
      * 构造审查编排服务。
@@ -65,7 +65,7 @@ public class GiteaReviewService {
                              AutoFixEngine autoFixEngine, ReviewWorkflowEngine workflowEngine,
                              TeamResolver teamResolver,
                              com.codereview.agent.core.memory.ReflectionService reflectionService,
-                             com.codereview.agent.core.eval.LlmJudge judge) {
+                             com.codereview.kit.eval.LlmJudge judge) {
         this.giteaClient = giteaClient;
         this.coordinator = coordinator;
         this.autoFixEngine = autoFixEngine;
@@ -181,7 +181,7 @@ public class GiteaReviewService {
         }
         try {
             if (judge != null && report != null) {
-                var er = judge.evaluate(report, List.of());
+                var er = judge.evaluate(report.getFindings(), List.of());
                 log.info("[Gitea审查] LLM 评估：precision={} recall={} f1={} {}",
                         String.format("%.2f", er.precision()), String.format("%.2f", er.recall()),
                         String.format("%.2f", er.f1()), er.judgeSummary());

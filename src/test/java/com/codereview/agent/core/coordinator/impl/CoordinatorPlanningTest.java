@@ -14,7 +14,7 @@ import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.planning.TaskPlanningSupport;
-import com.codereview.agent.core.planning.TaskPlanner;
+import com.codereview.kit.planning.TaskPlanner;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;
 import org.junit.jupiter.api.Test;
@@ -72,7 +72,7 @@ class CoordinatorPlanningTest {
 
         TaskPlanningSupport planning = new TaskPlanningSupport(
                 new TaskPlanner(new ScriptLlm(PLAN_JSON)),
-                new com.codereview.agent.core.planning.DagExecutor(java.util.concurrent.ForkJoinPool.commonPool()),
+                new com.codereview.kit.planning.DagExecutor(java.util.concurrent.ForkJoinPool.commonPool()),
                 true);
 
         CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(

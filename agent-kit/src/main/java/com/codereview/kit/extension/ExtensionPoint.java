@@ -1,4 +1,4 @@
-package com.codereview.agent.core.extension;
+package com.codereview.kit.extension;
 
 /**
  * 扩展点标记接口（积木架构的「可插拔组件」契约）。

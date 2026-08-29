@@ -559,6 +559,23 @@ Enterprise-grade agentic building blocks, all **optional enhancements (default o
 
 All five are covered by unit + integration tests (loop semantics, DAG topo-order & cycle rejection, coordinator weaving, precision/recall assertions, registry ordering) — see `docs/test-report-agent-capabilities-2026-08-27.md`.
 
+### agent-kit: the components as a pluggable Maven artifact
+
+All agentic capabilities above live in a **standalone, framework-free module** `agent-kit/` (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
+
+```xml
+<dependency>
+    <groupId>com.codereview</groupId>
+    <artifactId>agent-kit</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+- **Model boundary is a single method**: `ChatModel.chat(String)` — this engine's `LlmClient extends ChatModel`, so any project adapts with a one-line adapter.
+- **Eval is domain-agnostic**: `LlmJudge<F extends FindingLike>` consumes any domain finding that implements the `FindingLike` interface (this engine's `Finding` does).
+- **Five SPI extension points** (`LlmInterceptor` / `RagEnhancer` / `AgentProvider` / `MemoryStrategy` / `StageHook`) let consumers layer custom behavior on top of the built-in components via `ExtensionRegistry` (order-based weaving, same-name override).
+- Build once, reuse anywhere: `mvn -f agent-kit/pom.xml install` publishes `com.codereview:agent-kit:0.1.0` locally; see `agent-kit/README.md` for the usage guide.
+
 ### Data persistence
 
 Feedback & history are persisted by default to `review.data-dir` (default `./data`, producing `feedback.json` / `review-history.json`); if the directory is unwritable it falls back to memory so the system never goes down.

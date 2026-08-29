@@ -1,4 +1,4 @@
-package com.codereview.agent.core.extension;
+package com.codereview.kit.extension;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,9 +1,9 @@
 package com.codereview.agent.core;
 
 import com.codereview.agent.core.agent.ReviewAgent;
-import com.codereview.agent.core.eval.LlmJudge;
-import com.codereview.agent.core.extension.ExtensionPoint;
-import com.codereview.agent.core.extension.ExtensionRegistry;
+import com.codereview.kit.eval.LlmJudge;
+import com.codereview.kit.extension.ExtensionPoint;
+import com.codereview.kit.extension.ExtensionRegistry;
 import com.codereview.agent.core.llm.LlmClient;
 import com.codereview.agent.core.memory.ExperienceStore;
 import com.codereview.agent.core.memory.ReflectionService;
@@ -14,9 +14,9 @@ import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.report.ReportGenerator;
-import com.codereview.agent.core.toolcalling.ToolCallingLoop;
+import com.codereview.kit.toolcalling.ToolCallingLoop;
 import com.codereview.agent.core.toolcalling.ToolEquippedAgent;
-import com.codereview.agent.core.toolcalling.ToolRegistry;
+import com.codereview.kit.toolcalling.ToolRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -61,7 +61,7 @@ class AgentCapabilitiesTest {
                 {"findings":[{"severity":"MAJOR","file":"Pay.java","lineStart":6,
                   "title":"工具发现System.out","description":"生产代码禁止 System.out","suggestion":"改用日志"}]}""";
         ToolRegistry registry = new ToolRegistry();
-        registry.register(new com.codereview.agent.core.toolcalling.impl.BuiltinTools.RegexScanTool());
+        registry.register(new com.codereview.kit.toolcalling.BuiltinTools.RegexScanTool());
         ToolEquippedAgent agent = new ToolEquippedAgent(delegate,
                 new ToolCallingLoop(new ScriptLlm(
                         "{\"action\":\"call_tool\",\"tool\":\"regex_scan\",\"arguments\":{\"text\":\"System.out.println(1);\",\"regex\":\"System\\\\.out\"}}"),
@@ -110,7 +110,7 @@ class AgentCapabilitiesTest {
 
     @Test
     void LLM评估_精确匹配计算precision_recall且judge误报被识别() {
-        LlmJudge judge = new LlmJudge(new ScriptLlm("{\"verdict\":\"FP\"}"));
+        LlmJudge<com.codereview.agent.core.model.Finding> judge = new LlmJudge<>(new ScriptLlm("{\"verdict\":\"FP\"}"));
         ReviewReport report = new ReportGenerator().aggregate(1, "r", List.of(
                 new com.codereview.agent.core.model.AgentResult(1, AgentType.SECURITY, List.of(
                         new Finding(AgentType.SECURITY, "A.java", 1, 1, Severity.BLOCKER, "security",
@@ -118,7 +118,7 @@ class AgentCapabilitiesTest {
                         new Finding(AgentType.SECURITY, "C.java", 9, 9, Severity.MAJOR, "style",
                                 "STYLE-009", "无关风格", "d", "s", 0.9, "test")))),
                 null, "run1", 10, "default");
-        LlmJudge.EvalResult r = judge.evaluate(report, List.of(
+        LlmJudge.EvalResult r = judge.evaluate(report.getFindings(), List.of(
                 new LlmJudge.GroundTruth("A.java", "硬编码")));
         assertEquals(1, r.tp());
         assertEquals(1, r.fp());

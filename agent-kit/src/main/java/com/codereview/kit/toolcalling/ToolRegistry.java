@@ -1,4 +1,4 @@
-package com.codereview.agent.core.toolcalling;
+package com.codereview.kit.toolcalling;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

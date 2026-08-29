@@ -596,6 +596,23 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 
 五项均有单测 + 集成测试覆盖（循环语义、DAG 拓扑序与环拒绝、Coordinator 织入、precision/recall 断言、注册表排序），详见 `docs/test-report-agent-capabilities-2026-08-27.md`。
 
+### agent-kit：组件以独立 Maven 构件引入
+
+上述 Agent 通用能力全部位于**独立、零框架依赖的 `agent-kit/` 模块**（纯 Java 17，仅 jackson + slf4j），本引擎以普通依赖方式消费——即"类似 Spring Starter 的组件式引入"：
+
+```xml
+<dependency>
+    <groupId>com.codereview</groupId>
+    <artifactId>agent-kit</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+- **模型边界收敛为单方法**：`ChatModel.chat(String)` —— 本引擎 `LlmClient extends ChatModel`，任何项目一行适配器即可接入。
+- **评估与领域解耦**：`LlmJudge<F extends FindingLike>` 消费任意实现 `FindingLike` 接口的领域发现对象（本引擎的 `Finding` 即实现之）。
+- **五类 SPI 扩展点**（`LlmInterceptor` / `RagEnhancer` / `AgentProvider` / `MemoryStrategy` / `StageHook`）让使用方经 `ExtensionRegistry`（order 织入序 / 同名覆盖）在标准组件之上叠加自定义行为。
+- 一次构建处处复用：`mvn -f agent-kit/pom.xml install` 本地发布 `com.codereview:agent-kit:0.1.0`；使用指南见 `agent-kit/README.md`。
+
 ### 数据持久化
 
 反馈与历史默认落盘到 `review.data-dir`（默认 `./data`，生成 `feedback.json` / `review-history.json`）；  

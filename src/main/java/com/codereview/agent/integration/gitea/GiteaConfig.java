@@ -85,7 +85,7 @@ public class GiteaConfig {
                         new com.codereview.agent.core.memory.ExperienceStore(null, dataDir), llmClient)
                 : null;
         var judge = Boolean.parseBoolean(env.getProperty("review.eval.enabled", "false"))
-                ? new com.codereview.agent.core.eval.LlmJudge(llmClient)
+                ? new com.codereview.kit.eval.LlmJudge(llmClient)
                 : null;
         return new GiteaReviewService(giteaApiClient, coordinator, autoFixEngine, workflowEngine, teamResolver,
                 reflection, judge);

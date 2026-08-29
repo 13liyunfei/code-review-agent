@@ -1,6 +1,6 @@
-package com.codereview.agent.core.planning;
+package com.codereview.kit.planning;
 
-import com.codereview.agent.core.llm.LlmClient;
+import com.codereview.kit.ChatModel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -20,11 +20,11 @@ public class TaskPlanner {
 
     private static final Logger log = LoggerFactory.getLogger(TaskPlanner.class);
 
-    private final LlmClient llm;
+    private final ChatModel chatModel;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public TaskPlanner(LlmClient llm) {
-        this.llm = llm;
+    public TaskPlanner(ChatModel chatModel) {
+        this.chatModel = chatModel;
     }
 
     /**
@@ -39,7 +39,7 @@ public class TaskPlanner {
                     仅输出 JSON：{"tasks":[{"id":"t1","description":"做什么","dependsOn":[],"assignee":"执行者"}]}
                     依赖用 id 引用；无依赖则 dependsOn 为空数组；拆成 2-4 个粒度适中的任务。
                     目标：%s""".formatted(availableAgents == null ? "默认Agent" : availableAgents, goal);
-            JsonNode json = parseJson(llm.chat(prompt));
+            JsonNode json = parseJson(chatModel.chat(prompt));
             if (json == null || !json.has("tasks") || !json.get("tasks").isArray()
                     || json.get("tasks").isEmpty()) {
                 return fallback(goal, "LLM 未返回有效任务数组");

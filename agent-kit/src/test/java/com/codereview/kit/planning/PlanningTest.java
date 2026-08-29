@@ -1,6 +1,6 @@
-package com.codereview.agent.core.planning;
+package com.codereview.kit.planning;
 
-import com.codereview.agent.core.llm.LlmClient;
+import com.codereview.kit.ChatModel;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class PlanningTest {
 
-    static class FakeLlm implements LlmClient {
+    static class FakeLlm implements ChatModel {
         private final String response;
         FakeLlm(String response) { this.response = response; }
         @Override public String chat(String prompt) { return response; }
