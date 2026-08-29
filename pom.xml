@@ -12,7 +12,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.codereview</groupId>
+    <groupId>io.github.liyunfei</groupId>
     <artifactId>code-review-agent</artifactId>
     <version>1.0.0</version>
     <name>code-review-agent</name>
@@ -39,7 +39,7 @@
     <dependencies>
         <!-- agent-kit（独立仓库）：多 Agent 通用能力积木——工具循环/规划 DAG/评估/扩展点/会话/流式/结构化/MCP/检查点/可观测/HITL/路由/安全 -->
         <dependency>
-            <groupId>com.codereview</groupId>
+            <groupId>io.github.liyunfei</groupId>
             <artifactId>agent-kit</artifactId>
             <version>0.1.0</version>
         </dependency>

@@ -617,7 +617,7 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 
 - **模型边界收敛为单方法**：`ChatModel.chat(String)` —— 本引擎 `LlmClient extends ChatModel`，任何项目一行适配器即可接入。
 - **评估与领域解耦**：`LlmJudge<F extends FindingLike>` 消费任意实现 `FindingLike` 接口的领域发现对象（本引擎的 `Finding` 即实现之）。
-- 一次构建处处复用：`mvn -f agent-kit/pom.xml install` 本地发布 `com.codereview:agent-kit:0.1.0`；使用指南见独立仓库 `README.md`。
+- 一次构建处处复用：`mvn -f agent-kit/pom.xml install` 本地发布 `io.github.liyunfei:agent-kit:0.1.0`；使用指南见独立仓库 `README.md`。
 
 ### 数据持久化
 

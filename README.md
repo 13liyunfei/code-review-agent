@@ -580,7 +580,7 @@ All agentic capabilities above live in a **standalone, framework-free project** 
 
 - **Model boundary is a single method**: `ChatModel.chat(String)` — this engine's `LlmClient extends ChatModel`, so any project adapts with a one-line adapter.
 - **Eval is domain-agnostic**: `LlmJudge<F extends FindingLike>` consumes any domain finding that implements the `FindingLike` interface (this engine's `Finding` does).
-- Build once, reuse anywhere: `mvn -f agent-kit/pom.xml install` publishes `com.codereview:agent-kit:0.1.0` locally; see the standalone repo's `README.md` for the usage guide.
+- Build once, reuse anywhere: `mvn -f agent-kit/pom.xml install` publishes `io.github.liyunfei:agent-kit:0.1.0` locally; see the standalone repo's `README.md` for the usage guide.
 
 ### Data persistence
 
