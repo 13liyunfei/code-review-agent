@@ -29,3 +29,8 @@ scripts/dump.rdb
 # ===================== OS / 杂项 =====================
 .DS_Store
 *.swp
+
+# VitePress docs site build artifacts
+site/node_modules/
+site/.vitepress/dist/
+site/.vitepress/cache/

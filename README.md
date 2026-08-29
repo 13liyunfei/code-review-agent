@@ -561,7 +561,7 @@ All five are covered by unit + integration tests (loop semantics, DAG topo-order
 
 ### agent-kit: standalone component library (separate repo)
 
-All agentic capabilities above live in a **standalone, framework-free project** [`agent-kit`](https://github.com/13liyunfei/agent-kit) (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
+All agentic capabilities above live in a **standalone, framework-free project** [`agent-kit`](https://gitee.com/13liyunfei/agent-kit) (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
 
 ```xml
 <dependency>
