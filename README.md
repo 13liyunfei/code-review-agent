@@ -563,7 +563,7 @@ All five are covered by unit + integration tests (loop semantics, DAG topo-order
 
 ### agent-kit: standalone component library (separate repo)
 
-All agentic capabilities above live in a **standalone, framework-free project** [`agent-kit`](https://gitee.com/13liyunfei/agent-kit) (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
+All agentic capabilities above live in a **standalone, framework-free project** [`agent-kit`](https://github.com/13liyunfei/agent-kit) (pure Java 17, only jackson + slf4j), consumed by this engine as a regular dependency — "component-style" integration like Spring starters:
 
 ```xml
 <dependency>
@@ -582,7 +582,8 @@ All agentic capabilities above live in a **standalone, framework-free project** 
 
 - **Model boundary is a single method**: `ChatModel.chat(String)` — this engine's `LlmClient extends ChatModel`, so any project adapts with a one-line adapter.
 - **Eval is domain-agnostic**: `LlmJudge<F extends FindingLike>` consumes any domain finding that implements the `FindingLike` interface (this engine's `Finding` does).
-- Build once, reuse anywhere: `mvn -f agent-kit/pom.xml install` publishes `io.github.13liyunfei:agent-kit:0.1.0` locally; see the standalone repo's `README.md` for the usage guide.
+- Build once, reuse anywhere: `io.github.13liyunfei:agent-kit:0.1.0` is published to Maven Central, so the dependency above resolves with no local build step. To develop against a local snapshot instead, clone the standalone repo and run `mvn install` there.
+- **See the full adoption map**: [`docs/agent-kit-adoption.md`](docs/agent-kit-adoption.md) lists every agent-kit capability, where it lands in this codebase, and — just as importantly — which capabilities are deliberately *not* adopted and why.
 
 ### Data persistence
 

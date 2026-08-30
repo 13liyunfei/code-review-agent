@@ -2,6 +2,7 @@ import { defineConfig } from 'vitepress'
 
 const enNav = [
   { text: 'Guide', link: '/guide/' },
+  { text: 'Built on agent-kit', link: '/guide/agentkit' },
   { text: 'Architecture', link: '/architecture' },
   { text: 'Console', link: '/guide/console' },
   { text: 'Build', link: '/build' }
@@ -9,6 +10,7 @@ const enNav = [
 
 const zhNav = [
   { text: '指南', link: '/zh/guide/' },
+  { text: '基于 agent-kit', link: '/zh/guide/agentkit' },
   { text: '架构', link: '/zh/architecture' },
   { text: '控制台', link: '/zh/guide/console' },
   { text: '构建', link: '/zh/build' }
@@ -19,7 +21,8 @@ const enSidebar = [
     text: 'Getting started',
     items: [
       { text: 'Introduction', link: '/guide/' },
-      { text: 'Quick start', link: '/guide/quickstart' }
+      { text: 'Quick start', link: '/guide/quickstart' },
+      { text: 'Built on agent-kit', link: '/guide/agentkit' }
     ]
   },
   {
@@ -48,7 +51,8 @@ const zhSidebar = [
     text: '开始',
     items: [
       { text: '简介', link: '/zh/guide/' },
-      { text: '快速开始', link: '/zh/guide/quickstart' }
+      { text: '快速开始', link: '/zh/guide/quickstart' },
+      { text: '基于 agent-kit 构建', link: '/zh/guide/agentkit' }
     ]
   },
   {

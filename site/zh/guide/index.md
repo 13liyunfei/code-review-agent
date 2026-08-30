@@ -20,6 +20,6 @@ Java 17、Spring Boot 3.3、LangChain4j（多模型网关 TokenHub）、PostgreS
 
 ![分层架构](/architecture-layered.svg)
 
-能力层运行在独立的 [`agent-kit`](https://gitee.com/liyunfei2030/agent-kit) 组件库之上——工具调用循环、任务拆解 DAG、反思、LLM 评估与扩展点机制。
+能力层运行在独立的 [`agent-kit`](https://github.com/13liyunfei/agent-kit) 组件库之上——工具调用循环、任务拆解 DAG、反思、LLM 评估与扩展点机制。每项能力的落地位置、以及刻意不采纳的部分，见[基于 agent-kit 构建](./agentkit)。
 
 继续阅读 [快速开始](./quickstart)。

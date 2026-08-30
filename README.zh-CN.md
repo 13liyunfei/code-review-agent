@@ -600,7 +600,7 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 
 ### agent-kit：独立组件库（独立仓库）
 
-上述 Agent 通用能力全部位于**独立、零框架依赖的独立仓库 [`agent-kit`](https://gitee.com/13liyunfei/agent-kit)**（纯 Java 17，仅 jackson + slf4j），本引擎以普通依赖方式消费——即"类似 Spring Starter 的组件式引入"：
+上述 Agent 通用能力全部位于**独立、零框架依赖的独立仓库 [`agent-kit`](https://github.com/13liyunfei/agent-kit)**（纯 Java 17，仅 jackson + slf4j），本引擎以普通依赖方式消费——即"类似 Spring Starter 的组件式引入"：
 
 ```xml
 <dependency>
@@ -619,7 +619,8 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 
 - **模型边界收敛为单方法**：`ChatModel.chat(String)` —— 本引擎 `LlmClient extends ChatModel`，任何项目一行适配器即可接入。
 - **评估与领域解耦**：`LlmJudge<F extends FindingLike>` 消费任意实现 `FindingLike` 接口的领域发现对象（本引擎的 `Finding` 即实现之）。
-- 一次构建处处复用：`mvn -f agent-kit/pom.xml install` 本地发布 `io.github.13liyunfei:agent-kit:0.1.0`；使用指南见独立仓库 `README.md`。
+- 一次构建处处复用：`io.github.13liyunfei:agent-kit:0.1.0` 已发布至 Maven Central，上述依赖直接可解析，无需本地构建。若要基于本地快照开发，克隆独立仓库后在其目录执行 `mvn install` 即可。
+- **完整落地清单见 [`docs/agent-kit-adoption.md`](docs/agent-kit-adoption.md)**：逐项列出 agent-kit 每项能力在本仓库的落地位置，以及同样重要的——哪些能力**刻意不采纳**及理由。
 
 ### 数据持久化
 

@@ -20,6 +20,6 @@ The engine is a **star-topology pipeline**: webhook → `CompletableFutureCoordi
 
 ![Layered architecture](/architecture-layered-en.svg)
 
-The capability layer runs on the standalone [`agent-kit`](https://github.com/13liyunfei/agent-kit) library — tool calling loops, task decomposition DAG, reflection, LLM evaluation and extension SPI.
+The capability layer runs on the standalone [`agent-kit`](https://github.com/13liyunfei/agent-kit) library — tool calling loops, task decomposition DAG, reflection, LLM evaluation and extension SPI. See [Built on agent-kit](./agentkit) for exactly which capabilities are adopted here, and which are deliberately not.
 
 Continue to [Quick start](./quickstart).

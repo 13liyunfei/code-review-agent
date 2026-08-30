@@ -9,7 +9,7 @@
 
 ```bash
 ./mvnw -o compile            # compile offline
-./mvnw -o test               # full suite (129+ tests, 32 classes)
+./mvnw -o test               # full suite (130 tests, 31 classes, no infra required)
 ```
 
 ## Test coverage highlights
