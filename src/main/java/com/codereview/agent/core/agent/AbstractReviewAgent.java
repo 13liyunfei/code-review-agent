@@ -15,6 +15,8 @@ import com.codereview.agent.core.prompt.PromptTemplateLoader;
 import com.codereview.agent.core.skill.Skill;
 import com.codereview.agent.core.skill.SkillRegistry;
 import com.codereview.agent.core.skill.SkillResult;
+import com.codereview.kit.struct.StructuredChatModel;
+import com.codereview.kit.struct.StructuredResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +47,13 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
     protected final ConfidenceCalibrationService calibration;
     /** 本 Agent 的问题分类标识（如 security / performance）。 */
     protected final String category;
+    /**
+     * agent-kit 结构化输出（schema 由 {@link ReviewResultDto} 类型推导，不依赖 LangChain4j）。
+     *
+     * <p>AiServices 不可用（离线 / 纯 Java 部署）或其返回为空时，走这条路径拿强类型结果；
+     * 解析失败时复用其原始输出回退文本解析，<b>不额外多调一次模型</b>。
+     */
+    protected final StructuredChatModel structured;
 
     protected AbstractReviewAgent(LlmClient llmClient,
                                  PromptTemplateLoader promptLoader,
@@ -58,6 +67,7 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
         this.calibration = calibration;
         this.category = category;
         this.aiService = aiService;
+        this.structured = llmClient == null ? null : new StructuredChatModel(llmClient);
     }
 
     @Override
@@ -198,6 +208,31 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
                 log.info("[{}] LLM增强 AiServices 返回空，回退文本解析", getType());
             } catch (Exception e) {
                 log.warn("[{}] LLM增强 AiServices 失败，回退文本解析：{}（已耗时 {}ms）",
+                        getType(), e.getMessage(), System.currentTimeMillis() - t0);
+            }
+        }
+        // 第二优先：agent-kit 结构化输出（schema 由 ReviewResultDto 类型推导，零框架依赖）
+        if (structured != null) {
+            try {
+                StructuredResult<ReviewResultDto> sr =
+                        structured.chat(prompt, ReviewResultDto.class, 1);
+                if (sr.ok() && sr.value() != null && sr.value().findings() != null
+                        && !sr.value().findings().isEmpty()) {
+                    result = mapFindings(sr.value().findings());
+                    log.info("[{}] LLM增强 完成(agent-kit结构化{}）：返回 {} 条，耗时 {}ms",
+                            getType(), sr.retried() ? "+重试" : "", result.size(),
+                            System.currentTimeMillis() - t0);
+                    return result;
+                }
+                // 结构化失败：复用已拿到的原始输出走文本解析，避免为兜底再调一次模型
+                if (sr.rawResponse() != null && !sr.rawResponse().isBlank()) {
+                    result = LlmFindingParser.parse(sr.rawResponse(), getType(), category);
+                    log.info("[{}] LLM增强 完成(结构化失败→文本解析)：返回 {} 条，总耗时 {}ms",
+                            getType(), result.size(), System.currentTimeMillis() - t0);
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("[{}] LLM增强 agent-kit 结构化失败，回退文本解析：{}（已耗时 {}ms）",
                         getType(), e.getMessage(), System.currentTimeMillis() - t0);
             }
         }

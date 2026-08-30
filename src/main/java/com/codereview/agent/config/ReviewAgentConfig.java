@@ -9,6 +9,7 @@ import com.codereview.agent.core.agent.impl.StyleAgent;
 import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
+import com.codereview.kit.obs.AggregateTracer;
 import com.codereview.agent.core.calibration.ConfidenceCalibrationService;
 import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.coordinator.impl.CompletableFutureCoordinator;
@@ -93,12 +94,13 @@ public class ReviewAgentConfig {
      * 未配置 Key 时仅剩 Mock 兜底，保证链路不中断。
      */
     @Bean
-    public LlmClient llmClient(TokenHubProperties tokenHub, EgressProperties egress) {
+    public LlmClient llmClient(TokenHubProperties tokenHub, EgressProperties egress, AggregateTracer llmTracer) {
         List<ModelProvider> providers = new ArrayList<>();
         Duration timeout = Duration.ofSeconds(tokenHub.getTimeoutSeconds());
         for (TokenHubProperties.ModelSpec spec : tokenHub.getModels()) {
             providers.add(new LangChain4jChatProvider(spec.getName(),
-                    buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(), timeout),
+                    buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
+                            timeout, llmTracer),
                     tokenHub.hasKey()));
         }
         providers.add(new MockProvider()); // 兜底终点，保证链路不中断
@@ -111,13 +113,25 @@ public class ReviewAgentConfig {
      * 主聊天模型（供 AiServices 使用）：取 TokenHub 配置的第一个模型；无 Key 时为 NoOp 占位。
      */
     @Bean
-    public ChatModel primaryChatModel(TokenHubProperties tokenHub, EgressProperties egress) {
+    public ChatModel primaryChatModel(TokenHubProperties tokenHub, EgressProperties egress, AggregateTracer llmTracer) {
         if (!tokenHub.hasKey() || tokenHub.getModels().isEmpty()) {
             return new NoOpChatModel();
         }
         TokenHubProperties.ModelSpec spec = tokenHub.getModels().get(0);
         return buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
-                Duration.ofSeconds(tokenHub.getTimeoutSeconds()));
+                Duration.ofSeconds(tokenHub.getTimeoutSeconds()), llmTracer);
+    }
+
+    /**
+     * LLM 调用指标聚合器（agent-kit 提供）。
+     *
+     * <p>由 {@link LoggingChatModelListener} 在模型边界喂 span，累计调用量 / 错误数 /
+     * token / 耗时。日志侧的明细由监听器自己打，这里只做聚合，避免重复刷屏。
+     * 需要对外暴露时注入本 bean 读 {@link AggregateTracer#snapshot()} 即可。
+     */
+    @Bean
+    public AggregateTracer llmTracer() {
+        return new AggregateTracer();
     }
 
     /**
@@ -215,9 +229,10 @@ public class ReviewAgentConfig {
         return new JdkHttpClientBuilder().httpClientBuilder(jdkBuilder);
     }
 
-    private ChatModel buildOpenAiChatModel(EgressProperties egress,
-                                           String baseUrl, String apiKey, String model, Duration timeout) {
-        // 挂 LoggingChatModelListener：在模型边界统一记录 LLM 请求/响应（覆盖 AiServices 与文本两条路径）
+    private ChatModel buildOpenAiChatModel(EgressProperties egress, String baseUrl, String apiKey,
+                                           String model, Duration timeout, AggregateTracer tracer) {
+        // 挂 LoggingChatModelListener：在模型边界统一记录 LLM 请求/响应（覆盖 AiServices 与文本两条路径），
+        // 并把每次调用落成 agent-kit 的 GenAiSpan 交给聚合器（指标口径由基座统一，本仓库不自建）
         return OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
@@ -225,7 +240,7 @@ public class ReviewAgentConfig {
                 .temperature(0.2)
                 .timeout(timeout)
                 .httpClientBuilder(llmHttpClientBuilder(egress))
-                .listeners(new LoggingChatModelListener())
+                .listeners(new LoggingChatModelListener(tracer))
                 .build();
     }
 

@@ -1,5 +1,8 @@
 package com.codereview.agent.core.llm;
 
+import com.codereview.agent.core.trace.TraceContext;
+import com.codereview.kit.obs.GenAiSpan;
+import com.codereview.kit.obs.GenAiTracer;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -10,12 +13,15 @@ import dev.langchain4j.model.chat.listener.ChatModelRequestContext;
 import dev.langchain4j.model.chat.listener.ChatModelResponseContext;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.TokenUsage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
 /**
  * LLM 调用监听器（LangChain4j 官方拦截点）：在模型边界统一记录「请求 / 响应」，
- * 用于全链路追踪与线上问题定位。
+ * 并把每次调用落成一个 agent-kit {@link GenAiSpan} 交给 {@link GenAiTracer}。
  *
  * <p>为何放在这里：本系统的 LLM 调用有两条路径——
  * <ol>
@@ -25,11 +31,21 @@ import org.slf4j.LoggerFactory;
  * 两条路径最终都落到同一个 {@code OpenAiChatModel}，故在此处挂监听器可<b>一次性覆盖全部 LLM I/O</b>，
  * 且天然携带调用线程的 {@code traceId}（MDC），与审查链路日志同源。
  *
+ * <p><b>与 agent-kit 的分工</b>：
+ * <ul>
+ *   <li>本类只做"翻译"——把 LangChain4j 的回调翻译成 {@link GenAiSpan}，带上业务链路 id
+ *       （{@link TraceContext}）与模型回传的真实 token 用量；</li>
+ *   <li>span 的记录 / 聚合 / 成本核算全部交给 agent-kit 的 tracer
+ *       （{@code AggregateTracer}、{@code LoggingGenAiTracer} 或二者的组合），本仓库不自建指标体系。</li>
+ * </ul>
+ *
  * <p>日志策略：
  * <ul>
  *   <li>INFO：记录模型名、消息数 / 输出长度，内容截断到前 {@value #MAX_CHARS} 字符（防止超大 prompt 刷屏）；</li>
  *   <li>DEBUG：输出完整请求 / 响应内容（需开启对应包 DEBUG 才打印）。</li>
  * </ul>
+ *
+ * <p>观测是旁路：tracer 抛异常不会影响模型调用，也不会打断审查链路。
  */
 public class LoggingChatModelListener implements ChatModelListener {
 
@@ -38,10 +54,27 @@ public class LoggingChatModelListener implements ChatModelListener {
     /** 单条日志中请求 / 响应内容的最大展示字符数（超出截断，完整内容见 DEBUG）。 */
     private static final int MAX_CHARS = 800;
 
+    /** 在同一次调用的 request / response / error 三个 context 间共享的计时键。 */
+    private static final String START_NANOS = "llm.span.startNanos";
+
+    /** span 记录器（可空：为空时退化为纯日志，与历史行为一致）。 */
+    private final GenAiTracer tracer;
+
+    public LoggingChatModelListener() {
+        this(null);
+    }
+
+    public LoggingChatModelListener(GenAiTracer tracer) {
+        this.tracer = tracer;
+    }
+
     @Override
     public void onRequest(ChatModelRequestContext ctx) {
         try {
             ChatRequest req = ctx.chatRequest();
+            if (ctx.attributes() != null) {
+                ctx.attributes().put(START_NANOS, System.nanoTime());
+            }
             String model = safeModel(req);
             String content = renderMessages(req);
             log.info("[LLM请求] model={}, 消息数={}, 内容(前{}字符)=\n{}",
@@ -66,6 +99,8 @@ public class LoggingChatModelListener implements ChatModelListener {
             if (log.isDebugEnabled()) {
                 log.debug("[LLM响应-完整] model={}\n{}", model, text);
             }
+            record(ctx.attributes(), model, tokenUsage(resp), null,
+                    ctx.chatRequest() == null ? 0 : ctx.chatRequest().messages().size(), len);
         } catch (Exception e) {
             log.warn("[LLM响应] 日志提取异常：{}", e.getMessage());
         }
@@ -77,9 +112,47 @@ public class LoggingChatModelListener implements ChatModelListener {
             String model = ctx.chatRequest() == null ? "?" : safe(ctx.chatRequest().modelName());
             Throwable err = ctx.error();
             log.error("[LLM异常] model={}, error={}", model, err == null ? "null" : err.getMessage());
+            record(ctx.attributes(), model, null, err,
+                    ctx.chatRequest() == null ? 0 : ctx.chatRequest().messages().size(), 0);
         } catch (Exception e) {
             log.warn("[LLM异常] 日志提取异常：{}", e.getMessage());
         }
+    }
+
+    /**
+     * 把本次调用落成 agent-kit span。
+     *
+     * <p>耗时取自 request / response 共享的 {@link #START_NANOS}（纳秒单调时钟）；
+     * traceId 取业务链路上下文 {@link TraceContext}，从而在聚合侧能把一次审查里
+     * 5 个并行 Agent 的调用按链路串起来。
+     */
+    private void record(Map<Object, Object> attributes, String model, TokenUsage usage,
+                        Throwable error, int messageCount, int outputChars) {
+        if (tracer == null) {
+            return;
+        }
+        try {
+            long startNanos = attributes == null || attributes.get(START_NANOS) == null
+                    ? System.nanoTime()
+                    : (long) attributes.get(START_NANOS);
+            Integer in = usage == null ? null : usage.inputTokenCount();
+            Integer out = usage == null ? null : usage.outputTokenCount();
+            tracer.record(GenAiSpan.builder("llm.chat")
+                    .traceId(TraceContext.getTraceId())
+                    .model("?".equals(model) ? null : model)
+                    .durationMs(Math.max(0, (System.nanoTime() - startNanos) / 1_000_000))
+                    .tokens(in, out)
+                    .error(error)
+                    .attribute("messages", String.valueOf(messageCount))
+                    .attribute("outputChars", String.valueOf(outputChars))
+                    .build());
+        } catch (Exception e) {
+            log.warn("[LLM观测] span 记录失败（不影响调用）：{}", e.getMessage());
+        }
+    }
+
+    private static TokenUsage tokenUsage(ChatResponse resp) {
+        return resp == null ? null : resp.tokenUsage();
     }
 
     /** 将请求中的多轮消息拼为可读文本（按消息类型前缀）。 */

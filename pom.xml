@@ -41,7 +41,7 @@
         <dependency>
             <groupId>io.github.13liyunfei</groupId>
             <artifactId>agent-kit</artifactId>
-            <version>0.1.0</version>
+            <version>0.1.1</version>
         </dependency>
 
         <!-- Web 启动器：IoC 容器 + 内嵌 Tomcat + Spring MVC（接收 GitLab Webhook） -->
