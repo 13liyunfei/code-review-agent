@@ -104,7 +104,10 @@ public class ReviewAgentConfig {
                     tokenHub.hasKey()));
         }
         providers.add(new MockProvider()); // 兜底终点，保证链路不中断
-        ModelGateway gateway = new ModelGateway(providers, tokenHub.getQuotaPerMinute());
+        // P0-2 生产语义：配了真实 Key 时不允许 Mock 兜底——所有供应商失败即抛
+        // ModelUnavailableException → 对应 Agent 标记降级并在报告告警，而不是用 Mock 的
+        // 假结果「看起来通过」。仅无 Key 的本地演示模式允许 Mock 兜底保证链路可跑通。
+        ModelGateway gateway = new ModelGateway(providers, tokenHub.getQuotaPerMinute(), !tokenHub.hasKey());
         log.info("已装配 LangChain4j 统一模型网关（TokenHub 多模型）：{}", gateway.describe());
         return gateway;
     }
@@ -442,10 +445,13 @@ public class ReviewAgentConfig {
 
     /**
      * 反馈存储（误报反馈闭环）：默认基于本地 JSON 文件持久化，目录不可用时回退内存。
+     * 注入置信度校准服务作为落库监听器：每次保存反馈即驱动 markFalsePositive / markTruePositive，
+     * 打通「反馈 → 规则准确率 → 置信度校准」闭环（此前校准恒为空转）。
      */
     @Bean
-    public FeedbackStore feedbackStore(@Value("${review.data-dir:./data}") String dataDir) {
-        return new FileFeedbackStore(Path.of(dataDir));
+    public FeedbackStore feedbackStore(@Value("${review.data-dir:./data}") String dataDir,
+                                       ConfidenceCalibrationService calibration) {
+        return new FileFeedbackStore(Path.of(dataDir), calibration);
     }
 
     /**

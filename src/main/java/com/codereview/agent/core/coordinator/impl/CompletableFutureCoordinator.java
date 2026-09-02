@@ -31,6 +31,7 @@ import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.memory.RagContextBuilder;
 import com.codereview.agent.core.model.Severity;
+import com.codereview.agent.core.report.AgentDegradation;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.report.VerificationResult;
 import com.codereview.agent.core.security.InjectionDetector;
@@ -47,9 +48,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -58,8 +61,10 @@ import java.util.stream.Collectors;
  * <p>设计要点（见文档）：
  * <ul>
  *   <li>为每个 Agent 创建一个 Future，并行执行审查；</li>
- *   <li>使用 {@code allOf + orTimeout} 实现整体超时控制（默认 5 分钟）；</li>
- *   <li>支持“部分失败”：个别 Agent 超时 / 异常时，其余结果仍可用，不阻塞主线程；</li>
+ *   <li>使用<b>逐 Future 独立限时等待</b>（共享 deadline 递减，默认 5 分钟）实现超时控制；
+ *       修复前曾用 {@code allOf + orTimeout}，但那只作用于聚合节点，后续 {@code join()} 仍会无限阻塞；</li>
+ *   <li>支持“部分失败”：个别 Agent 超时 / 异常时，其余结果仍可用，不阻塞主线程，
+ *       且降级环节以 {@code AgentResult.degraded} + {@code AgentDegradation} 如实进入报告；</li>
  *   <li>生成 runId 并计时，落地到审查历史，支持“修复后复检”增量对比；</li>
  *   <li>结果汇聚后交由 {@link ReportGenerator} 去重、优先级仲裁、误报抑制、定档。</li>
  * </ul>
@@ -68,9 +73,9 @@ public class CompletableFutureCoordinator implements Coordinator {
 
     private static final Logger log = LoggerFactory.getLogger(CompletableFutureCoordinator.class);
 
-    /** 审查整体超时时间（毫秒），默认 5 分钟。 */
+    /** 审查整体超时时间（毫秒），默认 5 分钟。显式初值保证非 Spring 构造（单测）也有默认值。 */
     @Value("${review.agent.timeout-ms:300000}")
-    private long timeoutMillis;
+    private long timeoutMillis = 300_000L;
 
     /** 审查强度 Profile（默认 ADVISORY：只保留 Major 及以上）。 */
     @Value("${review.profile:ADVISORY}")
@@ -189,6 +194,15 @@ public class CompletableFutureCoordinator implements Coordinator {
         this.aiService = aiService;
         this.injectionDetector = injectionDetector;
         this.planningSupport = planningSupport;
+    }
+
+    /**
+     * 设置审查超时（毫秒）。Spring 经 @Value 注入；测试可显式调小以验证超时路径。
+     *
+     * @param timeoutMillis 超时毫秒数（<=0 时回退默认 300000）
+     */
+    public void setTimeoutMillis(long timeoutMillis) {
+        this.timeoutMillis = timeoutMillis > 0 ? timeoutMillis : 300_000L;
     }
 
     /** 生效的审查强度 Profile（未配置 / 非法时回退 ADVISORY）。 */
@@ -356,41 +370,73 @@ public class CompletableFutureCoordinator implements Coordinator {
                     return r;
                 }), agentExecutor);
 
-        // 2. allOf + 超时控制（回调不阻塞主线程）
-        CompletableFuture<Void> allDone = CompletableFuture.allOf(
-                futures.toArray(new CompletableFuture[0]));
-        allDone.orTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
-                .whenComplete((v, ex) -> {
-                    if (ex != null) {
-                        log.warn("[Coordinator] PR#{} 部分 Agent 超时或异常：{}",
-                                pr.id(), ex.getMessage());
-                    }
-                });
-
-        // 3. 收集结果（个别失败 / 超时以空结果占位，保证整体可用）；每个 Agent 完成即保存断点
-        for (CompletableFuture<AgentResult> future : futures) {
+        // 2. 并行结果收集：每个 Future 独立限时等待，超时/异常 → 该 Agent 标记为「降级」并入报告。
+        //    修复前（P0-1）：orTimeout 挂在 allOf 聚合 future 上只触发一条 warn，随后的 join()
+        //    无超时仍会无限阻塞；advancedFuture 也没进超时体系。现在以同一 deadline 逐个限时取结果，
+        //    超时即 cancel(true) 中断底层执行线程，绝不无限等待，且降级在报告/轨迹中如实可见。
+        long deadline = System.currentTimeMillis() + Math.max(1L, timeoutMillis);
+        List<AgentDegradation> degradations = new ArrayList<>();
+        for (int i = 0; i < futures.size(); i++) {
+            CompletableFuture<AgentResult> future = futures.get(i);
+            ReviewAgent agent = effectiveAgents.get(i);
+            long remaining = Math.max(deadline - System.currentTimeMillis(), 1L);
             try {
-                mainResults.add(future.join());
+                AgentResult result = future.get(remaining, TimeUnit.MILLISECONDS);
+                mainResults.add(result);
                 saveCheckpoint(runId, pr, teamId, resumedResults, mainResults);
+            } catch (TimeoutException te) {
+                future.cancel(true); // 中断底层执行线程，避免任务泄漏
+                String reason = "执行超时（" + timeoutMillis + "ms）";
+                log.warn("[Coordinator] 子Agent[{}] 超时（{}ms），已中断并标记降级", agent.getType(), timeoutMillis);
+                mainResults.add(AgentResult.degraded(pr.id(), agent.getType(), reason));
+                degradations.add(new AgentDegradation(agent.getType().name(), reason));
+                if (recorder != null) {
+                    recorder.append(runId, "agent.degraded", Map.of(
+                            "agentType", agent.getType().name(), "reason", reason));
+                }
             } catch (Exception e) {
-                log.warn("[Coordinator] 单个 Agent 执行失败，已跳过：{}", e.getMessage());
+                String reason = rootMessage(e);
+                log.warn("[Coordinator] 子Agent[{}] 异常，已标记降级：{}", agent.getType(), reason);
+                mainResults.add(AgentResult.degraded(pr.id(), agent.getType(), reason));
+                degradations.add(new AgentDegradation(agent.getType().name(), reason));
+                if (recorder != null) {
+                    recorder.append(runId, "agent.degraded", Map.of(
+                            "agentType", agent.getType().name(), "reason", reason));
+                }
             }
         }
         List<AgentResult> results = new ArrayList<>(resumedResults);
         results.addAll(mainResults);
 
-        // 3.1 收集高级分析结果
+        // 2.1 高级静态分析同样纳入限时等待（修复前 join() 无超时，可能无限阻塞主线程）
         if (advancedFuture != null) {
+            long remaining = Math.max(deadline - System.currentTimeMillis(), 1L);
             try {
-                results.addAll(advancedFuture.join());
+                results.addAll(advancedFuture.get(remaining, TimeUnit.MILLISECONDS));
+            } catch (TimeoutException te) {
+                advancedFuture.cancel(true);
+                String reason = "高级静态分析超时（" + timeoutMillis + "ms）";
+                log.warn("[Coordinator] 高级静态分析超时，已中断并标记降级：{}ms", timeoutMillis);
+                degradations.add(new AgentDegradation(AgentDegradation.STAGE_ADVANCED_ANALYSIS, reason));
+                if (recorder != null) {
+                    recorder.append(runId, "advanced.degraded", Map.of("reason", reason));
+                }
             } catch (Exception e) {
-                log.warn("[Coordinator] 高级分析执行失败，已跳过：{}", e.getMessage());
+                String reason = rootMessage(e);
+                log.warn("[Coordinator] 高级静态分析异常，已标记降级：{}", reason);
+                degradations.add(new AgentDegradation(AgentDegradation.STAGE_ADVANCED_ANALYSIS, reason));
+                if (recorder != null) {
+                    recorder.append(runId, "advanced.degraded", Map.of("reason", reason));
+                }
             }
         }
 
-        // 审查轨迹：记录各 Agent 完成事件（类型 + 发现数，便于事后回放/审计）
+        // 审查轨迹：记录各 Agent 完成事件（类型 + 发现数，便于事后回放/审计）；降级的已单独留痕
         if (recorder != null) {
             for (AgentResult r : results) {
+                if (r.degraded()) {
+                    continue;
+                }
                 recorder.append(runId, "agent.completed", Map.of(
                         "agentType", r.agentType().name(), "findingCount", r.findings().size()));
             }
@@ -398,9 +444,9 @@ public class CompletableFutureCoordinator implements Coordinator {
 
         long durationMs = System.currentTimeMillis() - start;
 
-        // 4. 汇聚、去重、优先级仲裁、误报抑制、定档
+        // 4. 汇聚、去重、优先级仲裁、误报抑制、定档（降级记录随报告输出告警块）
         ReviewReport report = reportGenerator.aggregate(
-                pr.id(), pr.repo(), results, feedbackStore, runId, durationMs, teamId);
+                pr.id(), pr.repo(), results, feedbackStore, runId, durationMs, teamId, degradations);
 
         // 4.0 报告如实标注本次参与的业务方自定义 Agent（无则不显示）
         if (!customAgentNames.isEmpty()) {
@@ -435,9 +481,10 @@ public class CompletableFutureCoordinator implements Coordinator {
         }
 
         log.info("[Coordinator] PR#{} 审查完成（runId={}，profile={}）：最终 {} 条，抑制误报 {} 条，仲裁覆盖 {} 条，" +
-                        "复检已解决 {} 条 / 未解决 {} 条 / 新引入 {} 条",
+                        "降级环节 {} 个，复检已解决 {} 条 / 未解决 {} 条 / 新引入 {} 条",
                 pr.id(), runId, profile, report.getFindings().size(), report.getSuppressedFindings().size(),
-                report.getOverriddenFindings().size(), verification.resolvedCount(),
+                report.getOverriddenFindings().size(), report.getDegradations().size(),
+                verification.resolvedCount(),
                 verification.unresolvedCount(), verification.introducedCount());
 
         // 审查轨迹：记录「审查结束」并落盘（若 recorder 可用）
@@ -461,10 +508,16 @@ public class CompletableFutureCoordinator implements Coordinator {
         Set<AgentType> done = new HashSet<>();
         List<Finding> findings = new ArrayList<>();
         for (AgentResult r : resumed) {
+            if (r.degraded()) {
+                continue;
+            }
             done.add(r.agentType());
             findings.addAll(r.findings());
         }
         for (AgentResult r : mainResults) {
+            if (r.degraded()) {
+                continue; // 降级（超时/异常）的 Agent 不写入断点：续跑时应重试而不是当作已完成
+            }
             done.add(r.agentType());
             findings.addAll(r.findings());
         }
@@ -515,5 +568,22 @@ public class CompletableFutureCoordinator implements Coordinator {
     private String label(FindingSummary s) {
         String loc = s.lineStart() > 0 ? (s.file() + ":L" + s.lineStart()) : s.file();
         return "[" + s.ruleId() + "] " + s.title() + "（" + loc + "）";
+    }
+
+    /**
+     * 从 {@link CompletableFuture#get} 抛出的包装异常中解出真正原因。
+     * {@code ExecutionException} 包裹的是 Agent 执行体抛出的异常，直接取 cause 才有人类可读信息。
+     *
+     * @param e 捕获的异常（可能是 ExecutionException / CompletionException 包装）
+     * @return 根因消息；无消息时回退根因类名
+     */
+    private static String rootMessage(Throwable e) {
+        Throwable cause = e;
+        while ((cause instanceof ExecutionException || cause instanceof java.util.concurrent.CompletionException)
+                && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        String msg = cause.getMessage();
+        return (msg == null || msg.isBlank()) ? cause.getClass().getSimpleName() : msg;
     }
 }

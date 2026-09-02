@@ -1,5 +1,6 @@
 package com.codereview.agent.core.model;
 
+import com.codereview.agent.core.report.AgentDegradation;
 import com.codereview.agent.core.report.VerificationResult;
 
 import java.util.List;
@@ -38,6 +39,8 @@ public class ReviewReport {
     private final VerificationResult verification;
     /** 本次审查展开的业务方自定义 Agent 名称（无则空列表，用于报告如实体现「五 Agent + 自定义」）。 */
     private final List<String> customAgents;
+    /** 本次审查发生降级的环节（超时 / 异常 / 模型不可用）。空列表 = 全部环节可信。 */
+    private final List<AgentDegradation> degradations;
 
     /**
      * 完整构造（聚合阶段使用）。
@@ -59,6 +62,21 @@ public class ReviewReport {
                         String runId, long reviewTimeMs, List<String> arbitrationNotes,
                         List<Finding> overriddenFindings, List<Finding> suppressedFindings,
                         VerificationResult verification, List<String> customAgents) {
+        this(prId, repo, findings, severityCount, runId, reviewTimeMs, arbitrationNotes,
+                overriddenFindings, suppressedFindings, verification, customAgents, List.of());
+    }
+
+    /**
+     * 含降级记录的最完整构造（聚合阶段使用）。
+     *
+     * @param customAgents  本次展开的业务方自定义 Agent 名称列表（可为空）
+     * @param degradations  本次降级的环节列表（可为空；空 = 全部环节可信，报告中不渲染告警块）
+     */
+    public ReviewReport(long prId, String repo, List<Finding> findings, Map<Severity, Long> severityCount,
+                        String runId, long reviewTimeMs, List<String> arbitrationNotes,
+                        List<Finding> overriddenFindings, List<Finding> suppressedFindings,
+                        VerificationResult verification, List<String> customAgents,
+                        List<AgentDegradation> degradations) {
         this.prId = prId;
         this.repo = repo;
         this.findings = findings;
@@ -70,6 +88,7 @@ public class ReviewReport {
         this.suppressedFindings = suppressedFindings;
         this.verification = verification;
         this.customAgents = customAgents == null ? List.of() : customAgents;
+        this.degradations = degradations == null ? List.of() : degradations;
     }
 
     /**
@@ -83,7 +102,7 @@ public class ReviewReport {
     /** 返回附带复检结果的新报告（记录不可变，采用拷贝式更新）。 */
     public ReviewReport withVerification(VerificationResult verification) {
         return new ReviewReport(prId, repo, findings, severityCount, runId, reviewTimeMs,
-                arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents);
+                arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents, degradations);
     }
 
     /**
@@ -94,7 +113,7 @@ public class ReviewReport {
      */
     public ReviewReport withFindings(List<Finding> newFindings) {
         return new ReviewReport(prId, repo, newFindings, countBySeverity(newFindings),
-                runId, reviewTimeMs, arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents);
+                runId, reviewTimeMs, arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents, degradations);
     }
 
     /**
@@ -109,7 +128,7 @@ public class ReviewReport {
                                            List<Finding> newSuppressed,
                                            List<Finding> newOverridden) {
         return new ReviewReport(prId, repo, newFindings, countBySeverity(newFindings),
-                runId, reviewTimeMs, arbitrationNotes, newOverridden, newSuppressed, verification, customAgents);
+                runId, reviewTimeMs, arbitrationNotes, newOverridden, newSuppressed, verification, customAgents, degradations);
     }
 
     /**
@@ -120,7 +139,7 @@ public class ReviewReport {
      */
     public ReviewReport withCustomAgents(List<String> customAgents) {
         return new ReviewReport(prId, repo, findings, severityCount, runId, reviewTimeMs,
-                arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents);
+                arbitrationNotes, overriddenFindings, suppressedFindings, verification, customAgents, degradations);
     }
 
     /** 按严重级别统计。 */
@@ -174,6 +193,16 @@ public class ReviewReport {
         return customAgents;
     }
 
+    /** 本次发生降级的环节列表（空 = 全部环节产出可信结论）。 */
+    public List<AgentDegradation> getDegradations() {
+        return degradations;
+    }
+
+    /** 本次审查是否存在降级环节（任何维度未产出可信结论）。 */
+    public boolean degraded() {
+        return !degradations.isEmpty();
+    }
+
     /**
      * 渲染为 Markdown 文本，便于直接发布到 PR 评论。
      *
@@ -204,6 +233,16 @@ public class ReviewReport {
                 .append("，🟡 ").append(msg("report.severity.minor")).append(" ").append(severityCount.getOrDefault(Severity.MINOR, 0L))
                 .append("，🔵 ").append(msg("report.severity.info")).append(" ").append(severityCount.getOrDefault(Severity.INFO, 0L))
                 .append("\n\n");
+
+        // 降级告警区块（必须置于发现区块之前：读者先知道「哪些维度没看成」）
+        if (!degradations.isEmpty()) {
+            sb.append("## ⚠️ ").append(msg("report.degraded.title", degradations.size())).append("\n\n");
+            sb.append("> ").append(msg("report.degraded.tip")).append("\n\n");
+            for (AgentDegradation d : degradations) {
+                sb.append("- **").append(stageLabel(d.stage())).append("**：").append(d.reason()).append('\n');
+            }
+            sb.append("\n");
+        }
 
         // 复检验证区块
         if (verification != null && verification.reCheck()) {
@@ -284,6 +323,17 @@ public class ReviewReport {
     /** 本地化 Agent 显示名（英文枚举名 → 按语言解析）。 */
     private static String agentName(AgentType agentType) {
         return msg("agent.type." + agentType.name());
+    }
+
+    /** 本地化降级环节显示名（Agent 类型或固定基础设施阶段名）。 */
+    private static String stageLabel(String stage) {
+        if (stage == null || stage.isBlank()) {
+            return stage;
+        }
+        if (AgentDegradation.STAGE_ADVANCED_ANALYSIS.equals(stage)) {
+            return msg("report.degraded.stage.advanced");
+        }
+        return msg("agent.type." + stage);
     }
 
     /** 本地化严重级别显示名。 */

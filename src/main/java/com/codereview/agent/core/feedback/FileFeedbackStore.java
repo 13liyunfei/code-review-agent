@@ -33,9 +33,20 @@ public class FileFeedbackStore implements FeedbackStore {
     private final Map<String, List<ReviewFeedback>> store = new ConcurrentHashMap<>();
     private final Path dataDir;
     private final boolean diskBacked;
+    /** 反馈落库监听器（驱动置信度校准等旁路；可为 null）。 */
+    private final FeedbackListener listener;
 
     public FileFeedbackStore(Path dataDir) {
+        this(dataDir, null);
+    }
+
+    /**
+     * @param dataDir  数据目录
+     * @param listener 反馈落库监听器（可为 null；由 ReviewAgentConfig 注入校准服务，打通校准闭环）
+     */
+    public FileFeedbackStore(Path dataDir, FeedbackListener listener) {
         this.dataDir = dataDir;
+        this.listener = listener == null ? FeedbackListener.NONE : listener;
         boolean ok = ensureDir(dataDir);
         this.diskBacked = ok && loadAll();
         if (!diskBacked) {
@@ -87,6 +98,16 @@ public class FileFeedbackStore implements FeedbackStore {
         store.computeIfAbsent(t, k -> new CopyOnWriteArrayList<>()).add(feedback);
         if (diskBacked) {
             persist(t);
+        }
+        notifyListener(t, feedback);
+    }
+
+    /** 广播落库事件给监听器（置信度校准等旁路）。监听器异常不得影响反馈保存本身。 */
+    private void notifyListener(String teamId, ReviewFeedback feedback) {
+        try {
+            listener.onFeedback(teamId, feedback);
+        } catch (Exception e) {
+            log.warn("[FeedbackStore] 反馈监听器执行失败（不影响保存）：{}", e.getMessage());
         }
     }
 

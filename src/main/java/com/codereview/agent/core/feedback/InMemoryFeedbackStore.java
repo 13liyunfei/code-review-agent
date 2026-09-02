@@ -20,10 +20,29 @@ public class InMemoryFeedbackStore implements FeedbackStore {
 
     /** teamId → 反馈列表。 */
     private final Map<String, List<ReviewFeedback>> store = new ConcurrentHashMap<>();
+    /** 反馈落库监听器（驱动置信度校准等旁路；可为 null）。 */
+    private final FeedbackListener listener;
+
+    public InMemoryFeedbackStore() {
+        this(null);
+    }
+
+    /**
+     * @param listener 反馈落库监听器（可为 null；测试中可直接注入校准服务验证闭环）
+     */
+    public InMemoryFeedbackStore(FeedbackListener listener) {
+        this.listener = listener == null ? FeedbackListener.NONE : listener;
+    }
 
     @Override
     public void save(String teamId, ReviewFeedback feedback) {
-        store.computeIfAbsent(Teams.sanitize(teamId), k -> new CopyOnWriteArrayList<>()).add(feedback);
+        String t = Teams.sanitize(teamId);
+        store.computeIfAbsent(t, k -> new CopyOnWriteArrayList<>()).add(feedback);
+        try {
+            listener.onFeedback(t, feedback);
+        } catch (Exception ignored) {
+            // 旁路：监听器异常不影响反馈保存
+        }
     }
 
     @Override

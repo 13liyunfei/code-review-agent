@@ -29,6 +29,24 @@ import java.util.Set;
 public class ReportGenerator {
 
     /**
+     * 由各 Agent 结果聚合生成报告（无基础设施级降级记录的重载）。
+     *
+     * @param prId            PR 标识
+     * @param repo            仓库名
+     * @param results         各 Agent 结果
+     * @param feedbackStore   反馈存储（用于误报抑制，可为 null）
+     * @param runId           本次运行 ID（调用链追踪）
+     * @param durationMs      审查耗时
+     * @param teamId          团队标识
+     * @return 聚合后的审查报告
+     */
+    public ReviewReport aggregate(long prId, String repo, List<AgentResult> results,
+                                  FeedbackStore feedbackStore, String runId, long durationMs,
+                                  String teamId) {
+        return aggregate(prId, repo, results, feedbackStore, runId, durationMs, teamId, List.of());
+    }
+
+    /**
      * 由各 Agent 结果聚合生成报告。
      *
      * @param prId            PR 标识
@@ -37,11 +55,31 @@ public class ReportGenerator {
      * @param feedbackStore   反馈存储（用于误报抑制，可为 null）
      * @param runId           本次运行 ID（调用链追踪）
      * @param durationMs      审查耗时
+     * @param teamId          团队标识
+     * @param infraDegradations 基础设施级降级（如高级静态分析超时）；Agent 级降级由
+     *                          {@code results} 中 {@code degraded=true} 的结果自动推导
      * @return 聚合后的审查报告
      */
     public ReviewReport aggregate(long prId, String repo, List<AgentResult> results,
                                   FeedbackStore feedbackStore, String runId, long durationMs,
-                                  String teamId) {
+                                  String teamId, List<AgentDegradation> infraDegradations) {
+        // 0. 降级收集：Agent 级（结果自带 degraded 标记）+ 基础设施级（入参），按环节去重。
+        //    降级意味着「这个维度没看成」，必须与「确实没问题」区分开，写入报告告警块。
+        Map<String, AgentDegradation> degradationByStage = new LinkedHashMap<>();
+        if (results != null) {
+            for (AgentResult result : results) {
+                if (result != null && result.degraded() && result.agentType() != null) {
+                    degradationByStage.putIfAbsent(result.agentType().name(),
+                            new AgentDegradation(result.agentType().name(), result.error()));
+                }
+            }
+        }
+        if (infraDegradations != null) {
+            for (AgentDegradation d : infraDegradations) {
+                degradationByStage.putIfAbsent(d.stage(), d);
+            }
+        }
+
         // 1. 按 (文件 @ 行区间 # 规则) 去重；同键保留置信度更高、严重级别更高者
         Map<String, Finding> merged = new LinkedHashMap<>();
         for (AgentResult result : results) {
@@ -121,7 +159,8 @@ public class ReportGenerator {
         }
 
         return new ReviewReport(prId, repo, kept, severityCount,
-                runId, durationMs, arbitrationNotes, overridden, suppressed, VerificationResult.none());
+                runId, durationMs, arbitrationNotes, overridden, suppressed, VerificationResult.none(),
+                List.of(), new ArrayList<>(degradationByStage.values()));
     }
 
     /**
