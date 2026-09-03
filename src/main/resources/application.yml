@@ -133,6 +133,14 @@ review:
     timeout-ms: ${REVIEW_AGENT_TIMEOUT_MS:300000}
   # 数据目录：误报反馈、审查历史的本地 JSON 持久化位置（不可写时自动回退内存）
   data-dir: ./data
+  # ===== 断点续跑（崩溃后同 runId 继续，不重跑已完成 Agent）=====
+  resume:
+    # 残留断点保留时长：超过该时长未更新的断点视为「崩溃遗留」，由 ResumeJanitor 定时清理。
+    # 只要审查仍在推进就会不断保存、刷新 mtime，因此跑得再久也不会被误删。
+    # 调小不会让续跑更快失效，只会更快回收孤儿文件。
+    ttl: ${REVIEW_RESUME_TTL:24h}
+    # 清理任务 cron（默认每日 03:30，避开 02:00 的定时巡检）
+    cleanup-cron: ${REVIEW_RESUME_CLEANUP_CRON:0 30 3 * * *}
   # 人工介入与监控接口（/api/feedback、/api/quality-report）开关
   api:
     enabled: true
