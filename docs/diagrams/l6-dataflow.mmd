@@ -1,0 +1,56 @@
+flowchart LR
+    subgraph IN["写入侧"]
+        direction TB
+        W1["Coordinator<br/>每完成一个 Agent"]
+        W2["Coordinator<br/>审查结束"]
+        W3["Console / REST<br/>开发者标记误报"]
+        W4["Coordinator<br/>全流程事件"]
+        W5["Coordinator<br/>正常完成"]
+        W6["AutoFix / Skill<br/>规则变更"]
+    end
+
+    subgraph STORE["持久化 · data-dir/teamId/"]
+        direction TB
+        P1[("ResumeState<br/>断点续跑快照<br/>doneAgents + findings")]
+        P2[("ReviewHistoryEntry<br/>审查历史<br/>支持复检对比")]
+        P3[("FeedbackStore<br/>误报反馈<br/>抑制源")]
+        P4[("trajectories/ runId .jsonl<br/>事件源轨迹")]
+        P5[("SkillRegistry 规则库<br/>内置 + 团队自定义 YAML")]
+        P6[("RAG 知识库<br/>团队规范 / 历史知识")]
+    end
+
+    subgraph OUT["消费侧"]
+        direction TB
+        C1["崩溃后同 runId 续跑<br/>只重跑剩余 Agent"]
+        C2["computeVerification<br/>已解决 / 未解决 / 新引入"]
+        C3["aggregate 阶段<br/>误报抑制"]
+        C4["ReviewReplay 回放<br/>事后审计 / 归因"]
+        C5["runSkills<br/>团队自定义规则生效"]
+        C6["RagContextBuilder<br/>注入 Agent 提示词"]
+    end
+
+    W1 --> P1
+    W2 --> P2
+    W3 --> P3
+    W4 --> P4
+    W5 -->|"complete 清理"| P1
+    W6 --> P5
+    W6 --> P6
+
+    P1 --> C1
+    P2 --> C2
+    P3 --> C3
+    P4 --> C4
+    P5 --> C5
+    P6 --> C6
+
+    G[("__global__ 基线<br/>团队配置叠加")] -.->|"缺失回退默认"| STORE
+
+    classDef grp fill:#FBFCFB,stroke:#2c7d2c,stroke-width:1.5px;
+    classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef store fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1.5px,color:#1f2933;
+    classDef base fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class IN,STORE,OUT grp;
+    class W1,W2,W3,W4,W5,W6,C1,C2,C3,C4,C5,C6 n;
+    class P1,P2,P3,P4,P5,P6 store;
+    class G base;

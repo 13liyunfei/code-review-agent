@@ -1,0 +1,38 @@
+flowchart TD
+    A["agent.review(diffs, enrichedCtx)"] --> B{"① 输入防护<br/>InjectionDetector.detect"}
+    B -->|"命中注入模式"| B1["直接上报 BLOCKER<br/>SEC-INJECTION-001"]
+    B1 --> B2(["短路返回<br/>不进入 LLM 语义审查"])
+    B -->|"干净"| C
+
+    C["② Skill 预扫描<br/>registry.getEnabledSkillsForCategory(teamId, category)<br/>parallelStream 并行执行"] --> D["SkillResult 列表"]
+    D --> E["toFinding：ConfidenceCalibrationService.calibrate<br/>按 ruleId 的历史准确率校准置信度"]
+    E --> F["来源标记为 SKILL / RULE"]
+
+    F --> G["③ LLM 增强 llmFindings<br/>渲染模板 → 注入 impactSummary + ragContext"]
+    G --> H{"第一优先：AiServices<br/>结构化输出 + ChatMemory"}
+    H -->|"成功且非空"| H1["mapFindings 映射为 Finding<br/>来源 LLM"]
+    H -->|"失败 / 返回空"| I{"第二优先：agent-kit<br/>StructuredChatModel 类型推导 schema"}
+
+    I -->|"成功"| I1["mapFindings 映射<br/>来源 LLM"]
+    I -->|"结构化失败<br/>但 rawResponse 非空"| J["复用原始输出走 LlmFindingParser 文本解析<br/>不额外多调一次模型"]
+    I -->|"彻底失败"| K["askLlm 文本对话<br/>LlmFindingParser.parse"]
+
+    H1 --> M
+    I1 --> M
+    J --> M
+    K --> M
+
+    M["合并 Skill 发现 + LLM 发现"] --> N(["返回 Finding 列表"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef short fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef llm fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class A start;
+    class N,B2 endn;
+    class C,D,E,F,G,M proc;
+    class B,H,I dec;
+    class B1 short;
+    class H1,I1,J,K llm;

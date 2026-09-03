@@ -1,0 +1,58 @@
+flowchart TD
+    A["开发者推送 / 更新 Pull Request"] --> B["Gitea 发送 Webhook<br/>POST /webhook/gitea"]
+    B --> T0["TraceContext.newTraceId<br/>入口即生成，贯穿全链路"]
+    T0 --> C{"X-Gitea-Signature<br/>HMAC-SHA256 校验"}
+
+    C -->|"缺失 且 allowUnsigned=false"| C1["401 Invalid webhook signature"]
+    C -->|"不一致"| C1
+    C -->|"通过 / 免签放行"| D["解析 payload JSON"]
+
+    D --> E{"number 与 repository.full_name<br/>均有效?"}
+    E -->|"否"| E1["200 ignored<br/>not a pull_request event"]
+    E -->|"是"| F{"action 属于<br/>opened / reopened / synchronized?"}
+    F -->|"否"| F1["200 skipped"]
+    F -->|"是"| G["拆分 owner / repo"]
+
+    G --> H["CompletableFuture.runAsync<br/>TraceContext.wrap 传递 traceId"]
+    H --> H1["立即返回 200 accepted<br/>不让 Webhook 超时重试"]
+    H --> I
+
+    subgraph ASYNC["异步审查主链路 · GiteaReviewService.reviewPullRequest"]
+        direction TB
+        I["TraceContext.ensure 兜底 traceId"] --> J["TeamResolver.resolve<br/>owner/repo 映射 teamId<br/>可被 X-Team-Id 覆盖"]
+        J --> K["GiteaApiClient.fetchPrChanges<br/>拉取 PR diff 与元信息"]
+        K --> L{"diffs 为空<br/>或拉取失败?"}
+        L -->|"是"| L1["postSkipNote<br/>PR 上发布跳过说明"]
+        L -->|"否"| M["构造 PullRequest 模型<br/>携带 teamId 实现租户隔离"]
+        M --> N["Coordinator.review<br/>多 Agent 并行审查"]
+        N --> O{"审查抛异常?"}
+        O -->|"是"| O1["postSkipNote<br/>引擎异常说明"]
+        O -->|"否"| P["AutoFixEngine.generateSuggestions<br/>生成修复建议 Markdown"]
+        P --> Q["ReviewWorkflowEngine.handle<br/>BLOCKER 强制审批 / 工单 / 提交状态"]
+        Q --> R["buildReviewComment<br/>报告 + 修复 + 工作流 + 分支流向"]
+        R --> Sp["postPrComment<br/>回写 PR 顶层评论"]
+        Sp --> T["AutoFixEngine.generateFixItems<br/>结构化修复项"]
+        T --> U["过滤 line 大于 0 的可锚定项<br/>包装为 suggestion 代码块"]
+        U --> V["postReviewComments<br/>一次性提交 comments 数组"]
+    end
+
+    V --> W["可选：ReflectionService 经验反思沉淀"]
+    V --> X["可选：LlmJudge 评估 precision / recall / F1"]
+    W --> Y["记录总耗时与各步骤耗时"]
+    X --> Y
+    L1 --> Y
+    O1 --> Y
+    Y --> Z(["结束"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef fail fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef ok fill:#F0FDF4,stroke:#15803d,stroke-width:1px,color:#14532d;
+    class A start;
+    class Z endn;
+    class T0,D,G,H,I,J,K,M,N,P,Q,R,Sp,T,U,V,W,X,Y proc;
+    class C,E,F,L,O dec;
+    class C1,E1,F1,L1,O1 fail;
+    class H1 ok;
