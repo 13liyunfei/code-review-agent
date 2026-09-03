@@ -1,0 +1,217 @@
+{
+  "output": "../business-flow.html",
+  "title": "code-review-agent · 完整业务流程图集",
+  "subtitle": "从「PR 被推送」到「评论回写平台」的全链路，逐层拆解到单 Agent 内部与聚合仲裁细节。",
+  "meta": [
+    "入口：<code>GiteaWebhookController</code> · <code>GitLabWebhookController</code> · <code>ScheduledScanService</code> · <code>ReviewApiController</code> · <code>IdeReviewServer</code>",
+    "编排：<code>GiteaReviewService</code> → <code>CompletableFutureCoordinator</code> → <code>ReportGenerator</code>"
+  ],
+  "footer": "code-review-agent · 业务流程图集 · 全部节点均可在 <code>src/main/java/com/codereview/</code> 下按文件路径 grep 复现<br>\n  mermaid 源码：<code>docs/diagrams/*.mmd</code>",
+  "sections": [
+    {
+      "id": "l0",
+      "tag": "L0",
+      "file": "l0-overview",
+      "title": "系统全景",
+      "sub": "五个入口 → 引擎内部六段流水线 → 平台四类回写动作。多租户以 <code>teamId</code> 贯穿全链路。",
+      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。这是与「Agent 链式传递结果」架构的根本差别。"
+    },
+    {
+      "id": "l1a",
+      "tag": "L1a",
+      "file": "l1a-webhook-intake",
+      "title": "接入与同步校验",
+      "sub": "Webhook 的同步部分<b>只做校验与分发</b>，重活全部丢给 <code>webhookExecutor</code> 异步执行。这样平台侧不会超时重试。",
+      "anchors": [
+        [
+          "验签 / 事件过滤 / 异步分发",
+          "<code>integration/gitea/GiteaWebhookController.java:75-147</code>"
+        ],
+        [
+          "团队解析",
+          "<code>tenant/TeamResolver.java</code>"
+        ]
+      ],
+      "note": "<b>Gitea Webhook 配置的三个坑</b><ul><li><code>events</code> 必须是 <b>布尔字面量</b>，写成字符串不生效；</li><li>重建后的 hook 默认 <code>active=false</code>，需单独 PATCH 打开；</li><li>PATCH <b>不持久化 secret</b>，改密钥必须 DELETE + POST 重建。</li></ul>"
+    },
+    {
+      "id": "l1b",
+      "tag": "L1b",
+      "file": "l1b-async-review",
+      "title": "异步审查与回写",
+      "sub": "<code>GiteaReviewService.reviewPullRequest()</code> 的编排主线：拉 diff → 并行审查 → 生成修复 → 分级路由 → 双通道回写。",
+      "anchors": [
+        [
+          "主链路编排",
+          "<code>integration/gitea/GiteaReviewService.java:99-192</code>"
+        ],
+        [
+          "报告 Markdown 拼装",
+          "<code>integration/gitea/GiteaReviewService.java:199-219</code>"
+        ]
+      ],
+      "note": "<b>Gitea 1.27 的平台限制（踩过的坑）</b><ul><li>逐条直发行内评论的接口返回 <b>405</b>，唯一入口是 <code>POST /pulls/{index}/reviews</code> + <code>comments[]</code> + <code>event:COMMENT</code> 一次性提交；</li><li>PENDING 预建方式下 <code>line</code>/<code>side</code> 会被丢弃，恒降级为文件级评论 → 可采纳修复必须写进「顶层概览 + 行内 suggestion」双通道。</li></ul>"
+    },
+    {
+      "id": "l2a",
+      "tag": "L2a",
+      "file": "l2a-prepare-dispatch",
+      "title": "协调器 · 准备与并行调度",
+      "sub": "断点续跑 → 上下文增强 → 自定义 Agent 展开 → 规划/固定两种并行路径。",
+      "anchors": [
+        [
+          "断点续跑检测",
+          "<code>coordinator/impl/CompletableFutureCoordinator.java:245-266</code>"
+        ],
+        [
+          "影响面 + RAG 上下文注入",
+          "<code>:268-295</code>"
+        ],
+        [
+          "自定义 Agent 展开",
+          "<code>:297-325</code>"
+        ],
+        [
+          "并行 Future 创建",
+          "<code>:342-359</code>"
+        ]
+      ]
+    },
+    {
+      "id": "l2b",
+      "tag": "L2b",
+      "file": "l2b-timeout-aggregate",
+      "title": "协调器 · 限时收口与聚合",
+      "sub": "共享 deadline 逐个收口，超时即中断；随后聚合、否决回收、复检对比与落库。",
+      "anchors": [
+        [
+          "独立限时等待 + 降级",
+          "<code>:373-432</code>"
+        ],
+        [
+          "聚合后处理（Veto / Profile / 复检 / 落库）",
+          "<code>:447-496</code>"
+        ],
+        [
+          "断点快照写入",
+          "<code>:503-526</code>"
+        ]
+      ],
+      "note": "<b>这里修过一个 P0 缺陷</b>：修复前用 <code>allOf(...).orTimeout()</code>，超时只作用在聚合 future 上，后续逐个 <code>join()</code> 仍然会无限阻塞，且 <code>advancedFuture</code> 完全没进超时体系。现在改为「共享 deadline + 逐个 <code>get(remaining)</code>」，超时即 <code>cancel(true)</code> 中断底层线程。"
+    },
+    {
+      "id": "l3",
+      "tag": "L3",
+      "file": "l3-single-agent",
+      "title": "单 Agent 三段式与三级降级",
+      "sub": "每个 Agent 内部固定三段：<b>注入检测短路</b> → <b>Skill 确定性预扫描</b> → <b>LLM 语义增强</b>。规则出确定结论，LLM 只做补充。",
+      "anchors": [
+        [
+          "三段式范例（SecurityAgent 最完整）",
+          "<code>core/agent/impl/SecurityAgent.java:56-77</code>"
+        ],
+        [
+          "Skill 并行预扫描",
+          "<code>core/agent/AbstractReviewAgent.java:85-89</code>"
+        ],
+        [
+          "置信度校准",
+          "<code>core/agent/AbstractReviewAgent.java:97-120</code>"
+        ],
+        [
+          "LLM 三级降级",
+          "<code>core/agent/AbstractReviewAgent.java:190-244</code>"
+        ],
+        [
+          "注入检测器实现",
+          "<code>core/security/{Keyword,Semantic}InjectionDetector.java</code>"
+        ]
+      ],
+      "info": "<b>降级链路的关键设计</b>：结构化输出失败但 <code>rawResponse</code> 非空时，<b>复用原始输出走文本解析</b>，不再多调一次模型——既省 token，也避免二次失败。"
+    },
+    {
+      "id": "l4a",
+      "tag": "L4a",
+      "file": "l4a-dedup-arbitration",
+      "title": "聚合 · 降级收集 / 去重 / 仲裁",
+      "sub": "仲裁权重：<b>安全 100 &gt; 逻辑 90 &gt; 性能 70 &gt; 架构 60 &gt; 风格 10</b>；先比 Agent 权重，再比严重度，最后比置信度。",
+      "anchors": [
+        [
+          "降级收集 / 去重 / 仲裁",
+          "<code>core/report/ReportGenerator.java</code>（<code>aggregate</code> 8 参数重载）"
+        ],
+        [
+          "权重表与冲突判定",
+          "<code>core/report/ArbitrationPolicy.java:21-27, 52-95</code>"
+        ]
+      ]
+    },
+    {
+      "id": "l4b",
+      "tag": "L4b",
+      "file": "l4b-suppress-grading",
+      "title": "聚合 · 误报抑制与强度定级",
+      "sub": "抑制来自开发者历史反馈；<b>BLOCKER 强否决不可被抑制或仲裁覆盖</b>，被误杀时由 VetoPolicy 回收。",
+      "anchors": [
+        [
+          "BLOCKER 强否决回收",
+          "<code>core/permission/VetoPolicy.java:26-36</code>"
+        ],
+        [
+          "强度 Profile 过滤",
+          "<code>core/profile/ReviewProfile.java:24-57</code>"
+        ]
+      ]
+    },
+    {
+      "id": "l5",
+      "tag": "L5",
+      "file": "l5-workflow",
+      "title": "人机协作 · 分级路由决策树",
+      "sub": "自动审查之后「人」如何介入。<code>ReviewWorkflowEngine.handle()</code> 按 BLOCKER 有无分叉。",
+      "anchors": [
+        [
+          "决策与回写动作",
+          "<code>core/workflow/ReviewWorkflowEngine.java:42-85</code>"
+        ],
+        [
+          "Issue / Commit Status API",
+          "<code>integration/gitea/GiteaApiClient.java</code>"
+        ]
+      ],
+      "info": "工单引用用裸 <code>#N</code> 而非绝对 URL：Gitea 的 auto-link 会渲染为站内可点链接，不会被域名白名单过滤，也不会因 base 二次拼接导致 404。"
+    },
+    {
+      "id": "l6",
+      "tag": "L6",
+      "file": "l6-dataflow",
+      "title": "数据流 · 租户存储与状态落盘",
+      "sub": "所有持久化状态按 <code>teamId</code> 隔离在 <code>data-dir/&lt;teamId&gt;/</code> 下；基线 <code>__global__</code> + 团队叠加，缺失回退默认。"
+    },
+    {
+      "id": "l7",
+      "tag": "L7",
+      "file": "l7-capability",
+      "title": "能力矩阵 · Agent 与 Skill 树",
+      "sub": "执行层的完整构成：5 内置 Agent + 团队自定义 Agent + 高级静态分析；Skill 按 category 挂载，支持运行期启停与团队自定义规则。",
+      "anchors": [
+        [
+          "5 个内置 Agent",
+          "<code>core/agent/impl/{Security,Logic,Performance,Architecture,Style}Agent.java</code>"
+        ],
+        [
+          "自定义 Agent",
+          "<code>core/agent/DeclarativeReviewAgent.java</code>；管理接口 <code>core/admin/AgentAdminController.java</code>"
+        ],
+        [
+          "高级静态分析",
+          "<code>core/analysis/{AdvancedAnalyzer,AstAnalyzer,CallGraphAnalyzer,ScaScanner}.java</code>"
+        ],
+        [
+          "Skill 注册与运行期启停",
+          "<code>core/skill/SkillRegistry.java:201-267</code>"
+        ]
+      ]
+    }
+  ]
+}
