@@ -17,16 +17,22 @@ import com.codereview.agent.core.feedback.FeedbackStore;
 import com.codereview.agent.core.feedback.FileFeedbackStore;
 import com.codereview.agent.core.history.FileReviewHistoryStore;
 import com.codereview.agent.core.history.ReviewHistoryStore;
+import com.codereview.agent.core.llm.BackoffPolicy;
+import com.codereview.agent.core.llm.CircuitBreakerProvider;
+import com.codereview.agent.core.llm.DefaultRetryClassifier;
 import com.codereview.agent.core.llm.EmbeddingClient;
 import com.codereview.agent.core.llm.LangChain4jChatProvider;
 import com.codereview.agent.core.llm.LangChain4jEmbeddingClient;
 import com.codereview.agent.core.llm.LlmClient;
+import com.codereview.agent.core.llm.LlmGatewayProperties;
 import com.codereview.agent.core.llm.LoggingChatModelListener;
-import com.codereview.agent.core.llm.MockProvider;
 import com.codereview.agent.core.llm.ModelGateway;
 import com.codereview.agent.core.llm.ModelProvider;
-import com.codereview.agent.core.llm.NoOpChatModel;
+import com.codereview.agent.core.llm.PriorityRouteStrategy;
+import com.codereview.agent.core.llm.RetryClassifier;
+import com.codereview.agent.core.llm.RouteStrategy;
 import com.codereview.agent.core.llm.SimpleHashEmbeddingClient;
+import com.codereview.agent.core.llm.TokenUsageRecorder;
 import com.codereview.agent.core.llm.aiservice.CodeReviewAiService;
 import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.prompt.ClasspathPromptLoader;
@@ -74,7 +80,8 @@ import java.util.regex.Pattern;
  * （如仅安全 Agent 挂载安全类 Skill），符合 Spring 最佳实践。
  */
 @Configuration
-@EnableConfigurationProperties({TeamProperties.class, TokenHubProperties.class, EgressProperties.class})
+@EnableConfigurationProperties({TeamProperties.class, TokenHubProperties.class,
+        EgressProperties.class, LlmGatewayProperties.class})
 public class ReviewAgentConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewAgentConfig.class);
@@ -91,34 +98,76 @@ public class ReviewAgentConfig {
      * <p>TokenHub 一个 API Key 可调用平台所有模型（OpenAI 兼容协议），故按
      * 「平台 + 模型」建模供应商：每个模型一个 {@link LangChain4jChatProvider}，
      * 共用同一 Key / base-url；模型按列表顺序路由，超时/失败时网关自动 failover。
-     * 未配置 Key 时仅剩 Mock 兜底，保证链路不中断。
+     *
+     * <p><b>2026-09-03 增强（对应 JD「高可用」「故障降级」）</b>：
+     * <ul>
+     *   <li>每个供应商默认包一层 {@link CircuitBreakerProvider}（连续失败 5 次 → OPEN 30s）；
+     *       OPEN 期间快速失败，避免对已知不健康供应商继续浪费 RTT；</li>
+     *   <li>{@link BackoffPolicy} 默认 200ms 起始 ×2 / 2s 上限，配合
+     *       {@link DefaultRetryClassifier} 对临时错误（429/503/timeout）在同一供应商上退避重试，
+     *       永久错误（401/403）立即切换；</li>
+     *   <li>{@link RouteStrategy} 默认 {@link PriorityRouteStrategy}，
+     *       跳过熔断 OPEN 中的供应商（与「顺序 failover」兼容）；</li>
+     *   <li>{@link TokenUsageRecorder} 环形缓冲最近 1024 次调用，
+     *       供 {@code LlmHealthController} 暴露 token 用量与调用次数。</li>
+     * </ul>
+     *
+     * <p><b>无任何 Mock（2026-09-03）</b>：不注入假模型供应商，也不允许网关兜底——
+     * 所有真实供应商失败即抛 {@code ModelUnavailableException}，由协调器把该 Agent
+     * 标记为降级并在报告顶部告警。宁可「看不见」，绝不用假结果「看起来通过」。
      */
     @Bean
-    public LlmClient llmClient(TokenHubProperties tokenHub, EgressProperties egress, AggregateTracer llmTracer) {
+    public LlmClient llmClient(TokenHubProperties tokenHub, LlmGatewayProperties gateway,
+                                EgressProperties egress, AggregateTracer llmTracer,
+                                TokenUsageRecorder usageRecorder) {
         List<ModelProvider> providers = new ArrayList<>();
         Duration timeout = Duration.ofSeconds(tokenHub.getTimeoutSeconds());
         for (TokenHubProperties.ModelSpec spec : tokenHub.getModels()) {
-            providers.add(new LangChain4jChatProvider(spec.getName(),
+            ModelProvider base = new LangChain4jChatProvider(spec.getName(),
                     buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
-                            timeout, llmTracer),
-                    tokenHub.hasKey()));
+                            timeout, llmTracer, usageRecorder),
+                    tokenHub.hasKey());
+            providers.add(wrapWithBreakerIfEnabled(gateway, base));
         }
-        providers.add(new MockProvider()); // 兜底终点，保证链路不中断
-        // P0-2 生产语义：配了真实 Key 时不允许 Mock 兜底——所有供应商失败即抛
-        // ModelUnavailableException → 对应 Agent 标记降级并在报告告警，而不是用 Mock 的
-        // 假结果「看起来通过」。仅无 Key 的本地演示模式允许 Mock 兜底保证链路可跑通。
-        ModelGateway gateway = new ModelGateway(providers, tokenHub.getQuotaPerMinute(), !tokenHub.hasKey());
-        log.info("已装配 LangChain4j 统一模型网关（TokenHub 多模型）：{}", gateway.describe());
-        return gateway;
+        BackoffPolicy backoff = new BackoffPolicy(
+                gateway.getRetry().getInitialBackoffMs(),
+                gateway.getRetry().getMaxBackoffMs(),
+                gateway.getRetry().getBackoffMultiplier());
+        ModelGateway gatewayBean = new ModelGateway(providers, tokenHub.getQuotaPerMinute(),
+                new PriorityRouteStrategy(), new DefaultRetryClassifier(),
+                backoff, gateway.getRetry().getMaxAttempts(),
+                gateway.getRetry().isEnabled(), usageRecorder);
+        log.info("已装配 LangChain4j 统一模型网关（TokenHub 多模型 + 熔断 + 退避重试）：{}",
+                gatewayBean.describe());
+        return gatewayBean;
+    }
+
+    /** 按配置决定是否包熔断器；关闭时 ModelGateway 行为与历史一致。 */
+    private ModelProvider wrapWithBreakerIfEnabled(LlmGatewayProperties cfg, ModelProvider base) {
+        if (!cfg.getCircuitBreaker().isEnabled()) {
+            return base;
+        }
+        return new CircuitBreakerProvider(base,
+                cfg.getCircuitBreaker().getFailureThreshold(),
+                Duration.ofSeconds(cfg.getCircuitBreaker().getOpenSeconds()),
+                cfg.getCircuitBreaker().getHalfOpenMaxTrials());
     }
 
     /**
-     * 主聊天模型（供 AiServices 使用）：取 TokenHub 配置的第一个模型；无 Key 时为 NoOp 占位。
+     * 主聊天模型（供 AiServices 使用）：取 TokenHub 配置的第一个模型。
+     *
+     * <p><b>无 Key / 无模型即启动失败（fail-fast）</b>——不再提供 NoOp 占位：
+     * 结构化审查路径没有「静默跳过」的余地，配置缺失应当立刻暴露而不是产出一份
+     * 看起来正常的假报告。
      */
     @Bean
     public ChatModel primaryChatModel(TokenHubProperties tokenHub, EgressProperties egress, AggregateTracer llmTracer) {
-        if (!tokenHub.hasKey() || tokenHub.getModels().isEmpty()) {
-            return new NoOpChatModel();
+        if (!tokenHub.hasKey()) {
+            throw new IllegalStateException("未配置 tokenhub.api-key（已移除 Mock 兜底）："
+                    + "请通过环境变量 TOKENHUB_API_KEY 注入真实 Key，服务拒绝在无模型配置下启动");
+        }
+        if (tokenHub.getModels().isEmpty()) {
+            throw new IllegalStateException("tokenhub.models 为空：请至少声明一个模型（见 application.yml tokenhub.models）");
         }
         TokenHubProperties.ModelSpec spec = tokenHub.getModels().get(0);
         return buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
@@ -135,6 +184,15 @@ public class ReviewAgentConfig {
     @Bean
     public AggregateTracer llmTracer() {
         return new AggregateTracer();
+    }
+
+    /**
+     * Token 用量记录器（环形缓冲）：监听器把每次 LLM 调用的 token 用量写进来，
+     * {@code LlmHealthController} 暴露给监控端点。
+     */
+    @Bean
+    public TokenUsageRecorder tokenUsageRecorder() {
+        return new TokenUsageRecorder(1024);
     }
 
     /**
@@ -233,9 +291,11 @@ public class ReviewAgentConfig {
     }
 
     private ChatModel buildOpenAiChatModel(EgressProperties egress, String baseUrl, String apiKey,
-                                           String model, Duration timeout, AggregateTracer tracer) {
+                                           String model, Duration timeout, AggregateTracer tracer,
+                                           TokenUsageRecorder usageRecorder) {
         // 挂 LoggingChatModelListener：在模型边界统一记录 LLM 请求/响应（覆盖 AiServices 与文本两条路径），
-        // 并把每次调用落成 agent-kit 的 GenAiSpan 交给聚合器（指标口径由基座统一，本仓库不自建）
+        // 并把每次调用落成 agent-kit 的 GenAiSpan 交给聚合器（指标口径由基座统一，本仓库不自建）；
+        // 同时把 token 用量落进环形缓冲供 SLA 端点暴露。
         return OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
@@ -243,8 +303,14 @@ public class ReviewAgentConfig {
                 .temperature(0.2)
                 .timeout(timeout)
                 .httpClientBuilder(llmHttpClientBuilder(egress))
-                .listeners(new LoggingChatModelListener(tracer))
+                .listeners(new LoggingChatModelListener(tracer, usageRecorder))
                 .build();
+    }
+
+    /** 兼容旧签名（primaryChatModel 直接调，没传 recorder 的场景）。 */
+    private ChatModel buildOpenAiChatModel(EgressProperties egress, String baseUrl, String apiKey,
+                                           String model, Duration timeout, AggregateTracer tracer) {
+        return buildOpenAiChatModel(egress, baseUrl, apiKey, model, timeout, tracer, null);
     }
 
     /** 提示词模板加载器（classpath 模板文件）。 */
@@ -441,6 +507,19 @@ public class ReviewAgentConfig {
         ms.setBasename("i18n/messages");
         ms.setDefaultEncoding("UTF-8");
         return ms;
+    }
+
+    /**
+     * 置信度校准服务（反馈 → 规则准确率 → 校准）：注入规则准确率快照目录，
+     * 使派生状态（ruleAccuracy）在重启后不丢失。
+     *
+     * <p>不再用 {@code @Service} 组件扫描——需要 {@code review.data-dir} 做快照持久化，
+     * 由本方法显式装配，避免扫描路径拿不到配置。
+     */
+    @Bean
+    public ConfidenceCalibrationService confidenceCalibrationService(
+            @Value("${review.data-dir:./data}") String dataDir) {
+        return new ConfidenceCalibrationService(Path.of(dataDir));
     }
 
     /**

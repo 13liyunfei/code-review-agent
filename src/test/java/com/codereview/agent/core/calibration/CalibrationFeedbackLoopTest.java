@@ -90,6 +90,38 @@ class CalibrationFeedbackLoopTest {
     }
 
     @Test
+    void accuracyDerivedStateSurvivesRestartViaSnapshot(@TempDir Path tempDir) {
+        // 2026-09-03：派生状态（ruleAccuracy）落快照 <data-dir>/calibration/accuracy.json，
+        // 模拟进程重启后新实例应从快照恢复学习结果，而非退化为乘 1.0。
+        ConfidenceCalibrationService first = new ConfidenceCalibrationService(tempDir);
+        InMemoryFeedbackStore store = new InMemoryFeedbackStore(first);
+        store.save("default", fp("SEC-100")); // 0.8
+        store.save("default", fp("SEC-100")); // max(0.5, 0.8*0.9)=0.72
+        store.save("default", tp("SEC-100")); // min(1.0, 0.72*1.05)=0.756
+        assertEquals(0.756, first.accuracy("SEC-100"), 1e-9);
+
+        // 模拟重启：同一 data-dir 上重建服务实例
+        ConfidenceCalibrationService second = new ConfidenceCalibrationService(tempDir);
+        assertEquals(0.756, second.accuracy("SEC-100"), 1e-9, "重启后准确率应从快照恢复");
+        assertEquals(0.756 * 0.95, second.calibrate("SEC-100", 0.95), 1e-9,
+                "校准应继续使用恢复后的准确率，而不是 1.0");
+
+        // 重启后的实例继续累计也应生效并再次持久化
+        InMemoryFeedbackStore store2 = new InMemoryFeedbackStore(second);
+        store2.save("default", fp("SEC-100")); // max(0.5, 0.756*0.9)=0.6804
+        assertEquals(0.6804, second.accuracy("SEC-100"), 1e-9);
+    }
+
+    @Test
+    void memoryOnlyConstructorDoesNotTouchDisk() {
+        // 无 data-dir 的内存模式：不写快照、不影响默认行为（纯单测友好构造）
+        ConfidenceCalibrationService memory = new ConfidenceCalibrationService();
+        InMemoryFeedbackStore store = new InMemoryFeedbackStore(memory);
+        store.save("default", fp("SEC-200"));
+        assertEquals(0.8, memory.accuracy("SEC-200"), 1e-9);
+    }
+
+    @Test
     void throwingListenerNeverBreaksFeedbackSave() {
         // 旁路保障：监听器抛异常不得影响反馈保存
         InMemoryFeedbackStore store = new InMemoryFeedbackStore(

@@ -2,8 +2,15 @@ package com.codereview.agent.core.calibration;
 
 import com.codereview.agent.core.feedback.FeedbackListener;
 import com.codereview.agent.core.memory.ReviewFeedback;
-import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,17 +28,42 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link #onFeedback} → {@link #markFalsePositive} / {@link #markTruePositive}。
  * 此前这两个方法与 {@code ruleAccuracy} 无任何调用方，校准恒等于乘 1.0（空转）。
  *
+ * <p><b>持久化（2026-09-03）</b>：规则准确率是<b>派生状态</b>——反馈事件本身已由
+ * {@code FileFeedbackStore} 落盘，但派生出的 {@code ruleAccuracy} 若只存内存，进程重启后
+ * 校准学习全部归零，重新退化为「乘 1.0」。本服务每次标记后把 {@code ruleAccuracy}
+ * 快照原子写入 {@code <data-dir>/calibration/accuracy.json}，构造时自动加载，重启不丢失。
+ * 无 {@code data-dir} 的构造（单测/内存模式）不做持久化。
+ *
  * <p><b>准确率下界（防一票否决）</b>：单次误报最多把准确率打到下界 {@link #MIN_ACCURACY}，
  * 不会因一次标记就近乎清零；正报回升封顶 1.0。
  */
-@Service
 public class ConfidenceCalibrationService implements FeedbackListener {
+
+    private static final Logger log = LoggerFactory.getLogger(ConfidenceCalibrationService.class);
 
     /** 规则准确率下界：一次误报最多把置信度折到 0.5，保留规则继续参与聚合的资格。 */
     static final double MIN_ACCURACY = 0.5;
 
     /** 规则 ID -> 历史准确率（初始 1.0）。 */
     private final Map<String, Double> ruleAccuracy = new ConcurrentHashMap<>();
+
+    /** 准确率快照文件（null = 不持久化，内存模式）。 */
+    private final Path accuracyFile;
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    /** 内存模式（单测 / 无盘环境）：不持久化派生状态。 */
+    public ConfidenceCalibrationService() {
+        this(null);
+    }
+
+    /**
+     * @param dataDir 数据根目录；派生准确率快照写入 {@code <dataDir>/calibration/accuracy.json}
+     */
+    public ConfidenceCalibrationService(Path dataDir) {
+        this.accuracyFile = dataDir == null ? null : dataDir.resolve("calibration").resolve("accuracy.json");
+        loadSnapshot();
+    }
 
     /**
      * 开发者标记“误报”后调用：降低该规则的置信度基准（指数衰减，下限 {@link #MIN_ACCURACY}）。
@@ -44,6 +76,7 @@ public class ConfidenceCalibrationService implements FeedbackListener {
         }
         // 首次误报直接落到 0.8，之后每次乘 0.9 衰减，但不再低于 0.5（防一票否决）
         ruleAccuracy.merge(ruleId, 0.8, (old, v) -> Math.max(MIN_ACCURACY, old * 0.9));
+        persist();
     }
 
     /**
@@ -56,6 +89,7 @@ public class ConfidenceCalibrationService implements FeedbackListener {
             return;
         }
         ruleAccuracy.merge(ruleId, 1.0, (old, v) -> Math.min(1.0, old * 1.05));
+        persist();
     }
 
     /**
@@ -99,6 +133,36 @@ public class ConfidenceCalibrationService implements FeedbackListener {
             markFalsePositive(feedback.ruleId());
         } else {
             markTruePositive(feedback.ruleId());
+        }
+    }
+
+    /** 构造时加载已有快照；缺失 / 损坏时不阻断启动（退化为无学习记录）。 */
+    private void loadSnapshot() {
+        if (accuracyFile == null || !Files.exists(accuracyFile)) {
+            return;
+        }
+        try {
+            Map<String, Double> loaded = mapper.readValue(
+                    Files.readString(accuracyFile), new TypeReference<Map<String, Double>>() {});
+            ruleAccuracy.putAll(loaded);
+            log.info("[Calibration] 已从 {} 恢复 {} 条规则准确率", accuracyFile, loaded.size());
+        } catch (IOException e) {
+            log.warn("[Calibration] 读取准确率快照 {} 失败（本次从空开始）：{}", accuracyFile, e.getMessage());
+        }
+    }
+
+    /** 每次标记后原子写快照（tmp + ATOMIC_MOVE，与断点存储同款）。持久化失败不影响校准本身。 */
+    private void persist() {
+        if (accuracyFile == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(accuracyFile.getParent());
+            Path tmp = accuracyFile.resolveSibling(accuracyFile.getFileName() + ".tmp");
+            mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), ruleAccuracy);
+            Files.move(tmp, accuracyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            log.warn("[Calibration] 写入准确率快照 {} 失败（本次学习仅存内存）：{}", accuracyFile, e.getMessage());
         }
     }
 }

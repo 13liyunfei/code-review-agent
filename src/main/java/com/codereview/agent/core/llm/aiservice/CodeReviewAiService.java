@@ -12,7 +12,7 @@ import dev.langchain4j.service.UserMessage;
  *   <li><b>结构化输出</b>：返回类型为 record，LangChain4j 自动要求模型输出 JSON 并反序列化；</li>
  *   <li><b>短期记忆</b>：{@link MemoryId} + ChatMemoryProvider 按「Agent-团队-PR」维护窗口记忆，
  *       替代原 SHORT_TERM 枚举（本系统三层记忆中的短期层）；</li>
- *   <li><b>失败降级</b>：调用/解析失败时，上层回退到文本路径（Mock 或 LlmFindingParser）。</li>
+ *   <li><b>失败降级</b>：调用/解析失败时，上层回退到文本路径（{@code LlmClient} + {@code LlmFindingParser}）。</li>
  * </ul>
  */
 public interface CodeReviewAiService {

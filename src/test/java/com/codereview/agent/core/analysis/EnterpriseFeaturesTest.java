@@ -4,8 +4,8 @@ import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.autofix.AutoFixEngine;
 import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.llm.LlmClient;
-import com.codereview.agent.core.llm.MockProvider;
 import com.codereview.agent.core.llm.ModelGateway;
+import com.codereview.agent.core.llm.ModelProvider;
 import com.codereview.agent.core.model.AgentResult;
 import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
@@ -107,11 +107,17 @@ class EnterpriseFeaturesTest {
     }
 
     @Test
-    void modelGatewayFallsBackToMock() {
-        ModelGateway gw = new ModelGateway(List.of(new MockProvider()), 10);
+    void modelGatewayReturnsConfiguredRealProviderOutput() {
+        // 2026-09-03 去 Mock：网关只认装配进来的真实供应商，不再有 mock 兜底
+        ModelGateway gw = new ModelGateway(List.of(new ModelProvider() {
+            @Override public String name() { return "real"; }
+            @Override public boolean available() { return true; }
+            @Override public String chat(String prompt) { return "REAL-OK"; }
+        }), 10);
         String out = gw.chat("hello");
-        assertNotNull(out, "网关应返回（Mock 兜底）非空结果");
-        assertTrue(gw.describe().contains("mock"), "网关应含 mock 供应商");
+        assertNotNull(out, "网关应返回真实供应商的结果");
+        assertEquals("REAL-OK", out);
+        assertFalse(gw.describe().contains("mock"), "网关不应再含任何 mock 供应商");
     }
 
     @Test

@@ -35,7 +35,7 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractReviewAgent.class);
 
-    /** 大模型客户端（用于 LLM 增强，离线环境为 Mock）。 */
+    /** 大模型客户端（用于 LLM 增强；模型不可用时由协调器将该 Agent 标记降级）。 */
     protected final LlmClient llmClient;
     /** LangChain4j AiServices（结构化输出 + ChatMemory；可能为 null → 回退文本路径）。 */
     protected final CodeReviewAiService aiService;

@@ -41,7 +41,8 @@ gitea:
 # → 模型广场领免费体验包 → API Key 管理创建 Key，格式 sk-xxx，只显示一次）。
 # 关键：同一个 API Key 可调用平台上所有模型，仅需切换 model 字段。
 # 下方 models 列表按顺序声明要用的模型；某模型超时/失败时网关自动 failover 到下一个。
-# api-key 留空则回退 Mock（仅供演示，LLM 不产生发现）。
+# 注意：本系统不提供任何 Mock 兜底（2026-09-03 已全量移除）——未配置 api-key 将直接启动失败，
+# 所有供应商失败时对应 Agent 会被标记为降级并在报告顶部告警，绝不产生「看起来通过」的假报告。
 tokenhub:
   # API Key 通过环境变量或 Secret 注入，禁止提交明文凭证
   api-key: ${TOKENHUB_API_KEY:}
@@ -131,6 +132,21 @@ review:
   # 默认用 0.6b：pgvector ivfflat 索引上限 2000 维，4b 无法建索引；
   # 切换模型时需同步把 pgvector.vector-dim 改为对应维度（存量表会自动迁移重建向量列）。
   llm:
+    gateway:
+      # 熔断器：连续失败 N 次 → OPEN 30s；OPEN 期间快速失败，避免对已知不健康供应商继续浪费 RTT。
+      circuit-breaker:
+        enabled: ${LLM_CB_ENABLED:true}
+        failure-threshold: ${LLM_CB_FAILURE_THRESHOLD:5}
+        open-seconds: ${LLM_CB_OPEN_SECONDS:30}
+        half-open-max-trials: ${LLM_CB_HALF_OPEN_MAX_TRIALS:1}
+      # 重试退避：临时错误（429/503/timeout）在本供应商上指数退避重试；
+      # 永久错误（401/403/参数错）立即切换到下一家。
+      retry:
+        enabled: ${LLM_RETRY_ENABLED:true}
+        max-attempts: ${LLM_RETRY_MAX_ATTEMPTS:3}
+        initial-backoff-ms: ${LLM_RETRY_INITIAL_BACKOFF_MS:200}
+        max-backoff-ms: ${LLM_RETRY_MAX_BACKOFF_MS:2000}
+        backoff-multiplier: ${LLM_RETRY_BACKOFF_MULTIPLIER:2.0}
     embedding:
       # 默认 true：有 TokenHub Key 时使用真实语义向量（业界最佳实践，检索质量远超哈希词袋）；
       # 无 Key 时自动降级 SimpleHashEmbeddingClient（离线哈希），保证链路不中断。

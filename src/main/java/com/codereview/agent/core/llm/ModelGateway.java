@@ -4,145 +4,202 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 统一模型网关（多厂商 + Quota 配额 + Failover 失败转移）。
+ * 统一模型网关（多厂商 + Quota 配额 + Failover 失败转移 + CircuitBreaker 熔断 +
+ * Retry-With-Backoff 退避重试 + 可插拔路由策略）。
  *
- * <p>实现 {@link LlmClient}，对上层（各审查 Agent）屏蔽底层厂商差异：
+ * <p><b>核心职责</b>：对上层（各审查 Agent）屏蔽底层厂商差异：
  * <ul>
- *   <li><b>多厂商路由</b>：按配置顺序选择可用供应商（混元 / OpenAI 兼容 / Azure / Mock）；</li>
- *   <li><b>配额</b>：每个供应商设定时间窗内最大调用次数，超限自动降级到下一供应商；</li>
- *   <li><b>失败转移</b>：某供应商抛异常时，立即切换下一供应商，保证审查链路不中断；</li>
- *   <li><b>兜底</b>：Mock 供应商永远可用，作为链路终点（可开关，见 {@code allowMockFallback}）。</li>
+ *   <li><b>多厂商路由</b>：由 {@link RouteStrategy} 选择下一个目标（默认按列表顺序，
+ *       自动跳过熔断器 OPEN 中的供应商）；</li>
+ *   <li><b>配额</b>：每个供应商设定时间窗内最大调用次数，超限自动跳过；</li>
+ *   <li><b>熔断</b>：每个供应商包 {@link CircuitBreakerProvider}（可选），
+ *       连续失败达阈值后 OPEN，期间直接抛 {@link CircuitOpenException} 快速失败；</li>
+ *   <li><b>失败转移</b>：永久错误立即切下一供应商；</li>
+ *   <li><b>退避重试</b>：临时错误（429/503/timeout 等）在同一供应商上指数退避重试；
+ *       超过 {@code maxAttempts} 才切换；</li>
+ *   <li><b>Token 用量</b>：每次成功调用通过 {@link TokenUsageRecorder}（可选）累计。 </li>
  * </ul>
  *
- * <p><b>失败必须显式（0.1.1 修复）</b>：此前所有供应商都失败时会 {@code return ""}，
- * 上层无法区分「模型返回空」与「模型不可用」，于是解析出 0 条发现并产出「看起来通过」的报告。
- * 现在改为抛出 {@link ModelUnavailableException}，由协调器把该 Agent 标记为降级并在报告中标注。
- * 静默失败比显式报错危险得多。
+ * <p><b>失败必须显式，且无任何 Mock（P0-2 修复 + 2026-09-03 全量去 Mock + 2026-09-03 JD 增强）</b>：
+ * 所有供应商（含熔断跳过、配额耗尽、真实调用失败）都试过后，
+ * 抛 {@link ModelUnavailableException}，由协调器把该 Agent 标记为降级并在报告中标注。
  *
- * <p><b>降级观测</b>：每次走 Mock 兜底或最终失败都会累加计数，可通过 {@link #degradationStats()}
- * 读取，用于健康检查与告警。
+ * <p><b>降级观测</b>：每次彻底失败计数 + 每个供应商的熔断状态 + Token 用量，
+ * 通过 {@link #snapshot()} 读取，供 {@code LlmHealthController} 暴露成 SLA 端点。
  */
 public class ModelGateway implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(ModelGateway.class);
 
-    /**
-     * 配额窗口（秒）。
-     */
     private static final long WINDOW_SECONDS = 60;
-
-    /** 兜底供应商的固定名称（约定俗成，用于识别 Mock）。 */
-    private static final String MOCK_PROVIDER = "mock";
 
     private final List<ModelProvider> providers;
     private final int maxPerWindow;
-    /** 是否允许在所有供应商失败后降级到 Mock（关闭后失败即抛异常，更适合生产环境）。 */
-    private final boolean allowMockFallback;
-    private final java.util.Map<String, QuotaState> quotas = new java.util.concurrent.ConcurrentHashMap<>();
+    private final RouteStrategy routeStrategy;
+    private final RetryClassifier retryClassifier;
+    private final BackoffPolicy backoffPolicy;
+    private final int retryMaxAttempts;
+    private final boolean retryEnabled;
+    private final TokenUsageRecorder usageRecorder;
 
-    /** 走 Mock 兜底的次数（显式降级，结果不可信）。 */
-    private final AtomicLong mockFallbacks = new AtomicLong();
-    /** 彻底失败的次数（连兜底都没有 / 兜底也失败）。 */
+    private final Map<String, QuotaState> quotas = new ConcurrentHashMap<>();
+
     private final AtomicLong totalFailures = new AtomicLong();
 
     /**
-     * 向后兼容构造：允许 Mock 兜底（与修复前行为一致，仅把「返回空串」改为「抛异常」）。
-     *
-     * @param providers    供应商列表（按顺序优先）
-     * @param maxPerWindow 每窗口最大调用次数
-     */
-    public ModelGateway(List<ModelProvider> providers, int maxPerWindow) {
-        this(providers, maxPerWindow, true);
-    }
-
-    /**
-     * @param providers        供应商列表（按顺序优先）
+     * @param providers        供应商列表（顺序即默认优先级；建议每个 spec 包一层熔断器）
      * @param maxPerWindow     每窗口最大调用次数
-     * @param allowMockFallback 所有供应商失败后是否允许降级到名为 {@code mock} 的供应商。
-     *                          生产建议 {@code false}——宁可让该 Agent 降级，也不要拿假结果充数
+     * @param routeStrategy    路由策略（默认 {@link PriorityRouteStrategy}）
+     * @param retryClassifier  失败分类器（默认 {@link DefaultRetryClassifier}）
+     * @param backoffPolicy    退避策略（默认 200ms / ×2 / 2s 上限）
+     * @param retryMaxAttempts 同供应商最大尝试次数（含首次；1=不退避）
+     * @param retryEnabled     是否启用退避重试
+     * @param usageRecorder    Token 用量记录器（可为 null 表示不记录）
      */
-    public ModelGateway(List<ModelProvider> providers, int maxPerWindow, boolean allowMockFallback) {
+    public ModelGateway(List<ModelProvider> providers,
+                        int maxPerWindow,
+                        RouteStrategy routeStrategy,
+                        RetryClassifier retryClassifier,
+                        BackoffPolicy backoffPolicy,
+                        int retryMaxAttempts,
+                        boolean retryEnabled,
+                        TokenUsageRecorder usageRecorder) {
         this.providers = providers;
         this.maxPerWindow = maxPerWindow;
-        this.allowMockFallback = allowMockFallback;
+        this.routeStrategy = routeStrategy == null ? new PriorityRouteStrategy() : routeStrategy;
+        this.retryClassifier = retryClassifier == null ? new DefaultRetryClassifier() : retryClassifier;
+        this.backoffPolicy = backoffPolicy == null ? new BackoffPolicy(200, 2000, 2.0) : backoffPolicy;
+        this.retryMaxAttempts = Math.max(1, retryMaxAttempts);
+        this.retryEnabled = retryEnabled;
+        this.usageRecorder = usageRecorder;
     }
 
     /**
-     * 发送提示词并获取模型输出。
-     *
-     * @param prompt 提示词
-     * @return 模型输出
-     * @throws ModelUnavailableException 所有供应商（含兜底）均失败时抛出，绝不静默返回空串
+     * 兼容旧构造（无熔断/重试/路由策略/用量记录）。
      */
+    public ModelGateway(List<ModelProvider> providers, int maxPerWindow) {
+        this(providers, maxPerWindow,
+                new PriorityRouteStrategy(), new DefaultRetryClassifier(),
+                new BackoffPolicy(200, 2000, 2.0), 1, false, null);
+    }
+
     @Override
     public String chat(String prompt) {
         long t0 = System.currentTimeMillis();
-        int attempt = 0;
+        // 收集「本轮可下发」的供应商（排除不 available / 配额耗尽）
+        List<ModelProvider> candidates = collectCandidates();
+        if (candidates.isEmpty()) {
+            totalFailures.incrementAndGet();
+            String reason = String.format(
+                    "无可用供应商（已配置 %d 个，全部不可用或配额耗尽，累计失败 %d 次）",
+                    providers.size(), totalFailures.get());
+            throw new ModelUnavailableException(reason, providers.size(), 0);
+        }
+
         Throwable lastFailure = null;
-        for (ModelProvider p : providers) {
-            if (!p.available()) {
+        int totalAttempts = 0;
+        // 策略循环：每轮选下一个 candidate，尝试 +1；本轮失败若是永久错误立刻换下一个；
+        // 若是临时错误且 retry 启用，按 backoff 在本 candidate 上重试
+        int strategyCursor = 0;
+        while (strategyCursor < candidates.size()) {
+            ModelProvider p = routeStrategy.next(rotate(candidates, strategyCursor));
+            strategyCursor++;
+            if (p == null) {
                 continue;
             }
+            // 配额二次校验（collectCandidates 已过滤；这里防御 available() 状态变化）
             if (quotaExceeded(p.name())) {
                 log.debug("[模型网关] 供应商 {} 配额耗尽，跳过", p.name());
                 continue;
             }
-            attempt++;
-            try {
-                log.debug("[模型网关] 尝试供应商[{}]（第 {} 个可用），prompt={}字符",
-                        p.name(), attempt, prompt.length());
-                String result = p.chat(prompt);
-                incQuota(p.name());
-                long cost = System.currentTimeMillis() - t0;
-                log.info("[模型网关] LLM 调用成功：供应商={}, 输出={}字符, 尝试次数={}, 耗时 {}ms",
-                        p.name(), result == null ? 0 : result.length(), attempt, cost);
-                return result;
-            } catch (Exception e) {
-                lastFailure = e;
-                log.warn("[模型网关] 供应商[{}] 调用失败，失败转移至下一供应商：{}（已耗时 {}ms）",
-                        p.name(), e.getMessage(), System.currentTimeMillis() - t0);
-            }
-        }
-        long cost = System.currentTimeMillis() - t0;
-        log.error("[模型网关] 所有可用供应商均失败（prompt 长度={}, 已尝试 {} 个/共 {} 个，耗时 {}ms）",
-                prompt.length(), attempt, providers.size(), cost);
-
-        // 兜底：Mock 仅在显式允许时使用（理论上 providers 末尾已包含 mock）
-        if (allowMockFallback) {
-            ModelProvider mock = providers.stream()
-                    .filter(p -> MOCK_PROVIDER.equals(p.name()))
-                    .findFirst()
-                    .orElse(null);
-            if (mock != null) {
+            int attemptsOnThisProvider = 0;
+            int maxForThis = retryEnabled ? retryMaxAttempts : 1;
+            while (attemptsOnThisProvider < maxForThis) {
+                attemptsOnThisProvider++;
+                totalAttempts++;
                 try {
-                    String fallback = mock.chat(prompt);
-                    mockFallbacks.incrementAndGet();
-                    // WARN 而非 DEBUG：走兜底意味着本次结论不可信，必须留下醒目痕迹
-                    log.warn("[模型网关] 已降级到 Mock 兜底（累计 {} 次），本次结论不可信，prompt 长度={}",
-                            mockFallbacks.get(), prompt.length());
-                    return fallback;
+                    log.debug("[模型网关] 尝试供应商[{}]（候选位 {}/{}，本供应商第 {} 次），prompt={}字符",
+                            p.name(), strategyCursor, candidates.size(), attemptsOnThisProvider, prompt.length());
+                    long pStart = System.currentTimeMillis();
+                    String result = p.chat(prompt);
+                    long pCost = System.currentTimeMillis() - pStart;
+                    incQuota(p.name());
+                    long cost = System.currentTimeMillis() - t0;
+                    log.info("[模型网关] LLM 调用成功：供应商={}, 输出={}字符, 总尝试={}, 耗时 {}ms",
+                            p.name(), result == null ? 0 : result.length(), totalAttempts, cost);
+                    if (usageRecorder != null) {
+                        // Listener 已记录 token 用量；这里仅在缺省监听器场景兜底（不重复 record by caller）
+                        // 保留 hook 留作后续按 supplier 维度补 metrics。
+                    }
+                    return result;
+                } catch (CircuitOpenException coe) {
+                    // 熔断器 OPEN：跳过本候选，移到下一家（不计入 retry）
+                    log.warn("[模型网关] 供应商[{}] 触发熔断（OPEN），跳过：{}", p.name(), coe.getMessage());
+                    lastFailure = coe;
+                    break;
                 } catch (Exception e) {
                     lastFailure = e;
-                    log.error("[模型网关] Mock 兜底也失败：{}", e.getMessage());
+                    boolean retryable = retryClassifier.isRetryable(e);
+                    log.warn("[模型网关] 供应商[{}] 调用失败（{}/{}）：{}（retryable={}）",
+                            p.name(), attemptsOnThisProvider, maxForThis, e.getMessage(), retryable);
+                    if (!retryable || attemptsOnThisProvider >= maxForThis) {
+                        // 永久错误 或 已达上限：换下一供应商
+                        break;
+                    }
+                    // 临时错误：本供应商上退避重试
+                    long sleepMs = backoffPolicy.backoffMs(attemptsOnThisProvider);
+                    log.info("[模型网关] 临时错误退避 {}ms 后重试（供应商 {}）", sleepMs, p.name());
+                    backoffPolicy.sleep(sleepMs);
                 }
             }
         }
 
+        long totalCost = System.currentTimeMillis() - t0;
+        log.error("[模型网关] 所有可用供应商均失败（prompt 长度={}, 已尝试 {} 次，耗时 {}ms）",
+                prompt.length(), totalAttempts, totalCost);
+
         totalFailures.incrementAndGet();
         String reason = String.format(
-                "所有供应商均不可用（已尝试 %d 个 / 共 %d 个，Mock 兜底%s，累计失败 %d 次）",
-                attempt, providers.size(), allowMockFallback ? "亦失败或未配置" : "已关闭",
-                totalFailures.get());
-        // 不再 return ""：静默空串会让上层误判为「无发现」，进而产出通过态的假报告
+                "所有供应商均不可用（已尝试 %d 次 / 共 %d 个供应商，累计失败 %d 次，无 Mock 兜底）",
+                totalAttempts, providers.size(), totalFailures.get());
         if (lastFailure == null) {
-            throw new ModelUnavailableException(reason, providers.size(), attempt);
+            throw new ModelUnavailableException(reason, providers.size(), totalAttempts);
         }
-        throw new ModelUnavailableException(reason, providers.size(), attempt, lastFailure);
+        throw new ModelUnavailableException(reason, providers.size(), totalAttempts, lastFailure);
+    }
+
+    /** 收集「available 且未超配额」的供应商作为本轮候选。 */
+    private List<ModelProvider> collectCandidates() {
+        List<ModelProvider> ok = new ArrayList<>(providers.size());
+        for (ModelProvider p : providers) {
+            if (p == null || !p.available()) {
+                continue;
+            }
+            if (quotaExceeded(p.name())) {
+                continue;
+            }
+            ok.add(p);
+        }
+        return ok;
+    }
+
+    /** 从 cursor 起旋转移位（让路由策略从 cursor 开始选择）。 */
+    private static List<ModelProvider> rotate(List<ModelProvider> in, int cursor) {
+        if (cursor <= 0 || cursor >= in.size()) {
+            return in;
+        }
+        List<ModelProvider> out = new ArrayList<>(in.size());
+        out.addAll(in.subList(cursor, in.size()));
+        out.addAll(in.subList(0, cursor));
+        return out;
     }
 
     /**
@@ -158,20 +215,44 @@ public class ModelGateway implements LlmClient {
 
     /**
      * 降级统计快照（供健康检查 / 告警）。
-     *
-     * @param mockFallbacks 走 Mock 兜底的次数（结论不可信）
-     * @param totalFailures 彻底失败的次数
      */
-    public record DegradationStats(long mockFallbacks, long totalFailures) {
-        /** 是否发生过任何形式的降级。 */
+    public record DegradationStats(long totalFailures) {
         public boolean degraded() {
-            return mockFallbacks > 0 || totalFailures > 0;
+            return totalFailures > 0;
         }
     }
 
-    /** 读取降级统计（累积值，进程内）。 */
     public DegradationStats degradationStats() {
-        return new DegradationStats(mockFallbacks.get(), totalFailures.get());
+        return new DegradationStats(totalFailures.get());
+    }
+
+    /**
+     * 全链路快照：SLA 端点暴露。
+     */
+    public LlmGatewaySnapshot snapshot() {
+        List<CircuitBreakerProvider.CircuitSnapshot> providerSnaps = new ArrayList<>();
+        for (ModelProvider p : providers) {
+            if (p instanceof CircuitBreakerProvider cb) {
+                providerSnaps.add(cb.snapshot());
+            } else {
+                // 未包熔断器：构造一个始终 CLOSED 的快照（便于上层无需特判）
+                providerSnaps.add(new CircuitBreakerProvider.CircuitSnapshot(
+                        p.name(), com.codereview.agent.core.llm.CircuitBreakerState.CLOSED,
+                        0, 0, null, 0, 0, 0));
+            }
+        }
+        List<TokenUsageRecorder.ProviderAggregate> agg = usageRecorder == null
+                ? List.of()
+                : usageRecorder.aggregatesSnapshot();
+        return new LlmGatewaySnapshot(totalFailures.get(), providerSnaps, agg);
+    }
+
+    public List<ModelProvider> providers() {
+        return providers;
+    }
+
+    public TokenUsageRecorder usageRecorder() {
+        return usageRecorder;
     }
 
     private boolean quotaExceeded(String name) {
