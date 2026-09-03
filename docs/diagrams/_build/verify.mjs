@@ -11,9 +11,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-const target = process.argv[2];
+const arg = process.argv[2];
+const target = arg ? path.resolve(arg) : '';
 if (!target || !fs.existsSync(target)) {
+  // 打印解析后的绝对路径：相对路径层级算错是最常见的用法错误
   console.error('用法: node verify.mjs <产物HTML路径>');
+  if (arg) console.error(`文件不存在：${target}`);
   process.exit(2);
 }
 
