@@ -331,8 +331,7 @@ flowchart TD
     C1 -->|成功| S[返回 + incQuota]
     C1 -->|异常| P2{provider 2}
     P2 --> P3{provider 3}
-    P3 --> M[Mock 兜底<br/>仅无 Key 演示启用]
-    M -->|失败 / 未启用| X[抛 ModelUnavailableException<br/>绝不静默返回空串]
+    P3 --> X[抛 ModelUnavailableException<br/>绝不静默返回空串 · 无任何 Mock 兜底]
 ```
 
 配置（`application.yml:45-61`）：`hy3` → `deepseek-v4-flash` → `glm-5.2`，timeout 60s，`quota-per-minute:200`。
@@ -342,7 +341,7 @@ flowchart TD
 | 缺陷 | 位置 | 状态与说明 |
 |---|---|---|
 | **无熔断半开** | `ModelGateway.java:88` | 仍在：`p.available()` 是**装配期静态布尔**，不因运行期失败翻转；恢复只靠 60s 窗口自然重置 |
-| **静默返回空串** | `ModelGateway.java`（修复前 `:81`） | ✅ **已修复（P0-2）**：全供应商 + Mock 用尽改为抛 `ModelUnavailableException`（`:138-148`），由协调器标 `degraded` 进报告。**静默失败比报错更危险**——上层会把空串解析成「无发现」 |
+| **静默返回空串** | `ModelGateway.java`（修复前 `:81`） | ✅ **已修复（P0-2）**：全供应商失败即抛 `ModelUnavailableException`（`ModelGateway.java:101-106`），由协调器标 `degraded` 进报告。**2026-09-03 起 Mock 兜底彻底移除**——不再注入 mock 供应商、无兜底分支，未配 Key 直接启动失败（`ReviewAgentConfig.java:122`）。**静默失败比报错更危险**——上层会把空串解析成「无发现」 |
 | **配额计数竞态** | `ModelGateway.java:180-189` | 仍在：`quotaExceeded` 在 `synchronized` 内，`incQuota` 在锁外，窗口重置与自增存在竞态 |
 
 **重试的真实来源**：网关自身**不重试**（`attempt` 计的是供应商序号，不是重试次数）。重试在 LangChain4j 层 —— builder 未设 `maxRetries`（`ReviewAgentConfig.java:239-247`），取 `OpenAiChatModel` 默认值 **2**。
@@ -476,15 +475,16 @@ flowchart LR
 > **修复**：改为收集阶段对每个 future 逐个 `get(remaining, MILLISECONDS)` 带超时取（共享 deadline 递减），`advancedFuture` 纳入同一体系；超时/异常转成 `AgentResult.degraded` + `AgentDegradation` 进报告，而不是静默丢弃（`CompletableFutureCoordinator.java:375-430`）。
 > **验证**：`CoordinatorTimeoutDegradationTest` 4 例——慢 Agent 5s 阻塞任务在 ~300ms 超时即返回报告、降级进报告、健康 Agent 不受影响。**诚实的边界**：Java 的 `CompletableFuture.cancel(true)` 不会中断已开始的线程，所以验收点是「不卡主线程 + 降级可见」，不是「线程被中断」。
 
-**Q13：模型全挂了会怎样？—— 已修复（P0-2）**
+**Q13：模型全挂了会怎样？—— 已修复（P0-2），且不再有任何 Mock**
 > **发现**：原来返回空串 `""` 且不抛异常（修复前 `ModelGateway.java:81`）。上层会把它解析成「0 条发现」，最终产生一份「看起来通过」的报告。**这是最危险的一个降级** —— 静默失败比报错更糟。
-> **修复**：全供应商 + Mock 用尽改抛 `ModelUnavailableException`（`ModelGateway.java:143-145`，消息带 providerCount/attempts/mock 状态）；`ReviewAgentConfig` 装配时**有真实 Key 即禁 Mock 兜底**（`ReviewAgentConfig.java:110`，`allowMockFallback = !tokenHub.hasKey()`，离线演示才保留 Mock）；异常向上传导 → 协调器标 `degraded` → 报告顶部告警块「该维度 0 条发现不代表代码没问题」。
-> **验证**：`ModelGatewayDegradationTest` 6 例——mock 关闭全失败抛异常、降级计数 `totalFailures` 正确、happy path 零降级计数等。
+> **修复（两步）**：① 全供应商失败即抛 `ModelUnavailableException`（`ModelGateway.java:101-106`，消息带 providerCount/attempts/累计失败，无任何 Mock 措辞）；② **2026-09-03 彻底移除 Mock**：`MockProvider`/`MockLlmClient`/`NoOpChatModel` 三个假模型类删除，装配不再追加 mock 供应商（`ReviewAgentConfig.java:107`），未配 Key 时 `primaryChatModel` 直接抛 `IllegalStateException` 拒绝启动（`ReviewAgentConfig.java:122`，fail-fast）。异常向上传导 → 协调器标 `degraded` → 报告顶部告警块「该维度 0 条发现不代表代码没问题」。
+> **验证**：`ModelGatewayDegradationTest` 4 例——全失败抛异常且消息不含 mock、happy path 零降级计数、不可用供应商不计尝试次数、失败消息携带真实 provider/attempt 计数。
+> **面试表述**：宁可在报告里看见「安全维度本次不可信」，也不用假模型产出「看起来通过」的结果——Mock 从演示期的权宜变成了正确性事故源，所以整类删掉而不是留开关。
 
 **Q14：反馈闭环真的闭上了吗？—— 校准这条已闭上（P0-3）**
 > **发现**：真闭环原本只有一条：`POST /api/feedback` → `FileFeedbackStore` → 下次审查 `ReportGenerator:142` 起按 ruleId 抑制。而置信度校准时**空转**——`calibrate()` 确实被调用（`AbstractReviewAgent.java:98,117`），但它依赖的 `ruleAccuracy` 只能由 `markFalsePositive`/`markTruePositive` 写入，这两个方法**原全仓零调用方** → `ruleAccuracy` 恒为空 → `getOrDefault(ruleId, 1.0)` 恒返回 1.0 → `calibrate` 退化成「乘 1.0」的恒等函数。
 > **修复**：新增 `FeedbackListener` SPI，`FileFeedbackStore`/`InMemoryFeedbackStore` 在 `save` 末尾广播，`ConfidenceCalibrationService implements FeedbackListener` 按 `isFalsePositive` 分派 mark 方法——**接线点收敛在落库咽喉，入口扩展零改动**。同时加防「一票否决」：误报指数衰减有下限 `MIN_ACCURACY=0.5`，正报回升封顶 1.0。
-> **验证**：`CalibrationFeedbackLoopTest` 6 例——一次误报 accuracy→0.8 且 `calibrate("SEC-001",0.9)==0.72`、50 次误报后仍 ≥0.5、正报封顶、listener 异常不阻断反馈保存（观测旁路）。
+> **验证**：`CalibrationFeedbackLoopTest` 8 例——一次误报 accuracy→0.8 且 `calibrate("SEC-001",0.9)==0.72`、50 次误报后仍 ≥0.5、正报封顶、**准确率快照重启恢复**（2026-09-03：派生状态落 `<data-dir>/calibration/accuracy.json`，新实例构造即回放）、listener 异常不阻断反馈保存（观测旁路）。
 >
 > 面试时讲这个例子很好用：**代码跑通了、测试绿了、功能看起来有了，但数据链路断在一半，实际效果为零。** 这类问题只有顺着数据流追到写入端才能发现。
 
@@ -548,9 +548,13 @@ grep -n "listener.onFeedback" $SRC/core/feedback/FileFeedbackStore.java     # �
 grep -n "onFeedback" $SRC/core/calibration/ConfidenceCalibrationService.java  # 按误报/正报分派 mark
 grep -n "MIN_ACCURACY" $SRC/core/calibration/ConfidenceCalibrationService.java # 防一票否决下限
 
-# P0-2 修复验证：全失败抛异常而非空串
+# P0-2 修复验证：全失败抛异常而非空串（且无任何 Mock）
 grep -rn "ModelUnavailableException" $SRC/core/llm/ModelGateway.java        # 抛出点
-grep -rn "allowMockFallback" $SRC/config/ReviewAgentConfig.java             # 有真实 Key 禁 Mock 兜底
+grep -rn "无 Mock 兜底" $SRC/core/llm/ModelGateway.java                     # 异常消息明确无兜底
+
+# 去 Mock 验证（应无输出——假模型类与兜底开关已删除）
+grep -rn "MockProvider\|MockLlmClient\|NoOpChatModel\|allowMockFallback" $SRC   # 无输出
+grep -n "已移除 Mock 兜底" $SRC/config/ReviewAgentConfig.java                   # 无 Key 启动失败（fail-fast）
 
 # 降级可见性三件套
 grep -n "degraded" $SRC/core/model/AgentResult.java | head -3
