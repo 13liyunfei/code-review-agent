@@ -1,5 +1,8 @@
 package com.codereview.agent.config;
 
+import com.codereview.agent.integration.gitea.GiteaWebhookController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** 生产级有界线程池，避免使用公共 ForkJoinPool 导致任务无界堆积。 */
 @Configuration
 public class ProductionExecutorConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductionExecutorConfig.class);
 
     @Bean(name = "webhookExecutor", destroyMethod = "shutdown")
     public Executor webhookExecutor(
@@ -54,7 +59,13 @@ public class ProductionExecutorConfig {
             return thread;
         };
         return new ThreadPoolExecutor(n, n, 0L, TimeUnit.MILLISECONDS, queue, factory,
-                new ThreadPoolExecutor.CallerRunsPolicy());
+                new ThreadPoolExecutor.DiscardPolicy() {
+                    @Override
+                    public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+                        log.warn("线程池[{}]任务队列已满({}/{}), 丢弃任务", prefix, e.getQueue().size(), capacity);
+                        super.rejectedExecution(r, e);
+                    }
+                });
     }
 
     private static final AtomicInteger THREAD_ID = new AtomicInteger();
