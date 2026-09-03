@@ -1,0 +1,35 @@
+flowchart TD
+    I["TraceContext 兜底 traceId"] --> J["TeamResolver 解析 teamId<br/>可被 X-Team-Id 覆盖"]
+    J --> K["fetchPrChanges<br/>拉取 PR diff 与元信息"]
+    K --> L{"diffs 为空<br/>或拉取失败?"}
+    L -->|"是"| L1["postSkipNote<br/>说明跳过原因"]
+    L -->|"否"| M["构造 PullRequest 模型<br/>携带 teamId 做租户隔离"]
+    M --> N["Coordinator.review<br/>多 Agent 并行审查 → 见 L2"]
+
+    N --> O{"审查抛异常?"}
+    O -->|"是"| O1["postSkipNote<br/>引擎异常说明"]
+    O -->|"否"| P["AutoFix 生成修复建议 Markdown"]
+    P --> Q["WorkflowEngine.handle<br/>工单 / 提交状态 → 见 L5"]
+    Q --> R["buildReviewComment<br/>报告 + 修复 + 工作流"]
+    R --> S["postPrComment<br/>回写 PR 顶层评论"]
+
+    S --> T["AutoFix 生成结构化修复项"]
+    T --> U["过滤可锚定项<br/>包装为 suggestion 代码块"]
+    U --> V["postReviewComments<br/>一次性提交 comments 数组"]
+
+    V --> W["可选：反思沉淀 / LlmJudge 评估"]
+    W --> X["记录总耗时与分步耗时"]
+    L1 --> X
+    O1 --> X
+    X --> Z(["结束"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef fail fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    class I start;
+    class Z endn;
+    class I,J,K,M,N,P,Q,R,S,T,U,V,W,X proc;
+    class L,O dec;
+    class L1,O1 fail;

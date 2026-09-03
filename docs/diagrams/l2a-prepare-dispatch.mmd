@@ -1,0 +1,36 @@
+flowchart TD
+    S["Coordinator.review(pullRequest)"] --> T["runId 与 traceId 统一<br/>轨迹 begin 记录 started / diff-loaded"]
+
+    T --> RS{"断点续跑<br/>存在同 runId 快照?"}
+    RS -->|"命中"| RS1["加载 ResumeState<br/>已完成结果直接复用"]
+    RS -->|"未命中"| IA
+    RS1 --> IA
+
+    IA["ImpactAnalyzer<br/>变更方法的上游调用方"] --> RAG["RagContextBuilder<br/>团队规范 / 历史知识检索"]
+    RAG --> ENR["合并为 enrichedCtx<br/>影响面 + RAG 上下文"]
+
+    ENR --> CA{"有启用中的<br/>自定义 Agent?"}
+    CA -->|"是"| CA1["展开 DeclarativeReviewAgent<br/>按 teamId 隔离"]
+    CA -->|"否 / 异常"| CA2["仅 5 个内置 Agent"]
+    CA1 --> PL
+    CA2 --> PL
+
+    PL{"review.planning<br/>.enabled?"}
+    PL -->|"开"| PL1["TaskPlanningSupport<br/>LLM 拆子任务 DAG 并行"]
+    PL -->|"关 / 失败"| PL2["固定并行路径"]
+
+    PL1 --> FU
+    PL2 --> FU
+    FU["为每个 Agent 建 CompletableFuture<br/>TraceContext.wrap 跨线程"] --> ADV["并行 AdvancedAnalyzer<br/>AST / 调用图 / SCA"]
+    ADV --> NB(["转入限时收口 → 见 L2b"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef warn fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef enhance fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class S start;
+    class T,FU,ADV proc;
+    class RS,CA,PL dec;
+    class RS1,CA2 warn;
+    class IA,RAG,ENR,CA1,PL1 enhance;

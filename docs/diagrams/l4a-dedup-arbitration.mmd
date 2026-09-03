@@ -1,0 +1,28 @@
+flowchart TD
+    A["输入：全部 AgentResult<br/>含自定义 Agent 与 AdvancedAnalyzer"] --> D0["⓪ 降级收集<br/>Agent 级 + 基础设施级，按 stage 去重"]
+
+    D0 --> D1["① 去重<br/>dedupKey = 文件 @ 行区间 # 规则"]
+    D1 --> D2{"同键冲突?"}
+    D2 -->|"更严重 / 同级别更高置信度"| D3["替换保留"]
+    D2 -->|"否则"| D4["保留原条目"]
+    D3 --> AR
+    D4 --> AR
+
+    AR["② 优先级仲裁<br/>ArbitrationPolicy.isConflict"] --> AR1{"不同 Agent + 同文件<br/>+ 行区间重叠 + 建议不同?"}
+    AR1 -->|"否"| AR2["全部保留"]
+    AR1 -->|"是"| AR3["裁决：Agent 权重 → 严重度 → 置信度"]
+    AR3 --> AR4["落败方移入 overridden<br/>生成仲裁说明"]
+
+    AR2 --> NB(["转入误报抑制与定级 → 见 L4b"])
+    AR4 --> NB
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef drop fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef keep fill:#F0FDF4,stroke:#15803d,stroke-width:1px,color:#14532d;
+    class A start;
+    class D0,D1,AR proc;
+    class D2,AR1 dec;
+    class D3,AR4 drop;
+    class AR2 keep;

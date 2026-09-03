@@ -1,0 +1,35 @@
+flowchart TD
+    A["承接 L4a 去重与仲裁后的条目"] --> FP["③ 误报抑制<br/>feedbackStore.falsePositives(teamId)"]
+
+    FP --> FP1{"命中历史误报?"}
+    FP1 -->|"是"| FP2["移入 suppressed"]
+    FP1 -->|"否"| FP3["进入 kept 列表"]
+    FP2 --> ST
+    FP3 --> ST
+
+    ST["④ 分级统计<br/>BLOCKER / MAJOR / MINOR / INFO"]
+    ST --> VT{"VetoPolicy<br/>BLOCKER 被误杀?"}
+    VT -->|"是"| VT1["回收 BLOCKER<br/>强否决不可覆盖"]
+    VT -->|"否"| PF
+    VT1 --> PF
+
+    PF{"ReviewProfile 强度"}
+    PF -->|"STRICT 严格"| PF1["仅剔除 INFO"]
+    PF -->|"ADVISORY 默认"| PF2["只留 BLOCKER + MAJOR"]
+    PF -->|"SUGGEST 仅建议"| PF3["全部保留"]
+    PF1 --> FIN(["最终对外发现列表"])
+    PF2 --> FIN
+    PF3 --> FIN
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef drop fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef keep fill:#F0FDF4,stroke:#15803d,stroke-width:1px,color:#14532d;
+    class A start;
+    class FIN endn;
+    class FP,ST proc;
+    class FP1,VT,PF dec;
+    class FP2 drop;
+    class FP3,PF1,PF2,PF3,VT1 keep;

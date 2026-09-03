@@ -1,25 +1,25 @@
-flowchart TD
-    ROOT["执行层 effectiveAgents"] --> BI["内置 5 Agent"]
-    ROOT --> A6["CUSTOM 自定义<br/>DeclarativeReviewAgent"]
-    ROOT --> A7["AdvancedAnalyzer<br/>AST / 调用图 / SCA"]
+flowchart LR
+    ROOT["执行层<br/>effectiveAgents"] --> BI["内置 Agent"]
+    ROOT --> A6["CUSTOM<br/>DeclarativeReviewAgent<br/>按 teamId 隔离"]
+    ROOT --> A7["AdvancedAnalyzer"]
 
-    BI --> A1["SECURITY 安全<br/>仲裁权重 100"]
-    BI --> A2["LOGIC 逻辑<br/>仲裁权重 90"]
-    BI --> A3["PERFORMANCE 性能<br/>仲裁权重 70"]
-    BI --> A4["ARCHITECTURE 架构<br/>仲裁权重 60"]
-    BI --> A5["STYLE 规范<br/>仲裁权重 10"]
+    BI --> A1["SECURITY 安全<br/>权重 100"]
+    BI --> A2["LOGIC 逻辑<br/>权重 90"]
+    BI --> A3["PERFORMANCE 性能<br/>权重 70"]
+    BI --> A4["ARCHITECTURE 架构<br/>权重 60"]
+    BI --> A5["STYLE 规范<br/>权重 10"]
 
-    A1 --> S1["HardcodedSecretSkill<br/>硬编码密钥"]
-    A1 --> S2["SqlInjectionSkill<br/>SQL 注入"]
-    A1 --> S3["YamlRuleEngine 自定义规则<br/>category = security"]
+    A1 --> S1["HardcodedSecretSkill"]
+    A1 --> S2["SqlInjectionSkill"]
+    A1 --> S3["YamlRuleEngine<br/>category = security"]
     A3 --> S4["PatternSkill<br/>正则模式匹配"]
-    A5 --> S5["YamlRuleEngine 自定义规则<br/>category = style"]
+    A5 --> S5["YamlRuleEngine<br/>category = style"]
 
-    A7 --> Z1["AstAnalyzer<br/>AST 结构分析"]
+    A7 --> Z1["AstAnalyzer<br/>AST 结构"]
     A7 --> Z2["CallGraphAnalyzer<br/>调用图影响面"]
-    A7 --> Z3["ScaScanner<br/>依赖安全扫描"]
+    A7 --> Z3["ScaScanner<br/>依赖安全"]
 
-    A1 --> P["AbstractReviewAgent<br/>公共三段式能力"]
+    A1 --> P["AbstractReviewAgent<br/>公共三段式"]
     A2 --> P
     A3 --> P
     A4 --> P
@@ -28,7 +28,7 @@ flowchart TD
     P --> P1["① 注入检测短路"]
     P --> P2["② Skill 并行预扫描"]
     P --> P3["③ 置信度校准"]
-    P --> P4["④ LLM 三级降级增强"]
+    P --> P4["④ LLM 三级降级"]
 
     classDef root fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
     classDef agent fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1.5px,color:#1f2933;

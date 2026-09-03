@@ -3,39 +3,38 @@ flowchart LR
         direction TB
         W1["Coordinator<br/>每完成一个 Agent"]
         W2["Coordinator<br/>审查结束"]
-        W3["Console / REST<br/>开发者标记误报"]
+        W3["Console / REST<br/>标记误报"]
         W4["Coordinator<br/>全流程事件"]
-        W5["Coordinator<br/>正常完成"]
-        W6["AutoFix / Skill<br/>规则变更"]
+        W5["Skill 规则变更"]
     end
 
     subgraph STORE["持久化 · data-dir/teamId/"]
         direction TB
-        P1[("ResumeState<br/>断点续跑快照<br/>doneAgents + findings")]
-        P2[("ReviewHistoryEntry<br/>审查历史<br/>支持复检对比")]
-        P3[("FeedbackStore<br/>误报反馈<br/>抑制源")]
-        P4[("trajectories/ runId .jsonl<br/>事件源轨迹")]
-        P5[("SkillRegistry 规则库<br/>内置 + 团队自定义 YAML")]
-        P6[("RAG 知识库<br/>团队规范 / 历史知识")]
+        P1[("ResumeState<br/>doneAgents + findings")]
+        P2[("ReviewHistory<br/>支持复检对比")]
+        P3[("FeedbackStore<br/>抑制源")]
+        P4[("trajectories<br/>runId .jsonl")]
+        P5[("SkillRegistry<br/>内置 + 团队 YAML")]
+        P6[("RAG 知识库<br/>团队规范")]
     end
 
     subgraph OUT["消费侧"]
         direction TB
-        C1["崩溃后同 runId 续跑<br/>只重跑剩余 Agent"]
-        C2["computeVerification<br/>已解决 / 未解决 / 新引入"]
+        C1["崩溃后同 runId 续跑"]
+        C2["computeVerification<br/>已解决 / 新引入"]
         C3["aggregate 阶段<br/>误报抑制"]
-        C4["ReviewReplay 回放<br/>事后审计 / 归因"]
-        C5["runSkills<br/>团队自定义规则生效"]
-        C6["RagContextBuilder<br/>注入 Agent 提示词"]
+        C4["ReviewReplay 回放"]
+        C5["runSkills<br/>自定义规则生效"]
+        C6["RagContextBuilder<br/>注入提示词"]
     end
 
     W1 --> P1
     W2 --> P2
     W3 --> P3
     W4 --> P4
-    W5 -->|"complete 清理"| P1
-    W6 --> P5
-    W6 --> P6
+    W5 --> P5
+    W5 --> P6
+    W6["Coordinator<br/>正常完成"] -->|"complete 清理"| P1
 
     P1 --> C1
     P2 --> C2

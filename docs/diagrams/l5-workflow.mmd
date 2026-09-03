@@ -1,26 +1,26 @@
 flowchart TD
-    A["ReviewWorkflowEngine.handle(report, owner, repo, prNum, headSha)"] --> B["统计 findings 中<br/>severity = BLOCKER 的数量"]
+    A["WorkflowEngine.handle<br/>report / owner / repo / prNum / headSha"] --> B["统计 findings 中<br/>BLOCKER 的数量"]
 
     B --> C{"BLOCKER 数量 大于 0 ?"}
 
-    C -->|"是"| D1["拼装 Issue 正文<br/>逐个列出 BLOCKER：文件 L行 · 标题 · 规则ID"]
-    D1 --> D2["giteaClient.createIssue<br/>创建整改工单"]
+    C -->|"是"| D1["拼装 Issue 正文<br/>逐条列文件 L行 · 标题 · 规则"]
+    D1 --> D2["createIssue 创建整改工单"]
     D2 --> D3{"headSha 非空?"}
-    D3 -->|"是"| D4["createCommitStatus = failure<br/>context: code-review/blocker<br/>描述：存在 BLOCKER 级问题，禁止合入"]
+    D3 -->|"是"| D4["提交状态 = failure<br/>context code-review/blocker"]
     D3 -->|"否"| D5["跳过提交状态"]
-    D4 --> D6["报告追加：🔴 已进入强制审批流<br/>附整改工单号 #N"]
+    D4 --> D6["报告追加：已进入强制审批流"]
     D5 --> D6
 
     C -->|"否"| E1{"headSha 非空?"}
-    E1 -->|"是"| E2["createCommitStatus = success<br/>context: code-review/blocker<br/>描述：无 BLOCKER 级问题"]
+    E1 -->|"是"| E2["提交状态 = success<br/>context code-review/blocker"]
     E1 -->|"否"| E3["跳过提交状态"]
-    E2 --> E4["报告追加：🟢 无 BLOCKER，按常规流程处理"]
+    E2 --> E4["报告追加：无 BLOCKER"]
     E3 --> E4
 
     D6 --> F["追加分级路由说明<br/>统计 MAJOR 数量"]
     E4 --> F
-    F --> F1["BLOCKER → 人工审批流<br/>MAJOR(N) → 建议修复<br/>MINOR / INFO → 提示参考"]
-    F1 --> G(["返回工作流 Markdown 片段<br/>合并进 PR 顶层评论"])
+    F --> F1["BLOCKER → 人工审批<br/>MAJOR → 建议修复<br/>MINOR / INFO → 提示参考"]
+    F1 --> G(["返回工作流片段<br/>合并进 PR 顶层评论"])
 
     classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
     classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;

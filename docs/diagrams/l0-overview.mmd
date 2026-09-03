@@ -1,47 +1,46 @@
 flowchart TD
-    subgraph SRC["① 触发源"]
+    subgraph SRC["① 触发源 · 5 个入口"]
         direction LR
-        S1["Gitea Webhook<br/>POST /webhook/gitea"]
-        S2["GitLab Webhook<br/>POST /webhook/gitlab"]
-        S3["定时全量扫描<br/>ScheduledScanService<br/>cron 默认每天 02:00"]
-        S4["REST API<br/>/api/feedback · /api/quality-report<br/>/api/admin/*"]
-        S5["IDE 本地审查<br/>IdeReviewServer<br/>stdin / stdout 长连接"]
+        S1["Gitea<br/>Webhook"]
+        S2["GitLab<br/>Webhook"]
+        S3["定时<br/>全量扫描"]
+        S4["REST<br/>API"]
+        S5["IDE<br/>本地审查"]
     end
 
-    SRC --> ENG
-
     subgraph ENG["② 审查引擎 :8080"]
-        E1["接入层：验签 · 事件过滤 · 异步分发"]
-        E2["编排层：GiteaReviewService"]
-        E3["协调层：CompletableFutureCoordinator"]
-        E4["执行层：5 内置 Agent + N 自定义 Agent + AdvancedAnalyzer"]
-        E5["聚合层：ReportGenerator"]
-        E6["输出层：AutoFixEngine · ReviewWorkflowEngine"]
+        direction TB
+        E1["接入层 · 验签 / 事件过滤 / 异步分发"]
+        E2["编排层 · GiteaReviewService"]
+        E3["协调层 · CompletableFutureCoordinator"]
+        E4["执行层 · 5 内置 + N 自定义 + AdvancedAnalyzer"]
+        E5["聚合层 · ReportGenerator"]
+        E6["输出层 · AutoFixEngine / ReviewWorkflowEngine"]
         E1 --> E2 --> E3 --> E4 --> E5 --> E6
     end
 
-    E4 -.-> EXT
-
     subgraph EXT["③ 外部依赖"]
         direction LR
-        X1["LLM 网关<br/>LlmClient / TokenHub"]
-        X2["LangChain4j AiServices<br/>结构化输出 + ChatMemory"]
-        X3["agent-kit 基座<br/>struct · eval · obs"]
+        X1["LLM 网关<br/>LlmClient"]
+        X2["LangChain4j<br/>AiServices"]
+        X3["agent-kit<br/>基座"]
     end
 
-    ENG --> OUT
-
-    subgraph OUT["④ 平台回写"]
+    subgraph OUT["④ 平台回写 · 4 类"]
         direction LR
-        O1["PR 顶层评论<br/>Markdown 报告"]
-        O2["行内 suggestion<br/>Gitea Apply 按钮"]
-        O3["Issue 整改工单"]
-        O4["Commit Status<br/>success / failure"]
+        O1["PR 顶层<br/>评论"]
+        O2["行内<br/>suggestion"]
+        O3["Issue<br/>整改工单"]
+        O4["Commit<br/>Status"]
     end
+
+    SRC --> E1
+    E4 -.-> EXT
+    E6 --> OUT
 
     classDef grp fill:#FBFCFB,stroke:#2c7d2c,stroke-width:1.5px;
-    classDef n fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
     classDef ext fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
     class SRC,ENG,OUT grp;
-    class E1,E2,E3,E4,E5,E6,O1,O2,O3,O4,S1,S2,S3,S4,S5 n;
+    class S1,S2,S3,S4,S5,E1,E2,E3,E4,E5,E6,O1,O2,O3,O4 n;
     class X1,X2,X3 ext;

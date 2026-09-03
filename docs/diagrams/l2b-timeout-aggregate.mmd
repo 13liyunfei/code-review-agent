@@ -1,0 +1,40 @@
+flowchart TD
+    DL["计算共享 deadline<br/>now + agent.timeout-ms（默认 300s）"] --> GT["逐个 future.get(remaining)<br/>剩余时间随 deadline 递减"]
+
+    GT --> GT1{"单个 Agent 结果?"}
+    GT1 -->|"正常返回"| GT2["收集 AgentResult<br/>saveCheckpoint 写断点"]
+    GT1 -->|"TimeoutException"| GT3["cancel(true) 中断底层线程<br/>标记 degraded"]
+    GT1 -->|"其他异常"| GT4["解包根因<br/>标记 degraded"]
+
+    GT2 --> ADV2{"AdvancedAnalyzer<br/>限时等待"}
+    GT3 --> ADV2
+    GT4 --> ADV2
+    ADV2 -->|"超时 / 异常"| ADV3["cancel(true)<br/>STAGE_ADVANCED 降级留痕"]
+    ADV2 -->|"正常"| ADV4["并入 results"]
+
+    ADV3 --> AGG
+    ADV4 --> AGG
+    AGG["ReportGenerator.aggregate<br/>去重 → 仲裁 → 抑制 → 统计 → 见 L4"]
+
+    AGG --> CUS{"有自定义 Agent<br/>参与?"}
+    CUS -->|"是"| CUS1["报告追加自定义 Agent 署名"]
+    CUS -->|"否"| VP
+    CUS1 --> VP
+
+    VP["VetoPolicy 回收被误杀的 BLOCKER<br/>+ ReviewProfile 强度过滤"] --> VER["computeVerification<br/>已解决 / 未解决 / 新引入"]
+    VER --> HS["historyStore.save 落地审查历史"]
+    HS --> CP["清理断点快照<br/>轨迹记录 completed 并 close"]
+    CP --> R(["返回 ReviewReport"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef warn fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef enhance fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class DL start;
+    class R endn;
+    class GT,AGG,CUS1,VER,HS,CP proc;
+    class GT1,ADV2,CUS dec;
+    class GT2,GT3,GT4,ADV3,ADV4 warn;
+    class VP enhance;

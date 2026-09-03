@@ -1,0 +1,28 @@
+flowchart TD
+    A["开发者推送 / 更新 Pull Request"] --> B["Gitea 发送 Webhook<br/>POST /webhook/gitea"]
+    B --> T0["生成 traceId<br/>贯穿全链路"]
+    T0 --> C{"X-Gitea-Signature<br/>HMAC-SHA256 校验"}
+
+    C -->|"缺失 / 不一致"| C1["401 Invalid signature"]
+    C -->|"一致 / 免签放行"| D["解析 payload JSON"]
+
+    D --> E{"PR 号与仓库名<br/>均有效?"}
+    E -->|"否"| E1["200 ignored<br/>非 PR 事件"]
+    E -->|"是"| F{"action 属于<br/>opened / reopened / synchronized?"}
+    F -->|"否"| F1["200 skipped<br/>动作不关心"]
+    F -->|"是"| G["拆分 owner / repo"]
+
+    G --> H["runAsync 提交线程池<br/>TraceContext.wrap 传递 traceId"]
+    H --> H1["立即返回 200 accepted<br/>不让平台超时重试"]
+    H1 --> NB(["转入异步审查主链路 → 见 L1b"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef fail fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef ok fill:#F0FDF4,stroke:#15803d,stroke-width:1px,color:#14532d;
+    class A start;
+    class T0,D,G,H proc;
+    class C,E,F dec;
+    class C1,E1,F1 fail;
+    class H1 ok;

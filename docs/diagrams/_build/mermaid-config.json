@@ -1,0 +1,25 @@
+{
+  "theme": "base",
+  "htmlLabels": false,
+  "flowchart": {
+    "useMaxWidth": false,
+    "htmlLabels": false,
+    "curve": "basis",
+    "rankSpacing": 30,
+    "nodeSpacing": 26,
+    "padding": 8,
+    "diagramPadding": 10
+  },
+  "themeVariables": {
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "fontSize": "15px",
+    "primaryColor": "#F3F8F4",
+    "primaryBorderColor": "#2c7d2c",
+    "primaryTextColor": "#1f2933",
+    "lineColor": "#5b7f6b",
+    "secondaryColor": "#F5F7FA",
+    "tertiaryColor": "#FBFCFB",
+    "titleColor": "#1f2933",
+    "edgeLabelBackground": "#ffffff"
+  }
+}
