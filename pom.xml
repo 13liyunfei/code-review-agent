@@ -34,6 +34,8 @@
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
         <!-- LangChain4j：统一大模型/嵌入/RAG 框架 -->
         <langchain4j.version>1.19.0</langchain4j.version>
+        <!-- 公司级 Token 工厂 SDK（独立开源仓库 token-factory） -->
+        <token-factory.version>0.1.0</token-factory.version>
     </properties>
 
     <dependencies>
@@ -42,6 +44,16 @@
             <groupId>io.github.13liyunfei</groupId>
             <artifactId>agent-kit</artifactId>
             <version>0.1.1</version>
+        </dependency>
+
+        <!-- Token 工厂 SDK（独立开源仓库 token-factory）：公司级 LLM 网关的 Java 客户端。
+             零 Spring 依赖，只依赖 JDK HttpClient + Jackson，因此接入不会引起依赖冲突。
+             本地构建顺序：先在 token-factory 仓库执行 `mvn -pl token-factory-client install`，
+             或等 0.1.0 发布到 Maven Central 后直接解析。 -->
+        <dependency>
+            <groupId>io.github.13liyunfei</groupId>
+            <artifactId>token-factory-client</artifactId>
+            <version>${token-factory.version}</version>
         </dependency>
 
         <!-- Web 启动器：IoC 容器 + 内嵌 Tomcat + Spring MVC（接收 GitLab Webhook） -->

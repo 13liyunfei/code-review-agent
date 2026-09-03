@@ -45,6 +45,12 @@ import com.codereview.agent.core.skill.SkillRegistry;
 import com.codereview.agent.core.skill.impl.HardcodedSecretSkill;
 import com.codereview.agent.core.skill.impl.PatternSkill;
 import com.codereview.agent.core.skill.impl.SqlInjectionSkill;
+import com.codereview.agent.core.tokenfactory.TokenFactoryChatProvider;
+import com.codereview.agent.core.tokenfactory.TokenFactoryClientHolder;
+import com.codereview.agent.core.tokenfactory.TokenFactoryProperties;
+import com.codereview.agent.core.tokenfactory.TokenFactoryUsageReporter;
+import com.codereview.agent.core.tokenfactory.UsageReporter;
+import com.codereview.agent.core.tokenfactory.UsageReportingProvider;
 import com.codereview.agent.core.tool.ToolDefinition;
 import com.codereview.agent.core.tool.ToolRouter;
 import com.codereview.agent.core.http.EgressHttpClientFactory;
@@ -81,7 +87,7 @@ import java.util.regex.Pattern;
  */
 @Configuration
 @EnableConfigurationProperties({TeamProperties.class, TokenHubProperties.class,
-        EgressProperties.class, LlmGatewayProperties.class})
+        EgressProperties.class, LlmGatewayProperties.class, TokenFactoryProperties.class})
 public class ReviewAgentConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewAgentConfig.class);
@@ -115,19 +121,43 @@ public class ReviewAgentConfig {
      * <p><b>无任何 Mock（2026-09-03）</b>：不注入假模型供应商，也不允许网关兜底——
      * 所有真实供应商失败即抛 {@code ModelUnavailableException}，由协调器把该 Agent
      * 标记为降级并在报告顶部告警。宁可「看不见」，绝不用假结果「看起来通过」。
+     *
+     * <p><b>公司级 Token 工厂接入（2026-09-03）</b>：当 {@code token-factory.enabled=true}
+     * 时，候选列表里会多出一个 {@link TokenFactoryChatProvider}（按 {@code priority}
+     * 决定排第一还是最后），其余直连供应商包一层 {@link UsageReportingProvider}
+     * 把用量补报回工厂。降级路径因此是<b>天然的</b>——工厂失败就由网关 failover 到直连，
+     * 不需要另写一套降级逻辑；代价只是「直连期间的用量得事后补报」，而这正是
+     * {@link UsageReporter} 的职责。
      */
     @Bean
     public LlmClient llmClient(TokenHubProperties tokenHub, LlmGatewayProperties gateway,
                                 EgressProperties egress, AggregateTracer llmTracer,
-                                TokenUsageRecorder usageRecorder) {
-        List<ModelProvider> providers = new ArrayList<>();
+                                TokenUsageRecorder usageRecorder,
+                                TokenFactoryProperties factoryProps,
+                                TokenFactoryClientHolder factoryClient) {
+        UsageReporter reporter = factoryClient.reporter();
+        List<ModelProvider> direct = new ArrayList<>();
         Duration timeout = Duration.ofSeconds(tokenHub.getTimeoutSeconds());
         for (TokenHubProperties.ModelSpec spec : tokenHub.getModels()) {
-            ModelProvider base = new LangChain4jChatProvider(spec.getName(),
+            LangChain4jChatProvider base = new LangChain4jChatProvider(spec.getName(),
                     buildOpenAiChatModel(egress, tokenHub.getBaseUrl(), tokenHub.getApiKey(), spec.getModel(),
                             timeout, llmTracer, usageRecorder),
                     tokenHub.hasKey());
-            providers.add(wrapWithBreakerIfEnabled(gateway, base));
+            // 工厂供应商自己会计量，只有直连才需要补报
+            direct.add(new UsageReportingProvider(base, reporter, factoryProps.getAlias(), spec.getModel()));
+        }
+
+        List<ModelProvider> providers = new ArrayList<>();
+        TokenFactoryChatProvider factoryProvider = factoryProvider(factoryProps, factoryClient, usageRecorder);
+        boolean factoryFirst = factoryProvider != null && factoryProps.isPriority();
+        if (factoryFirst) {
+            providers.add(wrapWithBreakerIfEnabled(gateway, factoryProvider));
+        }
+        for (ModelProvider p : direct) {
+            providers.add(wrapWithBreakerIfEnabled(gateway, p));
+        }
+        if (factoryProvider != null && !factoryFirst) {
+            providers.add(wrapWithBreakerIfEnabled(gateway, factoryProvider));
         }
         BackoffPolicy backoff = new BackoffPolicy(
                 gateway.getRetry().getInitialBackoffMs(),
@@ -137,9 +167,27 @@ public class ReviewAgentConfig {
                 new PriorityRouteStrategy(), new DefaultRetryClassifier(),
                 backoff, gateway.getRetry().getMaxAttempts(),
                 gateway.getRetry().isEnabled(), usageRecorder);
-        log.info("已装配 LangChain4j 统一模型网关（TokenHub 多模型 + 熔断 + 退避重试）：{}",
+        log.info("已装配 LangChain4j 统一模型网关（{} + 熔断 + 退避重试）：{}",
+                factoryProvider == null ? "TokenHub 多模型直连" : "Token 工厂优先 + TokenHub 直连兜底",
                 gatewayBean.describe());
         return gatewayBean;
+    }
+
+    /** 工厂启用时构建工厂供应商；未启用返回 null（调用方据此决定是否加入候选列表）。 */
+    private TokenFactoryChatProvider factoryProvider(TokenFactoryProperties props,
+                                                     TokenFactoryClientHolder holder,
+                                                     TokenUsageRecorder usageRecorder) {
+        if (!props.isEnabled()) {
+            return null;
+        }
+        if (!props.usable()) {
+            // 开了开关却没配 AK：直接启动失败。半接不接的状态最难排查，
+            // 而且会让人误以为「已经走工厂了」——实际上每次都在悄悄降级
+            throw new IllegalStateException(
+                    "token-factory.enabled=true 但未配置 token-factory.access-key："
+                            + "请通过环境变量 TOKEN_FACTORY_KEY 注入，或把 token-factory.enabled 设为 false");
+        }
+        return new TokenFactoryChatProvider(props.getAlias(), holder.client(), usageRecorder, true);
     }
 
     /** 按配置决定是否包熔断器；关闭时 ModelGateway 行为与历史一致。 */

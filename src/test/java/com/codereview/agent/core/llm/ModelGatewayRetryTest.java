@@ -22,12 +22,25 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ModelGatewayRetryTest {
 
-    private static ModelProvider fake(String name, java.util.function.Function<Integer, String> behavior) {
+    /**
+     * 供应商行为。
+     *
+     * <p><b>必须允许抛受检异常</b>：{@link java.util.function.Function} 的 {@code apply} 没有
+     * {@code throws}，而这里要模拟的正是 {@code SocketTimeoutException} 这类受检异常——
+     * 之前用 {@code Function} 时如果只做增量编译，javac 不会重新检查这个文件，
+     * 于是错误一直潜伏到某次全量重编译才炸出来。
+     */
+    @FunctionalInterface
+    interface ProviderBehavior {
+        String apply(int attempt) throws Exception;
+    }
+
+    private static ModelProvider fake(String name, ProviderBehavior behavior) {
         AtomicInteger calls = new AtomicInteger();
         return new ModelProvider() {
             @Override public String name() { return name; }
             @Override public boolean available() { return true; }
-            @Override public String chat(String prompt) {
+            @Override public String chat(String prompt) throws Exception {
                 int n = calls.incrementAndGet();
                 return behavior.apply(n);
             }
@@ -35,7 +48,7 @@ class ModelGatewayRetryTest {
     }
 
     private static CircuitBreakerProvider wrapWithBreaker(String name,
-                                                           java.util.function.Function<Integer, String> behavior,
+                                                           ProviderBehavior behavior,
                                                            int failureThreshold) {
         return new CircuitBreakerProvider(fake(name, behavior), failureThreshold,
                 Duration.ofSeconds(30), 1);
@@ -138,7 +151,7 @@ class ModelGatewayRetryTest {
         ModelProvider p1Counted = new ModelProvider() {
             @Override public String name() { return "p1"; }
             @Override public boolean available() { return true; }
-            @Override public String chat(String prompt) {
+            @Override public String chat(String prompt) throws Exception {
                 p1Calls.incrementAndGet();
                 throw new java.net.SocketTimeoutException("timeout");
             }

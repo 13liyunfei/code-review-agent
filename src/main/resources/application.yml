@@ -61,6 +61,33 @@ tokenhub:
     - name: glm
       model: glm-5.2
 
+# ===== 公司级 Token 工厂接入 =====
+# 工厂负责：统一鉴权（真实厂商 Key 只在工厂侧）、额度控制、供应商路由/熔断/重试、计价与计量。
+# 本系统接入后只持有工厂签发的 AK，不再自管厂商密钥。
+#
+# 工作方式（enabled=true 时）：
+#   1. 候选供应商列表首位插入「token-factory:<alias>」，请求打到工厂 /v1/chat/completions；
+#   2. 工厂不可用/超额/上游全挂时，由 ModelGateway 天然 failover 到下方 tokenhub 直连供应商；
+#   3. 直连期间的用量由 UsageReportingProvider 事后补报回工厂（report-direct-usage=false 则产生账缺口）。
+#
+# 默认关闭：不配置即完全不生效，行为与接入前一致（关掉就彻底没有，避免半接不接的模糊状态）。
+# 启用但没配 access-key 会直接启动失败——宁可起不来，也不要「以为走工厂其实一直在降级」。
+token-factory:
+  enabled: ${TOKEN_FACTORY_ENABLED:false}
+  base-url: ${TOKEN_FACTORY_BASE_URL:http://localhost:8090}
+  # 工厂签发的 access key，只通过环境变量注入
+  access-key: ${TOKEN_FACTORY_KEY:}
+  # 上报给工厂的应用标识（工厂侧按 app 维度拆分用量）
+  app-id: code-review-agent
+  # 工厂侧的模型别名（工厂负责把它路由到真实供应商）
+  alias: ${TOKEN_FACTORY_ALIAS:default}
+  # true=工厂优先（失败才回落直连）；false=直连优先，工厂只做备用
+  priority: ${TOKEN_FACTORY_PRIORITY:true}
+  # 直连上游时是否把用量补报回工厂
+  report-direct-usage: ${TOKEN_FACTORY_REPORT_USAGE:true}
+  timeout-seconds: 120
+  connect-timeout-ms: 3000
+
 # ===== PostgreSQL + pgvector 配置 =====
 # enabled=true 时使用 PostgreSQL + pgvector 持久化记忆；false 回退到内存
 pgvector:
