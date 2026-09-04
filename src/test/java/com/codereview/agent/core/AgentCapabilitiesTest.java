@@ -54,22 +54,43 @@ class AgentCapabilitiesTest {
         return new CodeDiff("Pay.java", "+System.out.println(1);", "java", 1, 0);
     }
 
+    /**
+     * 按真实链路驱动 ToolCallingLoop 的 LLM 桩：观察写入 prompt 前只发 call_tool 决策，
+     * 一旦看到 "[观察]"（工具真实执行成功的证据）才 finish。
+     *
+     * <p>这是集成测试护栏的关键：若工具注册/查找/执行链路被短路，观察永不出现，
+     * LLM 会一直 call_tool 直到耗尽 maxIterations → 兜底纯文本 → 工具 findings 为 0 → 用例失败。
+     * 因此它不允许「假装配让测试看起来测了工具发现」的回归。
+     */
+    static class ToolDrivingLlm implements LlmClient {
+        private final String finishAnswerJson;
+        private final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        ToolDrivingLlm(String finishAnswerJson) { this.finishAnswerJson = finishAnswerJson; }
+        @Override public String chat(String prompt) {
+            if (prompt.contains("[观察]")) {
+                try {
+                    return "{\"action\":\"finish\",\"answer\":" + mapper.writeValueAsString(finishAnswerJson) + "}";
+                } catch (Exception e) {
+                    return "{\"action\":\"finish\",\"answer\":\"\"}";
+                }
+            }
+            return "{\"action\":\"call_tool\",\"thought\":\"扫描 System.out 用法\",\"tool\":\"regex_scan\","
+                    + "\"arguments\":{\"text\":\"+System.out.println(1);\",\"regex\":\"System\\\\.out\"}}";
+        }
+    }
+
     @Test
-    void 工具增强Agent_合并委托结果与工具发现() {
+    void toolEquippedAgentMergesDelegateAndToolFindings() {
         CountingAgent delegate = new CountingAgent();
         String toolAnswer = """
                 {"findings":[{"severity":"MAJOR","file":"Pay.java","lineStart":6,
                   "title":"工具发现System.out","description":"生产代码禁止 System.out","suggestion":"改用日志"}]}""";
         ToolRegistry registry = new ToolRegistry();
         registry.register(new com.codereview.kit.toolcalling.BuiltinTools.RegexScanTool());
+        // 真实 ToolCallingLoop：LLM 决策 → registry 查找 → RegexScanTool 真实执行 → 观察 → finish。
+        // 不再用匿名子类 override run() 短路整条被测链路（旧实现是假装配：工具注册与 LLM 布置全是死布置）。
         ToolEquippedAgent agent = new ToolEquippedAgent(delegate,
-                new ToolCallingLoop(new ScriptLlm(
-                        "{\"action\":\"call_tool\",\"tool\":\"regex_scan\",\"arguments\":{\"text\":\"System.out.println(1);\",\"regex\":\"System\\\\.out\"}}"),
-                        registry, 3) {
-                    @Override public LoopResult run(String goal, String context) {
-                        return new LoopResult(toolAnswer, List.of("regex_scan"), 2);
-                    }
-                });
+                new ToolCallingLoop(new ToolDrivingLlm(toolAnswer), registry, 3));
         List<Finding> findings = agent.review(List.of(diff()), null);
         assertEquals(1, delegate.calls);
         assertEquals(2, findings.size());
@@ -78,7 +99,7 @@ class AgentCapabilitiesTest {
     }
 
     @Test
-    void 经验库_写入检索与团队隔离(@TempDir Path tmp) {
+    void experienceStoreWriteRetrieveAndTeamIsolation(@TempDir Path tmp) {
         ExperienceStore store = new ExperienceStore(null, tmp);
         store.add("teamA", "sql-injection 拼接漏洞", "使用参数化查询");
         store.add("teamA", "system-out 调试输出", "改用 SLF4J 日志");
@@ -93,7 +114,7 @@ class AgentCapabilitiesTest {
     }
 
     @Test
-    void 反思服务_从报告沉淀MAJOR以上经验(@TempDir Path tmp) {
+    void reflectionServiceDistillsMajorExperienceFromReport(@TempDir Path tmp) {
         ExperienceStore store = new ExperienceStore(null, tmp);
         ReflectionService service = new ReflectionService(store, null);
         ReviewReport report = new ReportGenerator().aggregate(1, "r", List.of(
@@ -109,7 +130,7 @@ class AgentCapabilitiesTest {
     }
 
     @Test
-    void LLM评估_精确匹配计算precision_recall且judge误报被识别() {
+    void llmJudgeComputesPrecisionRecallAndFlagsFalsePositive() {
         LlmJudge<com.codereview.agent.core.model.Finding> judge = new LlmJudge<>(new ScriptLlm("{\"verdict\":\"FP\"}"));
         ReviewReport report = new ReportGenerator().aggregate(1, "r", List.of(
                 new com.codereview.agent.core.model.AgentResult(1, AgentType.SECURITY, List.of(
@@ -133,7 +154,7 @@ class AgentCapabilitiesTest {
     record DemoExt(String name, int order, String marker) implements Demo {}
 
     @Test
-    void 扩展注册中心_order排序与同名覆盖() {
+    void extensionRegistryOrderingAndSameNameOverride() {
         ExtensionRegistry registry = new ExtensionRegistry();
         registry.register(Demo.class, new DemoExt("standard", 100, "S"));
         registry.register(Demo.class, new DemoExt("custom", 10, "C"));
