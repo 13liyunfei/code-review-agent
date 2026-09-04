@@ -87,26 +87,43 @@ const html = `<!DOCTYPE html>
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
     line-height: 1.7; font-size: 15px;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; }
+  /* 两栏布局下内容区 = 1440 - 232 - 44 - 64(padding) ≈ 1100px，够放下最宽的图（990px）不触发横向滚动 */
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 48px 32px 96px; }
   header.hero { border-bottom: 2px solid var(--accent); padding-bottom: 24px; margin-bottom: 36px; }
   header.hero h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.4px; }
   header.hero p { margin: 0; color: var(--ink-2); font-size: 15px; }
   .meta { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
   .meta code { background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; color: var(--accent); }
 
-  nav.toc { margin-bottom: 44px; }
-  nav.toc h2 { margin: 0 0 12px; font-size: 14px; color: var(--accent); letter-spacing: 0.5px; }
-  nav.toc ul {
-    list-style: none; margin: 0; padding: 0;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px;
-  }
+  /* 目录：宽屏为常驻左栏（sticky），窄屏折回顶部的卡片网格，见底部 media query */
+  .layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 44px; align-items: start; }
+  nav.toc { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto; }
+  nav.toc h2 { margin: 0 0 10px; font-size: 13px; color: var(--accent); letter-spacing: 0.5px; }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; }
+  nav.toc li { margin-bottom: 2px; }
   nav.toc a {
-    display: flex; align-items: baseline; gap: 8px;
-    padding: 11px 14px; border: 1px solid var(--line); border-radius: 8px;
-    background: #fff; color: var(--ink); text-decoration: none; font-size: 14px;
-    transition: border-color .15s, background .15s, transform .15s;
+    display: flex; align-items: baseline; gap: 7px;
+    padding: 7px 10px; border-radius: 6px;
+    color: var(--ink-2); text-decoration: none; font-size: 13px; line-height: 1.45;
+    transition: background .15s, color .15s;
   }
-  nav.toc a:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+  nav.toc a:hover { background: var(--accent-soft); color: var(--ink); }
+  nav.toc a.active {
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  nav.toc::-webkit-scrollbar { width: 6px; }
+  nav.toc::-webkit-scrollbar-thumb { background: #d3dae2; border-radius: 3px; }
+  /* grid 子项默认 min-width:auto，会被超宽的内联 SVG 顶开整页（实测 900px 视口下正文被撑到 1189px）。
+     必须显式归零，让横向溢出回落到 .diagram 自己的 overflow-x 上。 */
+  main { min-width: 0; }
+  @media (max-width: 1080px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav.toc { position: static; max-height: none; overflow: visible; margin-bottom: 40px; }
+    nav.toc ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+    nav.toc a { border: 1px solid var(--line); padding: 10px 12px; }
+    nav.toc a:hover { border-color: var(--accent); }
+  }
   .tag {
     flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px; font-weight: 700; color: var(--accent);
@@ -143,9 +160,12 @@ const html = `<!DOCTYPE html>
   }
   #lb .lb-close:hover { background: rgba(255,255,255,.3); }
 
-  table.anchor { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13.5px; }
+  /* table-layout:fixed + 长词断行：锚点列常含长文件路径，不约束会把整页撑出横向滚动条
+     （实测 900px 视口下表格宽 881px，页面被顶到 913px） */
+  table.anchor { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 20px; font-size: 13.5px; }
   table.anchor caption { text-align: left; color: var(--ink-2); font-size: 13px; padding-bottom: 8px; }
-  table.anchor th, table.anchor td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  table.anchor th, table.anchor td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+  table.anchor td:first-child { width: 24%; }
   table.anchor code { background: #f5f7fa; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
 
   .note { background: var(--amber-soft); border-left: 4px solid var(--amber); border-radius: 0 8px 8px 0; padding: 14px 18px; margin-top: 20px; font-size: 14px; color: #7c3d0b; }
@@ -167,6 +187,8 @@ const html = `<!DOCTYPE html>
   </div>
 </header>
 
+<div class="layout">
+
 <nav class="toc">
   <h2>目录</h2>
   <ul>
@@ -174,7 +196,11 @@ ${toc}
   </ul>
 </nav>
 
+<main>
 ${blocks.join('\n\n')}
+</main>
+
+</div>
 
 <footer>
   ${manifest.footer || ''}
@@ -188,6 +214,37 @@ ${blocks.join('\n\n')}
 </div>
 
 <script>
+/* 目录高亮：滚动时标记当前所在章节。用「视口顶部下方 140px 的最后一条」而非
+   IntersectionObserver——各章节高度差异极大（含 1500px 长图），observer 的
+   threshold 很难同时适配长短章节，边界处会来回跳。 */
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  if (!links.length) return;
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  var tops = [];
+  function measure() {
+    tops = secs.map(function (s) { return s ? s.getBoundingClientRect().top + window.pageYOffset : 0; });
+  }
+  function highlight() {
+    var y = window.pageYOffset + 140;
+    var idx = 0;
+    for (var i = 0; i < tops.length; i++) { if (tops[i] <= y) idx = i; }
+    // 触底时强制高亮最后一章：末章若较短，其顶部可能永远越不过 y
+    if (window.innerHeight + window.pageYOffset >= document.documentElement.scrollHeight - 4) idx = tops.length - 1;
+    links.forEach(function (a, i) { a.classList.toggle('active', i === idx); });
+  }
+  var raf = null;
+  function onScroll() {
+    if (raf) return;
+    raf = requestAnimationFrame(function () { raf = null; highlight(); });
+  }
+  measure(); highlight();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', function () { measure(); highlight(); });
+  // 图片是内联 SVG，加载不触发 resize；字体回退可能改变行高，故延迟再量一次
+  window.addEventListener('load', function () { measure(); highlight(); });
+})();
+
 (function () {
   var lb = document.getElementById('lb');
   var body = lb.querySelector('.lb-body');

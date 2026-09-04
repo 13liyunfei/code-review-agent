@@ -122,6 +122,49 @@ await page.keyboard.press('Escape');
 await new Promise(r => setTimeout(r, 200));
 const closed = await page.evaluate(() => !document.getElementById('lb')?.classList.contains('on'));
 
+// 6) 目录：宽屏 sticky 常驻 + 滚动高亮跟随 + 触底高亮末章 + 窄屏折回文档流
+const toc = await page.evaluate(async () => {
+  const nav = document.querySelector('nav.toc');
+  if (!nav) return { present: false };
+  const links = [...nav.querySelectorAll('a')];
+  const ids = links.map(a => a.getAttribute('href').slice(1));
+  // 高亮逻辑走 requestAnimationFrame，等两帧再断言
+  const raf = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const miss = [], offscreen = [];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (!el) { miss.push(`${id}(锚点缺失)`); continue; }
+    window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 60);
+    await raf();
+    const a = nav.querySelector('a.active');
+    const got = a ? a.getAttribute('href').slice(1) : null;
+    if (got !== id) miss.push(`滚到 ${id} 却高亮 ${got}`);
+    const r = nav.getBoundingClientRect();
+    if (r.bottom <= 0 || r.top >= window.innerHeight) offscreen.push(id);
+  }
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  await raf();
+  const bottom = nav.querySelector('a.active');
+  return {
+    present: true,
+    position: getComputedStyle(nav).position,
+    total: ids.length,
+    miss, offscreen,
+    bottomHref: bottom ? bottom.getAttribute('href').slice(1) : null,
+    lastId: ids[ids.length - 1],
+    dangling: links.filter(a => !document.querySelector(a.getAttribute('href'))).map(a => a.getAttribute('href')),
+  };
+});
+
+// 窄屏下目录应回到文档流并切换为卡片网格，否则会遮挡正文
+await page.setViewport({ width: 900, height: 900 });
+await page.reload({ waitUntil: 'load' });
+const narrow = await page.evaluate(() => {
+  const nav = document.querySelector('nav.toc');
+  if (!nav) return {};
+  return { position: getComputedStyle(nav).position, display: getComputedStyle(nav.querySelector('ul')).display };
+});
+
 await browser.close();
 
 console.log(`SVG 图数：${report.svgs} / section 数：${report.sections}`);
@@ -133,6 +176,16 @@ console.log(`svg id：${svgIds.length} 个${dupIds.length ? ` 重复：${dupIds.
 console.log(`放大：${opened ? '可打开' : '打不开'}（宽 ${zoomW}px） / Esc 关闭：${closed ? '正常' : '失败'}`);
 console.log(`JS 报错：${jsErrors.length ? jsErrors.slice(0, 3).join(' | ') : '无'}`);
 console.log(`my-svg 残留：${(html.match(/my-svg/g) || []).length}`);
+if (!toc.present) {
+  console.log('目录：未找到 nav.toc');
+} else {
+  const hit = toc.total - toc.miss.length;
+  console.log(`目录：${toc.total} 条 / 宽屏 ${toc.position} / 滚动高亮 ${hit}/${toc.total}`
+    + (toc.miss.length ? ` 错位：${toc.miss.slice(0, 4).join('; ')}` : '')
+    + (toc.offscreen.length ? ` / ${toc.offscreen.length} 处滚出视口` : '')
+    + ` / 触底高亮 ${toc.bottomHref}${toc.bottomHref === toc.lastId ? '' : `（末章应为 ${toc.lastId}）`}`
+    + ` / 窄屏 ${narrow.position} + ${narrow.display}`);
+}
 
 // 编辑器会把 data-page-node-id 注入到产物 HTML 的每一个标签上（实测单个 1MB 的图集能被塞进 191KB 垃圾属性）。
 // 产物若被注入，说明有人用编辑器手改过而不是走脚本重建——必须重新生成。
@@ -146,6 +199,17 @@ if (dupIds.length) problems.push('svg id 重复');
 if (!opened || !closed) problems.push('放大/Esc 交互异常');
 if (jsErrors.length) problems.push('JS 报错');
 if ((html.match(/my-svg/g) || []).length) problems.push('残留 my-svg（样式选择器未替换）');
+if (!toc.present) {
+  problems.push('缺少目录 nav.toc');
+} else {
+  if (toc.dangling.length) problems.push(`目录悬空锚点：${toc.dangling.join(', ')}`);
+  if (toc.position !== 'sticky') problems.push(`宽屏目录未 sticky（当前 ${toc.position}），滚动后会消失`);
+  if (toc.miss.length) problems.push(`目录高亮错位 ${toc.miss.length} 处`);
+  if (toc.offscreen.length) problems.push(`目录在 ${toc.offscreen.length} 个位置滚出视口`);
+  if (toc.bottomHref !== toc.lastId) problems.push(`触底未高亮末章（高亮了 ${toc.bottomHref}）`);
+  if (narrow.position === 'sticky') problems.push('窄屏目录仍 sticky，会遮挡正文');
+  if (narrow.display === 'block') problems.push('窄屏目录未切换为卡片网格');
+}
 if (injected) problems.push(`产物被注入 ${injected} 处 data-page-node-id（需用脚本重建）`);
 
 console.log(problems.length ? `\n验收失败：${problems.join('；')}` : '\n验收通过');

@@ -21,8 +21,18 @@ node verify.mjs ../../business-flow.html   # 验收（需 puppeteer，可设 PUP
 - 节点文案控制在 2 行内、每行 ≤ 16 个汉字，超出会让节点变高、图变长。
 
 `verify.mjs` 全绿才算交付：样式生效、文字溢出 0、悬空引用 0、svg id 唯一、
-放大可开且 Esc 可关、无 JS 报错、`my-svg` 残留 0、`data-page-node-id` 注入 0。
+放大可开且 Esc 可关、无 JS 报错、`my-svg` 残留 0、`data-page-node-id` 注入 0、
+目录（sticky 生效 + 滚动高亮全对 + 触底高亮末章 + 窄屏折回）。
 任一不满足即以非 0 退出码结束。
+
+## 目录
+
+产物左侧是常驻目录（宽屏 sticky 侧栏，≤1080px 折回顶部卡片网格），滚动时自动高亮
+当前章节。目录项与 `manifest.json` 的 `sections` 一一对应，加章节只改 manifest。
+
+- 判定当前章节用「视口顶部下方 140px 的最后一条」，**不用 IntersectionObserver**：
+  各章高度差异极大（含 1500px 长图），threshold 很难同时适配，边界会来回跳。
+- 触底强制高亮末章：末章较短时其顶部永远越不过判定线。
 
 ## 两条必须遵守的约束
 
@@ -33,7 +43,7 @@ node verify.mjs ../../business-flow.html   # 验收（需 puppeteer，可设 PUP
    垃圾属性，且因覆盖写后未 fsync，`statSync` 读到的还是旧大小，问题被掩盖。
    HTML 一律由 `build-doc.mjs` 生成；`.mmd` 源码的注入由 `render.mjs` 在渲染前清理。
 
-## 三个必踩的坑（脚本已处理，改脚本时别弄丢）
+## 五个必踩的坑（脚本已处理，改脚本时别弄丢）
 
 1. **`my-svg` 必须全局替换**。mermaid 把根 id、`<style>` 里的选择器前缀、
    箭头 `<marker id>` 全部写死成 `my-svg`。只改根 id 不改 style 前缀 →
@@ -47,6 +57,14 @@ node verify.mjs ../../business-flow.html   # 验收（需 puppeteer，可设 PUP
 
 3. **mmdc 默认输出 `width="100%"`**，窄容器里整图被压成小字。
    `build-doc.mjs` 按 viewBox 还原自然尺寸，`height` 必须显式给出，宽图交给容器横向滚动。
+
+4. **两栏布局下 grid 子项要显式 `min-width: 0`**。grid 子项默认 `min-width: auto`，
+   会被超宽内联 SVG 顶开，横向溢出落到整页而非 `.diagram` 的滚动条上
+   （实测 900px 视口下正文被撑到 1189px）。media query 里的 `1fr` 同理，
+   要写 `minmax(0, 1fr)`。
+
+5. **锚点表里的长文件路径会让整页横向溢出**。需 `table-layout: fixed` +
+   `overflow-wrap: anywhere`。
 
 另：**产物写完必须 fsync 再统计大小**。macOS APFS 上覆盖写大文件后立刻 `statSync`
 会拿到过期 inode size（实测报 901957 而 ls 显示 1093436），
