@@ -48,16 +48,52 @@ public class KeywordInjectionDetector implements InjectionDetector {
             Pattern.compile("(?i)覆盖\\s*(你|系统|所有)\\s*指令")
     );
 
+    /** 风险分级（对齐 agent-kit 的 Risk；领域正则命中一律视为 HIGH）。 */
+    public enum Level {
+        /** 安全：基座与领域规则均无命中。 */
+        NONE,
+        /** 可疑：基座 LOW（如 {@code override}/{@code act as}——Java 中 {@code @Override} 无处不在，不能直接拦截）。 */
+        LOW,
+        /** 拦截：基座 HIGH 或领域正则命中。 */
+        HIGH
+    }
+
     @Override
     public boolean detect(String input) {
+        return assess(input) == Level.HIGH;
+    }
+
+    /**
+     * 是否命中领域增强正则（确定的攻击句式，与基座词表无关）。
+     *
+     * <p>基座词表把「越权 / admin mode / 泄露系统提示」等裸词判 HIGH——这些在代码审查领域
+     * 恰是业务常见词（如“检查越权风险”），不能作为内容边界的硬拦截；内容边界组合检测只认
+     * 本方法的攻击句式，词表噪音交由语义层裁决。
+     */
+    public boolean domainHit(String input) {
         if (input == null || input.isBlank()) {
             return false;
         }
-        // 第一层：agent-kit 基座。仅 HIGH 拦截——LOW 会误杀 Java 的 @Override 注解。
-        if (kitDetector.detect(input).risk() == PromptInjectionDetector.Risk.HIGH) {
-            return true;
-        }
-        // 第二层：领域正则增强，补齐基座字面量匹配覆盖不到的变体。
         return DOMAIN_PATTERNS.stream().anyMatch(p -> p.matcher(input).find());
+    }
+
+    /**
+     * 分级判定：HIGH=基座 HIGH 或领域正则命中（拦截）；LOW=仅基座 LOW（可疑，不拦截，
+     * 交由上层语义检测与人工复核处理）；NONE=安全。
+     */
+    public Level assess(String input) {
+        if (input == null || input.isBlank()) {
+            return Level.NONE;
+        }
+        // 领域正则视为明确的攻击形态，直接 HIGH。
+        if (domainHit(input)) {
+            return Level.HIGH;
+        }
+        PromptInjectionDetector.Risk r = kitDetector.detect(input).risk();
+        return switch (r) {
+            case HIGH -> Level.HIGH;
+            case LOW -> Level.LOW;
+            default -> Level.NONE;
+        };
     }
 }

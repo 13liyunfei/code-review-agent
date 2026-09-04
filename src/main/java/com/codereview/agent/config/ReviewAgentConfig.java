@@ -38,8 +38,13 @@ import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.prompt.ClasspathPromptLoader;
 import com.codereview.agent.core.prompt.PromptTemplateLoader;
 import com.codereview.agent.core.report.ReportGenerator;
+import com.codereview.agent.core.security.ContentInjectionDetector;
+import com.codereview.agent.core.security.DiffInputGuard;
+import com.codereview.agent.core.security.DiffInjectionDetector;
 import com.codereview.agent.core.security.InjectionDetector;
 import com.codereview.agent.core.security.KeywordInjectionDetector;
+import com.codereview.agent.core.security.SemanticInjectionDetector;
+import com.codereview.agent.core.security.StegInjectionScanner;
 import com.codereview.agent.core.skill.Skill;
 import com.codereview.agent.core.skill.SkillRegistry;
 import com.codereview.agent.core.skill.impl.HardcodedSecretSkill;
@@ -130,7 +135,7 @@ public class ReviewAgentConfig {
      * {@link UsageReporter} 的职责。
      */
     @Bean
-    public LlmClient llmClient(TokenHubProperties tokenHub, LlmGatewayProperties gateway,
+    public ModelGateway llmClient(TokenHubProperties tokenHub, LlmGatewayProperties gateway,
                                 EgressProperties egress, AggregateTracer llmTracer,
                                 TokenUsageRecorder usageRecorder,
                                 TokenFactoryProperties factoryProps,
@@ -367,10 +372,30 @@ public class ReviewAgentConfig {
         return new ClasspathPromptLoader();
     }
 
-    /** Prompt 注入检测器（关键词规则，可离线）。 */
+    /**
+     * diff 输入面注入检测器（关键词 + 隐写字符，可离线）。
+     *
+     * <p>2026-09-04 升级：由 {@link KeywordInjectionDetector} 换成
+     * {@link DiffInjectionDetector}——补上隐写字符（零宽/Bidi 拆词藏指令）检测维度，
+     * 使所有消费本 bean 的路径（如 Coordinator 展开自定义 Agent 的逐文件标注）自动具备
+     * 该能力。需要 BLOCK/TAG 分级与文件级定位时用 {@link DiffInputGuard}（见 securityAgent）。
+     */
     @Bean
     public InjectionDetector injectionDetector() {
-        return new KeywordInjectionDetector();
+        return new DiffInjectionDetector();
+    }
+
+    /**
+     * diff 输入面注入防护门卫（SecurityAgent 专用）：逐文件 BLOCK/TAG/CLEAN 分级。
+     *
+     * <p>BLOCK（隐写字符 / 关键词 HIGH）→ 文件隔离不进 LLM；TAG（关键词 LOW / 语义近似）
+     * → 渲染前显式标注；语义层只在新增内容短时触发（防稀释/延迟），embedding 不可达自动
+     * 降级为空（不劣化）。详见 {@link DiffInputGuard}。
+     */
+    @Bean
+    public DiffInputGuard securityInputGuard(EmbeddingClient embeddingClient) {
+        return new DiffInputGuard(new KeywordInjectionDetector(), new StegInjectionScanner(),
+                new SemanticInjectionDetector(embeddingClient));
     }
 
     /** 全部内置审查技能（项目自带，覆盖安全/逻辑/性能/规范/架构五个维度）。 */
@@ -453,12 +478,14 @@ public class ReviewAgentConfig {
      * 自定义审查 Agent 存储（后管「自定义 Agent 列表」后端核心）。
      *
      * <p>按 teamId 隔离，落盘 <code>data-dir/&lt;teamId&gt;/custom-agents.json</code>；
-     * 写库前复用 {@link InjectionDetector} 对业务方提交内容做注入预检（命中即拒绝）。
+     * 写库前用 {@link com.codereview.agent.core.security.ContentInjectionDetector}（异常填充 + 关键词 HIGH +
+     * LOW 语义复核）对业务方提交内容做注入预检（命中即拒绝）——这是本仓库唯一把
+     * 业务方文本「提升为系统提示内容」的边界，语义层在此才真正有价值。
      */
     @Bean
-    public CustomAgentStore customAgentStore(InjectionDetector injectionDetector,
+    public CustomAgentStore customAgentStore(EmbeddingClient embeddingClient,
                                             @Value("${review.data-dir:./data}") String dataDir) {
-        return new CustomAgentStore(Path.of(dataDir), injectionDetector);
+        return new CustomAgentStore(Path.of(dataDir), new ContentInjectionDetector(embeddingClient));
     }
 
     /** 工具定义（供 ToolRouter 注册与白名单路由）。 */
@@ -472,9 +499,9 @@ public class ReviewAgentConfig {
                                       PromptTemplateLoader promptLoader,
                                       SkillRegistry registry,
                                       ConfidenceCalibrationService calibration,
-                                      InjectionDetector injectionDetector,
+                                      DiffInputGuard securityInputGuard,
                                       CodeReviewAiService aiService) {
-        return new SecurityAgent(llmClient, promptLoader, registry, calibration, injectionDetector, aiService);
+        return new SecurityAgent(llmClient, promptLoader, registry, calibration, securityInputGuard, aiService);
     }
 
     @Bean

@@ -31,10 +31,23 @@ public class AnomalyDetector {
         if (input.length() > MAX_INPUT_LENGTH) {
             return true;
         }
-        if (calculateShannonEntropy(input) > ENTROPY_THRESHOLD) {
+        // 香农熵阈值按英文自然语言 / 编码负载（Base64≈6.0）标定；CJK 等宽字符集文本
+        // 的字符级熵天然远超 5.5（如长中文描述的熵≈log2(去重字数)>6），逐字熵会对中文
+        // 业务内容误伤。因此熵信号只在纯 ASCII 输入上生效（编码绕过负载一定是 ASCII）。
+        if (isAsciiOnly(input) && calculateShannonEntropy(input) > ENTROPY_THRESHOLD) {
             return true;
         }
         return calculateRepetition(input) > REPETITION_THRESHOLD;
+    }
+
+    /** 是否纯 ASCII（编码绕过 / Base64 / 填充负载均为 ASCII；中文自然内容跳过熵判定）。 */
+    private boolean isAsciiOnly(String input) {
+        for (int i = 0; i < input.length(); i++) {
+            if (input.charAt(i) > 0x7F) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
