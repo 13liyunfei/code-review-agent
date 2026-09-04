@@ -32,7 +32,7 @@ RAG 与三层记忆、4 级降级链等核心设计。
 - Java 17、Spring Boot 3.3.4
 - Jackson（Agent 间标准化消息协议编解码）
 - LangChain4j 1.19.0（统一接入大模型 + 结构化输出 `AiServices` + OpenAI 兼容协议）
-- 腾讯云 TokenHub MaaS（一个 API Key 通吃多模型：混元 `hy3` / DeepSeek `deepseek-v4-flash` / 智谱 `glm-5.2`，可回退 Mock）
+- 腾讯云 TokenHub MaaS（一个 API Key 通吃多模型：混元 `hy3` / DeepSeek `deepseek-v4-flash` / 智谱 `glm-5.2`），或开启公司级 **token-factory** 网关（`token-factory.enabled=true`）；**无 Mock 兜底**（2026-09 移除）：缺 Key 启动即失败
 - PostgreSQL 17 + pgvector 0.8（向量记忆存储，可回退内存）
 - Redis 8.x（消息队列，可回退内存）
 - 多租户（团队）隔离：全局基线（`__global__`）+ 团队叠加，按 `teamId` 隔离自定义规则 / 知识 / 记忆 / 历史 / 反馈
@@ -281,20 +281,21 @@ docker exec -u git gitea gitea admin user generate-access-token --username revie
 
 > 注意：Spring Boot 3.3 最低要求 Java 17；本工程统一使用 **Java 17**（`maven.compiler.release=17`，仅用 `record` 等 17 特性），编译需 JDK 17+。IDEA 2022.2 不识别 Java 21 项目语言级别，故锁定 17 避免 reimport 后 bytecode 被回退。
 
-## 接入真实大模型（TokenHub 多模型，via LangChain4j）
+## 接入真实大模型（TokenHub 多模型 / 公司级 Token 工厂，via LangChain4j）
 
-系统通过 **LangChain4j 1.19.0** 统一接入大模型，底层走 **腾讯云 TokenHub MaaS** 的 OpenAI 兼容协议。  
+系统通过 **LangChain4j 1.19.0** 统一接入大模型，底层走 **腾讯云 TokenHub MaaS** 的 OpenAI 兼容协议，也可开启公司级 **token-factory** 网关（`token-factory.enabled=true`）。  
 TokenHub 一个 API Key 可调平台所有模型，仅需切换 `model` 字段，**不引入 `langchain4j-pgvector`**（其独立版本号与多租户 `memory_store` schema 冲突，PG 记忆沿用自建存储）。
 
-- 接入点：`https://tokenhub.tencentmaas.com/v1`
+- 接入点：`https://tokenhub.tencentmaas.com/v1`（或 `token-factory.enabled=true` 时走 `token-factory.base-url` 网关）
 - 默认模型（网关按列表顺序路由，超时/失败自动 failover）：`hy3`（混元）、`deepseek-v4-flash`（DeepSeek）、`glm-5.2`（智谱）
+- **无任何 Mock 兜底（2026-09-03 已全量移除）**：`api-key` 留空将**启动即失败**；所有供应商失败时对应 Agent 被标记降级并在报告顶部告警——绝不产出「看起来通过」的假报告
 - 结构化输出：`CodeReviewAiService`（LangChain4j `AiServices`）+ `MessageWindowChatMemory`（按 Agent-团队-PR 隔离的短期窗口记忆）；解析失败回退文本路径（`LlmFindingParser`）
 
-### 配置（`src/main/resources/application.yml` 的 `tokenhub`）
+### 配置（`application.yml` 的 `tokenhub`，token-factory 可选）
 
 ```yaml
 tokenhub:
-  api-key: ${TOKENHUB_API_KEY:}        # 留空则回退 Mock（仅供演示，LLM 不产生发现）
+  api-key: ${TOKENHUB_API_KEY:}        # 必填——留空启动即失败（无 Mock）
   base-url: https://tokenhub.tencentmaas.com/v1
   timeout-seconds: 60
   quota-per-minute: 200
@@ -305,32 +306,37 @@ tokenhub:
       model: deepseek-v4-flash
     - name: glm
       model: glm-5.2
+# 可选：公司级 Token 工厂网关；开启后排在 tokenhub 直连供应商之前，
+# 工厂不可用/超额/上游全挂时天然 failover 回下方 tokenhub 直连。
+token-factory:
+  enabled: ${TOKEN_FACTORY_ENABLED:false}
+  base-url: ${TOKEN_FACTORY_BASE_URL:http://localhost:8090}
+  secret: ${TOKEN_FACTORY_SECRET:}
 ```
 
 > 加模型只需在 `models` 列表加一行（共用同一 Key）；想换 AiServices 主模型，把对应项移到列表第一个即可。  
-> 无 OpenAI 官方通道（国内不好用），所有模型统一走 TokenHub。
+> `api-key` 是敏感凭证，通过 `${TOKENHUB_API_KEY:}` 环境变量注入，**绝不提交明文**。
 
 ### 调用链路
 
 ```
 LlmClient(接口)
-  └─ ModelGateway            # 多供应商路由 + 60s 滑动窗口配额 + failover + Mock 兜底
+  └─ ModelGateway            # 多供应商路由 + 60s 滑动窗口配额 + failover（无 Mock）
+       ├─ TokenFactoryProvider   #（可选）公司级网关 — token-factory.enabled=true
        ├─ LangChain4jChatProvider(hunyuan)  → OpenAiChatModel(hy3)      + LoggingChatModelListener
        ├─ LangChain4jChatProvider(deepseek) → OpenAiChatModel(deepseek-v4-flash) + LoggingChatModelListener
        ├─ LangChain4jChatProvider(glm)      → OpenAiChatModel(glm-5.2)  + LoggingChatModelListener
-       └─ MockProvider         # 列表终点，无 Key 时零配置可用
+       └─（列表终点，无 Mock——全部供应商失败 ⇒ Agent 降级 + 报告顶部告警）
 primaryChatModel（取 models[0]）→ CodeReviewAiService(AiServices 结构化输出 + ChatMemory)
 ```
 
-- 启动日志：`已装配 LangChain4j 统一模型网关（TokenHub 多模型）：ModelGateway[hunyuan(on),deepseek(on),glm(on),mock(on)]`
-- 向量化：`review.llm.embedding.enabled=true` 时切 `LangChain4jEmbeddingClient`（OpenAiEmbeddingModel，api-key/base-url 未单独配则复用 TokenHub）；默认 `SimpleHashEmbeddingClient`（离线哈希 256 维）。TokenHub 嵌入模型：`kinfra-text-embedding-0.6b`(1024 维，默认) / `kinfra-text-embedding-4b`(2560 维)；pgvector ivfflat 索引上限 2000 维，故默认 1024（切换模型须同步改 `pgvector.vector-dim`，存量表自动迁移重建向量列）。
+- 启动日志：`已装配 LangChain4j 统一模型网关（TokenHub 多模型直连 + 熔断 + 退避重试）：ModelGateway[...]`；开启工厂时为 `（Token 工厂优先 + TokenHub 直连兜底 ...）`
+- 向量化：`review.llm.embedding.enabled=true`（默认开）时切 `LangChain4jEmbeddingClient`（OpenAiEmbeddingModel，api-key/base-url 未单独配则复用 TokenHub；**维度必须与 `pgvector.vector-dim` 一致**）。默认模型 `kinfra-text-embedding-0.6b` 为 1024 维，`pgvector.vector-dim` 默认 **1024** 与之对齐；`SimpleHashEmbeddingClient`（离线哈希 256 维）仅在关闭 embedding 时作为纯离线兜底保留。TokenHub 嵌入模型：`kinfra-text-embedding-0.6b`(1024 维，默认) / `kinfra-text-embedding-4b`(2560 维)；pgvector ivfflat 索引上限 2000 维，故默认 1024（切换模型须同步改 `pgvector.vector-dim`，存量表自动迁移重建向量列）。
 
-> ⚠️ **安全提示**：`api-key` 是敏感凭证，请勿将明文密钥提交到代码仓库。推荐两种做法：
+> ⚠️ **安全提示**：`api-key` 是敏感凭证，请勿将明文密钥提交到代码仓库。推荐做法：
 >
 > 1. 保留占位 `${TOKENHUB_API_KEY:}`，运行前用环境变量注入：`TOKENHUB_API_KEY=sk-xxxx ./mvnw spring-boot:run`；
 > 2. 或将 `application.yml` 加入 `.gitignore`，改用本地覆盖文件 `application-local.yml`。
->
-> 当前仓库的 `application.yml` 已写入一个可用 Key 用于演示，请在上线前移除或替换。
 
 启用真实模型后，`ModelGateway` 打印当前在线供应商；最终审查报告中标注 **来源 LLM** 的发现即由对应模型实时推理产生（规则型发现仍由本地确定性检测补充）。
 
@@ -444,7 +450,9 @@ Coordinator 按固定优先级权重裁决，高优先级胜出，落败方进�
 - 落盘 `data-dir/<teamId>/trajectories/<runId>.jsonl`（JSONL，追加式），失败仅告警不阻断审查；事件自带 traceId，与日志链路关联。
 
 **5.2 上下文影响面切片（对齐 codex `context-fragments`）**
-- `core/impact/ImpactAnalyzer` 复用 `AstAnalyzer` + `CallGraphAnalyzer`，计算「变更方法 → 上游调用方」传播链；
+- `core/analysis` 双引擎索引：`RepoIndex`（`analysis/index/`）按 **PR head SHA 拉全量源码**并用真实解析器建索引——Java 走 JavaParser + symbol-solver（`CROSS_FILE`，全限定签名），其它语言走 tree-sitter（`FILE_LOCAL`，无符号解析）——再由 `ImpactAnalyzer` 把 hunk 新文件行号与方法行范围求交，计算「变更方法 → 上游调用方」传播链（一跳 + 同包，上限 `maxFiles=200`）；
+- **为何重写**：旧实现对 diff hunk 片段跑 AST 扫描，真实 PR 上恒产出 0 条（hunk 只带 ±3 行上下文、hunk 里解析出的方法挂不到文件顶部的 `class X {`、调用图只看单文件），而测试因 fixture 是「新增文件全量 patch」（`@@ -0,0 +1,N @@`）侥幸通过；
+- 每条结论带 `ImpactEntry.crossFile()` 标记——摘要文案不会把「引擎查不了跨文件」说成「没有调用方」；
 - 影响面摘要经 `ReviewContext.impactSummary` 注入 5 个 Agent 的 prompt（模板新增「影响面」区块，缺失变量安全）；无影响面时返回空串，避免噪声；
 - 大 PR 只喂「改动方法 + 受影响调用方」，降 token、提聚焦度。
 
@@ -531,14 +539,14 @@ rules:
 
 #### 4. 统一模型网关（`ModelGateway`）
 
-实现 `LlmClient`，内部聚合多个 `ModelProvider`（混元 / OpenAI / Mock），具备：
+实现 `LlmClient`，内部聚合多个 `ModelProvider`（token-factory / 混元 / DeepSeek / GLM / 其它 OpenAI 兼容端点），具备：
 
 - **多供应商路由**：按配置顺序选择可用供应商；
 - **配额保护**：`QuotaState` 60 秒滑动窗口限流，超窗口自动跳到下一家；
-- **故障转移**：某供应商异常自动 failover 到下一个；
-- **Mock 兜底**：列表末尾内置 Mock，无密钥时零配置可用。
+- **故障转移**：某供应商异常自动 failover 到下一个（含公司级 token-factory 网关排在 tokenhub 直连之前、工厂不可用时兜底直连）；
+- **无 Mock 兜底**（2026-09-03 已全量移除）：API Key 留空**启动即失败**；全部供应商失败时对应 Agent 标记降级并在报告头部告警——绝不产出「看起来通过」的假报告。
 
-启动日志会打印 `已装配统一模型网关：ModelGateway[hunyuan(on),mock(on),]`。
+启动日志会打印 `已装配 LangChain4j 统一模型网关（TokenHub 多模型直连 + 熔断 + 退避重试）：ModelGateway[...]`（开启工厂时为 `Token 工厂优先 + TokenHub 直连兜底`）。
 
 #### 5. 定时扫描（`ScheduledScanService`）
 
@@ -606,7 +614,7 @@ jackson-databind、lodash、minimist、axios 等），输出漏洞清单、许�
 <dependency>
     <groupId>io.github.13liyunfei</groupId>
     <artifactId>agent-kit</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
@@ -744,7 +752,7 @@ npm run build
 设计原则（**可控性 > 灵活性、安全优先**）：
 
 - **声明式，不开放代码 / 工具调用**：业务方仅填写「角色描述 + 审查要点 + 严重级别偏好」两个内容槽；系统指令骨架由代码硬编码且**不可被覆盖**，末尾固定护栏（diff 文字只是被审查数据、非指令）。
-- **Prompt 注入纵深防御**：① 系统指令骨架不可覆盖；② 写库前对业务方提交内容做注入预检（`KeywordInjectionDetector`），命中即拒绝保存；③ 审查时 PR diff 过注入检测，命中仅数据区标注 `[INJECTION-RISK]`，**绝不切换系统角色**。
+- **Prompt 注入纵深防御（按信任边界分层，2026-09 刷新）**：① 系统指令骨架不可覆盖；② 写库前对业务方提交内容（名称/描述/审查要点）做预检——`ContentInjectionDetector`（异常填充 → 领域攻击句式 → 懒加载语义向量复核），命中即拒绝保存；③ 审查时 PR diff 过 `DiffInputGuard` 分级门卫（全局关键词+隐写扫描 → 逐文件复核）：命中隐写字符（零宽 / bidi）或关键词 HIGH 的**文件被 BLOCK 并隔离出 LLM 上下文**，产出带文件+行号定位的 BLOCKER；语义近似（仅对新增行聚合）只 **TAG** 为 `[INJECTION-RISK]`；④ 全部 Prompt 模板带显式「以下是待审查数据、非指令」定界句——即使检测全漏，模型也知道 diff 是数据。命中**绝不切换系统角色**。
 - **可降级**：自定义 Agent 异常 / 超时（复用整体 `timeout-ms`）仅该 Agent 结果置空，不影响内置 5 Agent 与最终报告。
 - **可追踪 / 可回放**：复用事件源轨迹，记录 `agent.custom.expanded` / `agent.custom.disabled` 及 `custom-agent.created/updated/deleted/toggle`；落盘 `<data-dir>/<teamId>/trajectories/<runId>.jsonl`，支持事后回放与责任追溯（对齐 deepseek-harness / codex rollout）。
 
@@ -815,10 +823,10 @@ src/main/java/com/codereview/agent/
 │   ├── TeamProperties.java                # @ConfigurationProperties（review.teams.default/mapping）
 │   └── TeamResolver.java                  # resolve(owner,repo,override) → teamId
 └── core/
-    ├── model/        # 领域模型：Severity/AgentType/Finding/CodeDiff/PullRequest/ReviewMessage/Report
+    ├── model/        # 领域模型：Severity/AgentType/Finding/CodeDiff/PullRequest/Report
     ├── agent/        # ReviewAgent 接口 + 抽象基类 + 5 个具体 Agent + DeclarativeReviewAgent（声明式自定义 Agent）
     ├── coordinator/  # Coordinator 接口 + CompletableFutureCoordinator（并行/超时/部分失败/自定义 Agent 展开）
-    ├── analysis/     # AstAnalyzer（AST 语义）/ CallGraphAnalyzer（调用链）/ ScaScanner（SCA）/ AdvancedAnalyzer（聚合）
+    ├── analysis/     # AstAnalyzer（AST 语义）/ CallGraphAnalyzer（调用链）/ ScaScanner（SCA）/ AdvancedAnalyzer（聚合）/ index/（RepoIndex + ImpactIndexBuilder 双引擎符号索引）+ java/ + treesitter/ 引擎
     ├── autofix/      # AutoFixEngine（自动修复建议生成）
     ├── workflow/     # ReviewWorkflowEngine（BLOCKER 强制审批 / commit status）
     ├── scheduler/    # ScheduledScanService（定时夜间巡检）
@@ -829,15 +837,15 @@ src/main/java/com/codereview/agent/
     ├── calibration/  # 置信度校准服务（误报/正报）
     ├── mq/           # MessageQueue 接口 + 内存实现 + QueueNames + AgentWorker
     ├── tool/         # ToolDefinition / ToolRouter（意图→白名单）/ ToolCallValidator
-    ├── security/     # 注入检测（关键词/语义/异常）+ Prompt 硬化（XML/Canary）
+    ├── security/     # 注入防护：InjectionDetector / KeywordInjectionDetector / DiffInjectionDetector / StegInjectionScanner（零宽+bidi）/ DiffInputGuard（BLOCK/TAG 分级）/ SemanticInjectionDetector / ContentInjectionDetector（写库边界）/ AnomalyDetector / PromptHardening
     ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG / ExperienceStore（团队隔离文件经验条目）/ ReflectionService（审查后反思沉淀）
     ├── toolcalling/  # AgentTool / ToolRegistry / ToolCallingLoop（思考→决策→调用→观察→推理）+ ToolEquippedAgent 装饰器 + BuiltinTools
     ├── planning/     # TaskPlanner（LLM 任务拆解）/ TaskPlan（DAG 校验）/ DagExecutor（拓扑并行）/ TaskPlanningSupport（织入 Coordinator）
     ├── rag/          # RAG 检索重构：KnowledgeStore（内存/Pg）/ StructuredChunker / Reranker（ApiReranker+HeuristicReranker）/ RagEvaluator / RagContextBuilder
-    ├── llm/          # LlmClient / ModelGateway（多供应商路由+配额+failover）/ LangChain4jChatProvider / MockProvider / NoOpChatModel / LoggingChatModelListener / EmbeddingClient / aiservice/（CodeReviewAiService 结构化输出 + ChatMemory）
+    ├── llm/          # LlmClient / ModelGateway（多供应商路由+配额+failover）/ LangChain4jChatProvider / CircuitBreakerProvider / BackoffPolicy / TokenUsageRecorder / LoggingChatModelListener / EmbeddingClient / aiservice/（CodeReviewAiService 结构化输出 + ChatMemory）— 无 Mock
     ├── trace/        # TraceContext（SLF4J MDC traceId，跨线程 wrap 传播，全链路追踪）
     ├── trajectory/   # ReviewEvent / ReviewEventLog / ReviewTrajectoryRecorder（事件源审查轨迹，JSONL 落盘）
-    ├── impact/       # ImpactAnalyzer（上下文影响面切片：变更方法 → 上游调用方，注入 Agent prompt）
+    ├── impact/       # ImpactAnalyzer（经 RepoIndex 全量源码索引做上下文影响面切片：变更方法 → 上游调用方，注入 Agent prompt）
     ├── resume/       # ResumeState / FileResumeStore（断点续跑：崩溃后同 runId 只重跑剩余 Agent）
     ├── profile/      # ReviewProfile（审查强度 STRICT/ADVISORY/SUGGEST 热切换）
     ├── permission/   # VetoPolicy（权限收敛：BLOCKER 免于误报抑制 / 仲裁覆盖）
@@ -865,13 +873,13 @@ src/main/java/com/codereview/agent/
 | ----------------------------- | --------------------------------------------------------------- |
 | 星型拓扑 + 5 个审查 Agent            | `agent/impl/*` + `coordinator`                                  |
 | 并行审查 + 超时 + 部分失败              | `CompletableFutureCoordinator`（allOf + orTimeout）               |
-| 标准化消息协议                       | `model/ReviewMessage`                                           |
+| 标准化消息协议                       | `model/*`（Finding/CodeDiff/PullRequest）— ReviewMessage 已删（孤儿）       |
 | Prompt 模板化                    | `prompt/*` + `resources/prompts/*.txt`                          |
 | 业务方自定义 Agent（并行 + 注入防御 + 降级） | `core/admin/CustomAgentStore` + `core/agent/DeclarativeReviewAgent` + `core/admin/AgentAdminController` |
 | Skill 插件化                     | `skill/*`（硬编码密钥、SQL 注入检测）                                       |
 | 工具路由（防选错工具）                   | `tool/ToolRouter` + `ToolCallValidator`                         |
 | 置信度校准（越用越准）                   | `calibration/ConfidenceCalibrationService`                      |
-| Prompt 注入防护                   | `security/*`（关键词/语义/异常 + 硬化）                                    |
+| Prompt 注入防护（按信任边界）            | `security/*` — diff 输入面：`DiffInjectionDetector`(关键词+隐写) + `DiffInputGuard`(BLOCK/TAG)；写库边界：`ContentInjectionDetector`(异常+关键词+语义)；关键词基座：`KeywordInjectionDetector` + agent-kit `PromptInjectionDetector` |
 | RAG + 三层记忆                    | `memory/*`（向量库 + 反思 + 经验库）                                      |
 | 4 级降级链                        | `degrade/DegradationChain`                                      |
 | 分级定档 Blocker/Major/Minor/Info | `model/Severity` + `report/ReportGenerator`                     |
@@ -912,7 +920,7 @@ src/main/java/com/codereview/agent/
 
 | 组件        | 离线实现（默认关闭）                              | 生产实现（默认启用）                                          | 切换配置                              |
 | --------- | --------------------------------------- | --------------------------------------------------- | --------------------------------- |
-| LLM       | `MockProvider`（Mock 兜底，零配置可用）           | `ModelGateway` + `LangChain4jChatProvider`（TokenHub 多模型 hy3 / deepseek-v4-flash / glm-5.2，OpenAI 兼容） | `tokenhub.api-key` 留空→Mock |
+| LLM       | —（2026-09-03 起无 Mock：缺 Key 启动即失败）   | `ModelGateway` + `LangChain4jChatProvider`（TokenHub 多模型 hy3 / deepseek-v4-flash / glm-5.2，OpenAI 兼容）+ 可选公司级 `token-factory` 网关排前（失败兜底直连） | `tokenhub.api-key` 必填 / `token-factory.enabled=true` |
 | 记忆存储      | `InMemoryVectorStore`                   | `PgVectorMemoryStore`（PostgreSQL 17 + pgvector 0.8，含 `team_id` 隔离） | `pgvector.enabled=false`→内存       |
 | 消息队列      | `InMemoryMessageQueue`                  | `RedisMessageQueue`（Redis，LPUSH/BRPOP）              | `redis.enabled=false`→内存          |
 | Embedding | `SimpleHashEmbeddingClient`（词袋哈希，256 维） | `LangChain4jEmbeddingClient`（OpenAiEmbeddingModel，复用 TokenHub；`kinfra-text-embedding-0.6b` 1024 维） | `review.llm.embedding.enabled=true` 切换 |
