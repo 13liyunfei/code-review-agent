@@ -21,9 +21,10 @@ flowchart TD
 
     subgraph EXT["③ 外部依赖"]
         direction LR
-        X1["LLM 网关<br/>LlmClient"]
+        X1["LLM 网关<br/>熔断 / 退避重试 / 路由"]
         X2["LangChain4j<br/>AiServices"]
         X3["agent-kit<br/>基座"]
+        X4["Token 工厂<br/>公司级计量计费"]
     end
 
     subgraph OUT["④ 平台回写 · 4 类"]
@@ -36,6 +37,7 @@ flowchart TD
 
     SRC --> E1
     E4 -.-> EXT
+    X1 -.->|"直连时补报用量"| X4
     E6 --> OUT
 
     classDef grp fill:#FBFCFB,stroke:#2c7d2c,stroke-width:1.5px;
@@ -43,4 +45,4 @@ flowchart TD
     classDef ext fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
     class SRC,ENG,OUT grp;
     class S1,S2,S3,S4,S5,E1,E2,E3,E4,E5,E6,O1,O2,O3,O4 n;
-    class X1,X2,X3 ext;
+    class X1,X2,X3,X4 ext;

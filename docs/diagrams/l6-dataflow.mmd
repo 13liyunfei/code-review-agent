@@ -6,6 +6,8 @@ flowchart LR
         W3["Console / REST<br/>标记误报"]
         W4["Coordinator<br/>全流程事件"]
         W5["Skill 规则变更"]
+        W6["Coordinator<br/>正常完成"]
+        W7["ResumeJanitor<br/>每日 03:30 定时"]
     end
 
     subgraph STORE["持久化 · data-dir/teamId/"]
@@ -20,7 +22,7 @@ flowchart LR
 
     subgraph OUT["消费侧"]
         direction TB
-        C1["崩溃后同 runId 续跑"]
+        C1["崩溃后同 runId 续跑<br/>runId 由 PR 身份派生"]
         C2["computeVerification<br/>已解决 / 新引入"]
         C3["aggregate 阶段<br/>误报抑制"]
         C4["ReviewReplay 回放"]
@@ -34,7 +36,8 @@ flowchart LR
     W4 --> P4
     W5 --> P5
     W5 --> P6
-    W6["Coordinator<br/>正常完成"] -->|"complete 清理"| P1
+    W6 -->|"complete 清理"| P1
+    W7 -->|"purgeExpired<br/>按 mtime 判超期"| P1
 
     P1 --> C1
     P2 --> C2
@@ -50,6 +53,6 @@ flowchart LR
     classDef store fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1.5px,color:#1f2933;
     classDef base fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
     class IN,STORE,OUT grp;
-    class W1,W2,W3,W4,W5,W6,C1,C2,C3,C4,C5,C6 n;
+    class W1,W2,W3,W4,W5,W6,W7,C1,C2,C3,C4,C5,C6 n;
     class P1,P2,P3,P4,P5,P6 store;
     class G base;

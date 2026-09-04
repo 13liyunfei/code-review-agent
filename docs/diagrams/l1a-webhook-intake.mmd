@@ -12,8 +12,9 @@ flowchart TD
     F -->|"否"| F1["200 skipped<br/>动作不关心"]
     F -->|"是"| G["拆分 owner / repo"]
 
-    G --> H["runAsync 提交线程池<br/>TraceContext.wrap 传递 traceId"]
-    H --> H1["立即返回 200 accepted<br/>不让平台超时重试"]
+    G --> H{"提交 webhookExecutor<br/>TraceContext.wrap 传递 traceId"}
+    H -->|"队列已满"| H2["DiscardPolicy 丢弃<br/>WARN 告警，等上游重投"]
+    H -->|"入队成功"| H1["立即返回 200 accepted<br/>不让平台超时重试"]
     H1 --> NB(["转入异步审查主链路 → 见 L1b"])
 
     classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
@@ -22,7 +23,7 @@ flowchart TD
     classDef fail fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
     classDef ok fill:#F0FDF4,stroke:#15803d,stroke-width:1px,color:#14532d;
     class A start;
-    class T0,D,G,H proc;
-    class C,E,F dec;
-    class C1,E1,F1 fail;
+    class T0,D,G proc;
+    class C,E,F,H dec;
+    class C1,E1,F1,H2 fail;
     class H1 ok;

@@ -14,7 +14,7 @@
       "file": "l0-overview",
       "title": "系统全景",
       "sub": "五个入口 → 引擎内部六段流水线 → 平台四类回写动作。多租户以 <code>teamId</code> 贯穿全链路。",
-      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。这是与「Agent 链式传递结果」架构的根本差别。"
+      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。<br><b>LLM 侧已接入公司级 Token 工厂</b>：工厂供应商与直连供应商同列候选，复用已有 failover；直连时由 <code>UsageReportingProvider</code> 把用量补报回工厂（无 usage 按字符数估算并打 estimated 标记）。"
     },
     {
       "id": "l1a",
@@ -30,20 +30,28 @@
         [
           "团队解析",
           "<code>tenant/TeamResolver.java</code>"
+        ],
+        [
+          "线程池拒绝策略",
+          "<code>config/ProductionExecutorConfig.java:62</code>"
         ]
       ],
-      "note": "<b>Gitea Webhook 配置的三个坑</b><ul><li><code>events</code> 必须是 <b>布尔字面量</b>，写成字符串不生效；</li><li>重建后的 hook 默认 <code>active=false</code>，需单独 PATCH 打开；</li><li>PATCH <b>不持久化 secret</b>，改密钥必须 DELETE + POST 重建。</li></ul>"
+      "note": "<b>Gitea Webhook 配置的三个坑</b><ul><li><code>events</code> 必须是 <b>布尔字面量</b>，写成字符串不生效；</li><li>重建后的 hook 默认 <code>active=false</code>，需单独 PATCH 打开；</li><li>PATCH <b>不持久化 secret</b>，改密钥必须 DELETE + POST 重建。</li></ul><b>拒绝策略已从 CallerRunsPolicy 改为 DiscardPolicy</b>：原先队列满时会用 Tomcat 接收线程执行审查任务，等于把背压直接传导给 webhook 接入能力，高峰期会让整个服务的接入一起变慢。现在丢弃并记 WARN，由 Gitea 上游重投——对审查系统而言，<b>丢一次比拖慢接入安全</b>。"
     },
     {
       "id": "l1b",
       "tag": "L1b",
       "file": "l1b-async-review",
       "title": "异步审查与回写",
-      "sub": "<code>GiteaReviewService.reviewPullRequest()</code> 的编排主线：拉 diff → 并行审查 → 生成修复 → 分级路由 → 双通道回写。",
+      "sub": "<code>GiteaReviewService.reviewPullRequest()</code> 的编排主线：拉 diff → 并行审查 → 生成修复 → 分级路由 → 双通道回写。 <b>headSha 全程透传</b>，既用于 commit status，也是影响面索引与断点续跑键的输入。",
       "anchors": [
         [
-          "主链路编排",
+          "主链路编排（含 headSha 透传）",
           "<code>integration/gitea/GiteaReviewService.java:99-192</code>"
+        ],
+        [
+          "headSha 缺失时回落 sourceBranch",
+          "<code>:129</code>"
         ],
         [
           "报告 Markdown 拼装",
@@ -57,15 +65,19 @@
       "tag": "L2a",
       "file": "l2a-prepare-dispatch",
       "title": "协调器 · 准备与并行调度",
-      "sub": "断点续跑 → 上下文增强 → 自定义 Agent 展开 → 规划/固定两种并行路径。",
+      "sub": "<b>runId 由 PR 身份派生</b>（不再用随机 traceId）→ 断点续跑 → 影响面与 RAG 上下文增强 → 自定义 Agent 展开 → 规划/固定两种并行路径。",
       "anchors": [
         [
+          "runId 派生（续跑键）",
+          "<code>coordinator/impl/CompletableFutureCoordinator.java:302-303, 589</code>"
+        ],
+        [
           "断点续跑检测",
-          "<code>coordinator/impl/CompletableFutureCoordinator.java:245-266</code>"
+          "<code>:245-266</code>"
         ],
         [
           "影响面 + RAG 上下文注入",
-          "<code>:268-295</code>"
+          "<code>:265-295, 347</code>"
         ],
         [
           "自定义 Agent 展开",
@@ -75,18 +87,23 @@
           "并行 Future 创建",
           "<code>:342-359</code>"
         ]
-      ]
+      ],
+      "note": "<b>runId 曾用随机 traceId，导致断点续跑在生产上永远不生效</b>：崩溃重试是新 HTTP 请求，拿到另一串随机 traceId，<code>resumeStore.load(runId)</code> 永远查不到断点——典型的「feature 只在测试里跑过、线上是死代码」。现在从 PR 身份派生稳定键 <code>repo#编号@headSha</code>（<code>/</code>→<code>_</code>，因 runId 同时被当作文件名）；含 head SHA 保证换新 commit 时重开审查而非续跑旧断点。"
     },
     {
       "id": "l2b",
       "tag": "L2b",
       "file": "l2b-timeout-aggregate",
       "title": "协调器 · 限时收口与聚合",
-      "sub": "共享 deadline 逐个收口，超时即中断；随后聚合、否决回收、复检对比与落库。",
+      "sub": "共享 deadline 逐个收口，超时即中断；随后聚合、否决回收、复检对比与落库。高级分析改走 <code>analyze(pr, diffs)</code>，结束时释放影响面临时目录。",
       "anchors": [
         [
           "独立限时等待 + 降级",
           "<code>:373-432</code>"
+        ],
+        [
+          "高级分析新签名",
+          "<code>core/analysis/AdvancedAnalyzer.java:97</code>（旧重载保留于 <code>:173</code>）"
         ],
         [
           "聚合后处理（Veto / Profile / 复检 / 落库）",
@@ -100,15 +117,54 @@
       "note": "<b>这里修过一个 P0 缺陷</b>：修复前用 <code>allOf(...).orTimeout()</code>，超时只作用在聚合 future 上，后续逐个 <code>join()</code> 仍然会无限阻塞，且 <code>advancedFuture</code> 完全没进超时体系。现在改为「共享 deadline + 逐个 <code>get(remaining)</code>」，超时即 <code>cancel(true)</code> 中断底层线程。"
     },
     {
+      "id": "l2c",
+      "tag": "L2c",
+      "file": "l2c-impact-analysis",
+      "title": "影响面分析 · 双引擎分层与真实仓库索引",
+      "sub": "此前影响面在真实 PR 上<b>恒产出 0 条结论</b>：diff 只含改动处 ±3 行上下文，手写正则的 AST 扫描器拿不到完整方法，跨文件调用方从来没被看见过。",
+      "anchors": [
+        [
+          "索引构建入口",
+          "<code>core/analysis/index/ImpactIndexBuilder.java:20, 40</code>"
+        ],
+        [
+          "倒排索引与能力判定",
+          "<code>core/analysis/index/RepoIndex.java:196-231</code>"
+        ],
+        [
+          "能力枚举（可区分「查不了」与「确实没有」）",
+          "<code>core/analysis/spi/CodeAnalyzer.java:63-74</code>"
+        ],
+        [
+          "引擎路由（Java→JavaParser，其余→tree-sitter）",
+          "<code>core/analysis/index/AnalysisEngines.java:17-18</code>"
+        ],
+        [
+          "生产接线与临时目录释放",
+          "<code>coordinator/impl/CompletableFutureCoordinator.java:272-273</code>"
+        ]
+      ],
+      "note": "<b>为什么之前测不出来</b>：测试用了「新增文件全量 patch」，helper 悄悄替生产代码满足了前提，于是恒 0 的问题被测试掩盖。治本要点：<ul><li><b>能力显式化</b>：<code>Capability</code> 区分 CROSS_FILE / FILE_LOCAL，把「引擎查不了」与「确实没有影响面」分开，避免把原理性限制说成「没影响」；</li><li><b>按 head SHA 拉全量源码</b>物化成临时源码树，JavaParser 才有跨文件解析的原料；源码根必须给到 <code>src/main/java</code> 而非仓库根，否则全 <code>resolved=false</code> 且不报错；</li><li><b>一跳 + 同包 + maxFiles 硬限流</b>，并过滤 JDK 标准库 import，否则 404 刷屏并挤占配额。</li></ul>",
+      "info": "<b>改完必须验证生产日志真的出现「[RepoIndex] 索引完成」</b>。本仓库已因「分析器写得准但没接生产路径」踩过三次同类坑（AST 层恒 0、断点续跑 runId、影响面）。"
+    },
+    {
       "id": "l3",
       "tag": "L3",
       "file": "l3-single-agent",
       "title": "单 Agent 三段式与三级降级",
-      "sub": "每个 Agent 内部固定三段：<b>注入检测短路</b> → <b>Skill 确定性预扫描</b> → <b>LLM 语义增强</b>。规则出确定结论，LLM 只做补充。",
+      "sub": "每个 Agent 内部三段：<b>① 输入防护（逐文件分级隔离）</b> → <b>② Skill 确定性预扫描</b> → <b>③ LLM 语义增强</b>。规则出确定结论，LLM 只做补充。",
       "anchors": [
         [
-          "三段式范例（SecurityAgent 最完整）",
-          "<code>core/agent/impl/SecurityAgent.java:56-77</code>"
+          "逐文件分级（BLOCK / TAG / CLEAN）",
+          "<code>core/agent/impl/SecurityAgent.java:63-97</code>"
+        ],
+        [
+          "隔离后渲染（标注数据非指令）",
+          "<code>:99-122</code>"
+        ],
+        [
+          "分级门卫实现",
+          "<code>core/security/DiffInputGuard.java</code>"
         ],
         [
           "Skill 并行预扫描",
@@ -121,13 +177,10 @@
         [
           "LLM 三级降级",
           "<code>core/agent/AbstractReviewAgent.java:190-244</code>"
-        ],
-        [
-          "注入检测器实现",
-          "<code>core/security/{Keyword,Semantic}InjectionDetector.java</code>"
         ]
       ],
-      "info": "<b>降级链路的关键设计</b>：结构化输出失败但 <code>rawResponse</code> 非空时，<b>复用原始输出走文本解析</b>，不再多调一次模型——既省 token，也避免二次失败。"
+      "info": "<b>降级链路的关键设计</b>：结构化输出失败但 <code>rawResponse</code> 非空时，<b>复用原始输出走文本解析</b>，不再多调一次模型——既省 token，也避免二次失败。",
+      "note": "<b>输入防护已从「全 PR concat 一刀切」改为「逐文件分级」</b>：<ul><li><b>BLOCK</b>（隐写字符 / 关键词 HIGH）→ 该文件<b>不进 LLM 上下文</b>并产文件级 BLOCKER 带行号；</li><li><b>TAG</b>（关键词 LOW / 语义近似）→ 渲染前显式标注「被审查数据非指令」，仍参与审查；</li><li><b>CLEAN</b> → 正常放行。</li></ul>收益：单文件命中不再连累整 PR（旧实现一旦命中就 <code>return</code>，整 PR 不做语义审查），且能给出文件级/行级定位。新增维度：<code>StegInjectionScanner</code> 查<b>隐写字符</b>（零宽 / Bidi 拆词藏指令）。<b>纯规则层无 LLM 风险，因此 Skill 预扫描仍跑全量 diff</b>，只有 LLM 输入被裁剪。"
     },
     {
       "id": "l4a",
@@ -186,14 +239,25 @@
       "tag": "L6",
       "file": "l6-dataflow",
       "title": "数据流 · 租户存储与状态落盘",
-      "sub": "所有持久化状态按 <code>teamId</code> 隔离在 <code>data-dir/&lt;teamId&gt;/</code> 下；基线 <code>__global__</code> + 团队叠加，缺失回退默认。"
+      "sub": "所有持久化状态按 <code>teamId</code> 隔离在 <code>data-dir/&lt;teamId&gt;/</code> 下；基线 <code>__global__</code> + 团队叠加，缺失回退默认。",
+      "anchors": [
+        [
+          "断点定时清理（每日 03:30）",
+          "<code>core/resume/ResumeJanitor.java:27, 47</code>"
+        ],
+        [
+          "purgeExpired 按 mtime 判超期",
+          "<code>core/resume/FileResumeStore.java:118</code>"
+        ]
+      ],
+      "note": "<b>崩溃遗留的断点会永久残留</b>——<code>complete()</code> 只在正常完成时调用，崩溃后若那个 runId 再也不被触发，JSON 就永远躺在磁盘上，几个月攒一目录垃圾。<br>判据用 <b>文件 mtime 而非 JSON 里的 updatedAt</b>：写入被中断留下的半截 JSON 根本读不出 updatedAt，但它同样该被清掉。审查推进时会不断 save 刷新 mtime，因此跑得再久也不会被误删（已加测试锁住）。<br><b>坑</b>：Spring 的 <code>Duration</code> 绑定，不带单位的纯数字按<b>毫秒</b>算——写成 <code>ttl: 24</code> 会变成 24 毫秒、把所有断点一扫而空。TTL 为 0 / 负数 / 未配置时一律不清理。"
     },
     {
       "id": "l7",
       "tag": "L7",
       "file": "l7-capability",
-      "title": "能力矩阵 · Agent 与 Skill 树",
-      "sub": "执行层的完整构成：5 内置 Agent + 团队自定义 Agent + 高级静态分析；Skill 按 category 挂载，支持运行期启停与团队自定义规则。",
+      "title": "能力矩阵 · Agent / Skill / 分析引擎 / 安全检测器",
+      "sub": "执行层的完整构成：5 内置 Agent + 团队自定义 Agent + 高级静态分析（含影响面双引擎）；Skill 按 category 挂载，支持运行期启停与团队自定义规则。",
       "anchors": [
         [
           "5 个内置 Agent",
@@ -204,14 +268,27 @@
           "<code>core/agent/DeclarativeReviewAgent.java</code>；管理接口 <code>core/admin/AgentAdminController.java</code>"
         ],
         [
-          "高级静态分析",
-          "<code>core/analysis/{AdvancedAnalyzer,AstAnalyzer,CallGraphAnalyzer,ScaScanner}.java</code>"
+          "高级静态分析 + 影响面",
+          "<code>core/analysis/{AdvancedAnalyzer,AstAnalyzer,CallGraphAnalyzer,ScaScanner}.java</code>；<code>core/analysis/index/</code>"
+        ],
+        [
+          "注入检测四件套",
+          "<code>core/security/{DiffInputGuard,DiffInjectionDetector,StegInjectionScanner,SemanticInjectionDetector}.java</code>"
+        ],
+        [
+          "写库边界预检",
+          "<code>core/security/ContentInjectionDetector.java</code>"
+        ],
+        [
+          "Token 工厂接入",
+          "<code>core/tokenfactory/{TokenFactoryChatProvider,UsageReportingProvider}.java</code>"
         ],
         [
           "Skill 注册与运行期启停",
           "<code>core/skill/SkillRegistry.java:201-267</code>"
         ]
-      ]
+      ],
+      "note": "<b>安全检测按信任边界分层，不同边界用不同强度</b>：<ul><li><b>diff 预检</b>（进 LLM 前）：关键词 + 隐写字符命中 → BLOCK 隔离；语义近似 → TAG 标注。<b>此处只隔离/标注，不硬拦截</b>——基座词表里的「越权 / admin mode / 泄露系统提示」在代码审查域是正常业务词（\"检查越权风险\"曾被直接拦掉）；</li><li><b>写库边界</b>（自定义 Agent 存库前，本仓库唯一把业务方文本提升为系统提示的位置）：才做异常填充 + 关键词 + 语义复合检测，命中即拒绝。</li></ul>中文长描述香农熵天然偏高，<b>熵检测只对纯 ASCII 生效</b>，否则误杀。"
     }
   ]
 }

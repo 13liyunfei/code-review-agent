@@ -3,7 +3,7 @@ flowchart TD
     J --> K["fetchPrChanges<br/>拉取 PR diff 与元信息"]
     K --> L{"diffs 为空<br/>或拉取失败?"}
     L -->|"是"| L1["postSkipNote<br/>说明跳过原因"]
-    L -->|"否"| M["构造 PullRequest 模型<br/>携带 teamId 做租户隔离"]
+    L -->|"否"| M["构造 PullRequest 模型<br/>携带 teamId 做租户隔离<br/>透传 headSha 供影响面索引与续跑键"]
     M --> N["Coordinator.review<br/>多 Agent 并行审查 → 见 L2"]
 
     N --> O{"审查抛异常?"}

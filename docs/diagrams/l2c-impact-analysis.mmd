@@ -1,0 +1,37 @@
+flowchart TD
+    A["Coordinator 传入 pr + diffs"] --> B["ImpactIndexBuilder<br/>拼启动期配置 + 请求期仓库坐标"]
+
+    B --> C{"pr.headSha<br/>可用?"}
+    C -->|"否"| C1["退化为 RepoIndex.empty<br/>不抛进主链路"]
+    C -->|"是"| D["RepoSourceLocator 拉取<br/>PR head 版本全量源码"]
+
+    D --> E["物化为临时源码树<br/>try-with-resources 用完即释放"]
+    E --> F["IndexScope 控制扫描范围<br/>一跳 import + 同包，maxFiles 硬限流"]
+    F --> F1["过滤 JDK 标准库 import<br/>否则 404 刷屏并挤占配额"]
+
+    F1 --> G{"按文件语言<br/>选引擎"}
+    G -->|"Java"| G1["JavaParser + symbol-solver<br/>Capability.CROSS_FILE<br/>全限定签名天然区分重载"]
+    G -->|"其余语言"| G2["tree-sitter 容错解析<br/>Capability.FILE_LOCAL<br/>无符号解析，做不了跨文件"]
+
+    G1 --> H["倒排索引 callersByCallee<br/>callee 签名 → 调用点列表"]
+    G2 --> H
+
+    H --> I["summarize(diffs, index)<br/>改动方法 → 上游调用方"]
+    I --> J["ImpactReport<br/>含 unsupportedLangs 与 Mode"]
+    J --> K["索引统计落轨迹<br/>拉取 / 解析 / 触顶可事后诊断"]
+    K --> L(["并入 enrichedCtx"])
+
+    C1 --> M(["返回空 ImpactReport<br/>报告标注 NONE 而非「无影响」"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef eng fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    classDef warn fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    class A start;
+    class B,D,E,F,F1,H,I,J,K proc;
+    class C,G dec;
+    class G1,G2 eng;
+    class C1 warn;
+    class L,M endn;

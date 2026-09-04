@@ -1,17 +1,22 @@
 flowchart TD
-    A["agent.review(diffs, enrichedCtx)"] --> B{"① 输入防护<br/>InjectionDetector"}
+    A["agent.review(diffs, enrichedCtx)"] --> B{"① 输入防护<br/>DiffInputGuard 逐文件分级"}
 
-    B -->|"命中注入模式"| B1["上报 BLOCKER<br/>SEC-INJECTION-001"]
-    B1 --> B2(["短路返回<br/>不进 LLM"])
+    B -->|"BLOCK<br/>隐写字符 / 关键词 HIGH"| B1["产文件级 BLOCKER（带行号）<br/>该文件隔离，不进 LLM"]
+    B -->|"TAG<br/>关键词 LOW / 语义近似"| B2["渲染时标注「数据非指令」<br/>仍参与审查"]
+    B -->|"CLEAN"| B3["正常放行"]
 
-    B -->|"干净"| C["② Skill 预扫描<br/>registry 按 teamId + 分类取技能<br/>parallelStream 并行执行"]
-    C --> D["SkillResult → Finding<br/>按 ruleId 历史准确率校准置信度"]
+    B1 --> C
+    B2 --> C
+    B3 --> C
 
-    D --> G["③ LLM 增强<br/>模板注入影响面 + RAG 上下文"]
-    G --> H{"优先：AiServices<br/>结构化输出 + ChatMemory"}
+    C["② Skill 预扫描<br/>registry 按 teamId + 分类取技能<br/>parallelStream 并行，全量 diff 照跑"] --> D["SkillResult → Finding<br/>按 ruleId 历史准确率校准置信度"]
+
+    D --> G{"还有未被 BLOCK<br/>隔离的文件?"}
+    G -->|"否"| G0["跳过 LLM 语义审查<br/>仅保留规则发现"]
+    G -->|"是"| H{"③ LLM 增强<br/>优先 AiServices<br/>结构化输出 + ChatMemory"}
     H -->|"成功且非空"| H1["映射为 Finding<br/>来源 LLM"]
 
-    H -->|"失败 / 空"| I{"次选：agent-kit<br/>类型推导 schema"}
+    H -->|"失败 / 空"| I{"次选 agent-kit<br/>类型推导 schema"}
     I -->|"成功"| I1["映射为 Finding<br/>来源 LLM"]
     I -->|"结构化失败<br/>但原文非空"| J["复用原始输出做文本解析<br/>不再多调一次模型"]
     I -->|"彻底失败"| K["askLlm 文本对话<br/>解析器兜底"]
@@ -20,6 +25,7 @@ flowchart TD
     I1 --> M
     J --> M
     K --> M
+    G0 --> M
     M["合并 Skill 发现 + LLM 发现"] --> N(["返回 Finding 列表"])
 
     classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
@@ -29,8 +35,8 @@ flowchart TD
     classDef short fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
     classDef llm fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
     class A start;
-    class N,B2 endn;
-    class C,D,G,M proc;
-    class B,H,I dec;
-    class B1 short;
-    class H1,I1,J,K llm;
+    class N endn;
+    class C,D,M proc;
+    class B,H,I,G dec;
+    class B1,G0 short;
+    class B2,B3,H1,I1,J,K llm;
