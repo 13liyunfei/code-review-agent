@@ -32,6 +32,15 @@ public record CodeDiff(
     /**
      * 根据文件扩展名推断语言类型。
      *
+     * <p>取值对齐业界通用命名（tree-sitter grammar / GitHub linguist），而非自造缩写。
+     * 这一点很关键：语言标识是分析引擎的**路由键**，若写成 {@code py} / {@code js}
+     * 这类非标准缩写，注册表里按 {@code python} / {@code javascript} 注册就永远匹配不上，
+     * 结果是「支持了该语言却静默不生效」——排查时极难发现。
+     *
+     * <p>历史上本方法把 {@code .py} 映射为 {@code py}、{@code .ts} 映射为 {@code js}
+     * （TypeScript 被当成 JavaScript）。由于既有消费方全部只判断 {@code java}，
+     * 修正这些取值不影响任何既有规则。
+     *
      * @param fileName 文件名
      * @return 语言标识，未知返回 "unknown"
      */
@@ -46,9 +55,20 @@ public record CodeDiff(
         return switch (fileName.substring(dot + 1).toLowerCase()) {
             case "java" -> "java";
             case "go" -> "go";
-            case "py" -> "py";
-            case "js", "ts" -> "js";
-            case "kt" -> "kotlin";
+            case "py" -> "python";
+            case "js", "jsx", "mjs", "cjs" -> "javascript";
+            case "ts" -> "typescript";
+            case "tsx" -> "tsx";
+            case "kt", "kts" -> "kotlin";
+            case "rb" -> "ruby";
+            case "rs" -> "rust";
+            case "c" -> "c";
+            case "h" -> "c";
+            case "cpp", "cc", "cxx", "hpp" -> "cpp";
+            case "cs" -> "c_sharp";
+            case "php" -> "php";
+            case "scala" -> "scala";
+            case "sh", "bash" -> "bash";
             case "xml" -> "xml";
             case "sql" -> "sql";
             default -> "unknown";

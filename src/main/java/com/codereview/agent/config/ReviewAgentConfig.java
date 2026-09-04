@@ -602,6 +602,7 @@ public class ReviewAgentConfig {
                                   LlmClient llmClient,
                                   CodeReviewAiService codeReviewAiService,
                                   InjectionDetector injectionDetector,
+                                  com.codereview.agent.core.analysis.index.ImpactIndexBuilder impactIndexBuilder,
                                   org.springframework.core.env.Environment environment) {
         // 任务规划织入（可选增强）：review.planning.enabled=true 时，LLM 先把审查目标拆解为
         // 子任务 DAG 再按依赖拓扑并行执行；默认关闭，行为与旧版完全一致
@@ -613,6 +614,45 @@ public class ReviewAgentConfig {
         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
                 historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,
                 enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector,
-                planningSupport);
+                planningSupport, impactIndexBuilder);
+    }
+
+    /**
+     * 代码分析引擎路由（影响面索引用）。
+     *
+     * <p>{@code maxMethodLines=0} 表示不限制方法长度——影响面分析关心的是「谁调用了我」，
+     * 与方法多长无关，加限制只会漏掉被长方法调用的场景。
+     */
+    @Bean
+    public com.codereview.agent.core.analysis.index.AnalysisEngines analysisEngines() {
+        return new com.codereview.agent.core.analysis.index.AnalysisEngines(0);
+    }
+
+    /**
+     * 影响面索引构建器。
+     *
+     * <p>源码定位器是<b>可选</b>依赖：它由集成层（Gitea/GitLab）提供，
+     * 未启用任何平台集成时这里拿不到实现，此时影响面分析自动降级（不产结论但不报错），
+     * 不能因为少一个增强 Bean 就让整个应用起不来。
+     *
+     * @param locatorProvider 源码定位器（可能为空）
+     * @param engines         引擎路由
+     * @param environment     配置源
+     */
+    @Bean
+    public com.codereview.agent.core.analysis.index.ImpactIndexBuilder impactIndexBuilder(
+            org.springframework.beans.factory.ObjectProvider<
+                    com.codereview.agent.core.analysis.index.RepoSourceLocator> locatorProvider,
+            com.codereview.agent.core.analysis.index.AnalysisEngines engines,
+            org.springframework.core.env.Environment environment) {
+        int maxFiles = Integer.parseInt(environment.getProperty("review.impact.index-max-files", "200"));
+        boolean samePackage = Boolean.parseBoolean(
+                environment.getProperty("review.impact.index-same-package", "true"));
+        boolean imports = Boolean.parseBoolean(
+                environment.getProperty("review.impact.index-resolve-imports", "true"));
+        return new com.codereview.agent.core.analysis.index.ImpactIndexBuilder(
+                locatorProvider.getIfAvailable(),
+                engines,
+                new com.codereview.agent.core.analysis.index.IndexScope(samePackage, imports, maxFiles));
     }
 }

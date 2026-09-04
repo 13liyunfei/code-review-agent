@@ -55,6 +55,18 @@ public class GiteaConfig {
     }
 
     /**
+     * 源码定位器：把「仓库坐标 + ref」翻译成索引能用的 {@code SourceFetcher}。
+     *
+     * <p>核心层只认接口、不认 Gitea——这样影响面索引在单测里可用 Map 打桩，
+     * 将来接 GitLab/GitHub 也只需在各自的 Config 里再提供一个实现。
+     */
+    @Bean
+    public com.codereview.agent.core.analysis.index.RepoSourceLocator repoSourceLocator(
+            GiteaApiClient giteaApiClient) {
+        return (owner, repo, ref) -> new GiteaSourceFetcher(giteaApiClient, owner, repo, ref);
+    }
+
+    /**
      * 人机协作工作流引擎（依赖 Gitea API 创建工单 / 设置提交状态）。
      */
     @Bean

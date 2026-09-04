@@ -123,7 +123,10 @@ public class GiteaReviewService {
                 pr.author(),
                 pr.targetBranch(),
                 teamId,
-                pr.diffs()
+                pr.diffs(),
+                // head SHA 必须透传：影响面分析据此拉取「与本次 diff 同一时刻」的完整文件内容。
+                // 缺省时回落到源分支名——总比拿不到强，但要清楚分支内容可能比本次 diff 新（行号会偏）
+                (headSha == null || headSha.isBlank()) ? pr.sourceBranch() : headSha
         );
 
         // 3. 多 Agent 协同审查（含高级静态分析）

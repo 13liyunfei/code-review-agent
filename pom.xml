@@ -36,6 +36,15 @@
         <langchain4j.version>1.19.0</langchain4j.version>
         <!-- 公司级 Token 工厂 SDK（独立开源仓库 token-factory） -->
         <token-factory.version>0.1.0</token-factory.version>
+        <!-- 代码分析引擎版本。
+             JavaParser 3.26.x 要求 Java 8+，字节码级别兼容本项目 Java 17。
+             tree-sitter 核心为 Java 11 字节码，grammar 包仅含 TSLanguage 子类 + native 库。 -->
+        <javaparser.version>3.26.3</javaparser.version>
+        <tree-sitter.version>0.25.3</tree-sitter.version>
+        <tree-sitter-grammar.version>0.23.4</tree-sitter-grammar.version>
+        <tree-sitter-go.version>0.23.3</tree-sitter-go.version>
+        <tree-sitter-js.version>0.23.1</tree-sitter-js.version>
+        <tree-sitter-ts.version>0.23.2</tree-sitter-ts.version>
     </properties>
 
     <dependencies>
@@ -92,6 +101,48 @@
         <dependency>
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
+        </dependency>
+
+        <!-- ===== 代码分析引擎（双引擎分层，见 core/analysis/spi/CodeAnalyzer） ===== -->
+
+        <!-- JavaParser：Java 主引擎。纯 Java 无 native 依赖，symbol-solver 提供跨文件
+             符号解析（全限定签名、重载消歧），是跨文件调用图的基础。
+             传递依赖 javaparser-core + guava（guava 由 symbol-solver 的 BuildCache 使用）。 -->
+        <dependency>
+            <groupId>com.github.javaparser</groupId>
+            <artifactId>javaparser-symbol-solver-core</artifactId>
+            <version>${javaparser.version}</version>
+        </dependency>
+
+        <!-- tree-sitter：非 Java 语言引擎。容错解析（片段也能出结果）+ 100+ 语言统一 API。
+             注意：jar 内自带 5 个平台的 native 库（aarch64/x86_64 × macos/linux/windows），
+             运行时由 NativeUtils 解压到临时目录后 System.load，无需额外安装系统依赖。
+             tree-sitter 只提供语法树、不提供符号解析，故其能力声明为 FILE_LOCAL（文件内）。 -->
+        <dependency>
+            <groupId>io.github.bonede</groupId>
+            <artifactId>tree-sitter</artifactId>
+            <version>${tree-sitter.version}</version>
+        </dependency>
+        <!-- 各语言 grammar 按需引入：新增语言 = 加依赖 + TreeSitterLanguages 注册一行 -->
+        <dependency>
+            <groupId>io.github.bonede</groupId>
+            <artifactId>tree-sitter-python</artifactId>
+            <version>${tree-sitter-grammar.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.bonede</groupId>
+            <artifactId>tree-sitter-javascript</artifactId>
+            <version>${tree-sitter-js.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.bonede</groupId>
+            <artifactId>tree-sitter-typescript</artifactId>
+            <version>${tree-sitter-ts.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.bonede</groupId>
+            <artifactId>tree-sitter-go</artifactId>
+            <version>${tree-sitter-go.version}</version>
         </dependency>
 
         <!-- YAML 解析：低代码规则平台（团队用 YAML 描述自定义规则） -->

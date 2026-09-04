@@ -5,6 +5,8 @@ import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.admin.CustomAgentDef;
 import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
+import com.codereview.agent.core.analysis.index.ImpactIndexBuilder;
+import com.codereview.agent.core.analysis.index.RepoIndex;
 import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.enhance.ReviewEnhancements;
 import com.codereview.agent.core.impact.ImpactAnalyzer;
@@ -109,6 +111,13 @@ public class CompletableFutureCoordinator implements Coordinator {
     private final InjectionDetector injectionDetector;
     /** 任务规划织入支撑（可空：为 null 或未启用时走固定并行路径）。 */
     private final TaskPlanningSupport planningSupport;
+    /**
+     * 影响面索引构建器（可空：为 null 时影响面分析只能看到 diff 片段，拿不到结论）。
+     *
+     * <p>这是影响面分析从「测试里能跑」变成「线上真生效」的关键接线：
+     * 分析器本身再准，没有完整文件内容也无从下手。
+     */
+    private final ImpactIndexBuilder indexBuilder;
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
@@ -177,6 +186,23 @@ public class CompletableFutureCoordinator implements Coordinator {
                                        CodeReviewAiService aiService,
                                        InjectionDetector injectionDetector,
                                        TaskPlanningSupport planningSupport) {
+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, agentExecutor,
+                impactAnalyzer, recorder, enhancements, ragContextBuilder, customAgentStore,
+                llmClient, aiService, injectionDetector, planningSupport, null);
+    }
+
+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,
+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,
+                                       ReviewEnhancements enhancements,
+                                       RagContextBuilder ragContextBuilder,
+                                       CustomAgentStore customAgentStore,
+                                       LlmClient llmClient,
+                                       CodeReviewAiService aiService,
+                                       InjectionDetector injectionDetector,
+                                       TaskPlanningSupport planningSupport,
+                                       ImpactIndexBuilder indexBuilder) {
         this.agents = agents;
         this.reportGenerator = reportGenerator;
         this.feedbackStore = feedbackStore;
@@ -194,6 +220,7 @@ public class CompletableFutureCoordinator implements Coordinator {
         this.aiService = aiService;
         this.injectionDetector = injectionDetector;
         this.planningSupport = planningSupport;
+        this.indexBuilder = indexBuilder;
     }
 
     /**
@@ -214,6 +241,50 @@ public class CompletableFutureCoordinator implements Coordinator {
             return ReviewProfile.valueOf(profileConfig.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             return ReviewProfile.ADVISORY;
+        }
+    }
+
+    /**
+     * 构建影响面摘要（注入 Agent prompt 的上下文片段）。
+     *
+     * <h2>为什么必须先建索引</h2>
+     * 影响面分析回答的是「谁在调用我改动的方法」，而 diff 只带 ±3 行上下文，
+     * 连一个完整方法体都未必装得下，更别说跨文件的调用方。
+     * 所以这里先按 PR 的 head SHA 把相关源码拉下来建索引（用完在 try-with-resources 里释放临时目录），
+     * 再把索引交给 {@link ImpactAnalyzer} 做真正的分析。
+     *
+     * <p>索引不可用时（未配置 / 无 head SHA / 拉取失败）<b>不做任何伪装</b>：
+     * 由分析器回落为 {@code Mode.NO_SOURCE}，明确表达「这次没结论是因为缺输入」，
+     * 而不是「这个改动没有影响面」——后者正是旧实现长期以「恒产出 0 条」掩盖故障的原因。
+     *
+     * @param pr    PR（提供 owner/repo 与 head SHA）
+     * @param diffs 变更列表
+     * @param runId 运行号（用于轨迹记录）
+     * @return 摘要；无结论时为空串，调用方据此决定是否注入，避免噪声
+     */
+    private String buildImpactSummary(PullRequest pr, List<CodeDiff> diffs, String runId) {
+        if (impactAnalyzer == null) {
+            return "";
+        }
+        if (indexBuilder == null) {
+            return impactAnalyzer.summarize(diffs);
+        }
+        try (RepoIndex index = indexBuilder.build(pr)) {
+            String summary = impactAnalyzer.summarize(diffs, index);
+            // 索引统计落轨迹：让「为什么这次没结论」可被事后诊断，而不是只能靠猜
+            if (recorder != null) {
+                recorder.append(runId, "context.index-built", Map.of(
+                        "fetched", index.stats().fetched(),
+                        "analyzed", index.stats().analyzed(),
+                        "failed", index.stats().failed(),
+                        "truncated", index.stats().truncated(),
+                        "crossFile", index.crossFileCapable(),
+                        "summaryLength", summary.length()));
+            }
+            return summary;
+        } catch (Exception e) {
+            log.warn("[Coordinator] 影响面索引构建失败，跳过注入（不影响主审查）：{}", e.getMessage());
+            return "";
         }
     }
 
@@ -266,7 +337,7 @@ public class CompletableFutureCoordinator implements Coordinator {
         }
 
         // 上下文影响面切片：计算变更方法的上游调用方，注入 Agent 提示词（对齐 codex context-fragments）
-        String impactSummary = (impactAnalyzer != null) ? impactAnalyzer.summarize(diffs) : "";
+        String impactSummary = buildImpactSummary(pr, diffs, runId);
         // RAG 增强：检索团队相关规范/历史知识，注入 Agent 提示词（对齐业界 RAG 最佳实践）
         // 仅在 RagContextBuilder 可用时执行；异常不阻断主审查链路
         final String ragContext;

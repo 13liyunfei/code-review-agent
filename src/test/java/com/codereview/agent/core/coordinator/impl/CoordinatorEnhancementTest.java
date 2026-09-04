@@ -2,6 +2,11 @@ package com.codereview.agent.core.coordinator.impl;
 
 import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
+import com.codereview.agent.core.analysis.index.AnalysisEngines;
+import com.codereview.agent.core.analysis.index.ImpactIndexBuilder;
+import com.codereview.agent.core.analysis.index.IndexScope;
+import com.codereview.agent.core.analysis.index.RepoSourceLocator;
+import com.codereview.agent.core.analysis.index.SourceFetcher;
 import com.codereview.agent.core.feedback.InMemoryFeedbackStore;
 import com.codereview.agent.core.history.InMemoryReviewHistoryStore;
 import com.codereview.agent.core.impact.ImpactAnalyzer;
@@ -23,6 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
@@ -79,18 +85,36 @@ class CoordinatorEnhancementTest {
                 + "  public void a() { m(); }\n"
                 + "  public void m() { int x = 1; }\n"
                 + "}\n";
-        CodeDiff cd = javaDiff("T.java", src);
+        CodeDiff cd = javaDiff("demo/T.java", src);
 
-        CaptureAgent agent = new CaptureAgent(AgentType.SECURITY, () -> List.of(f("T.java", 6)));
+        CaptureAgent agent = new CaptureAgent(AgentType.SECURITY, () -> List.of(f("demo/T.java", 6)));
+
+        // 影响面索引：生产里由 Gitea 拉源码，这里用 Map 打桩（核心层只认接口，不认平台）
+        RepoSourceLocator locator = (owner, repo, ref) -> new SourceFetcher() {
+            @Override
+            public Optional<String> fetch(String path) {
+                return "demo/T.java".equals(path) ? Optional.of(src) : Optional.empty();
+            }
+
+            @Override
+            public List<String> listDir(String dir) {
+                return List.of();
+            }
+        };
+        ImpactIndexBuilder indexBuilder = new ImpactIndexBuilder(
+                locator, AnalysisEngines.defaults(), IndexScope.DEFAULT);
 
         ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tempDir.toString());
         CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(
                 List.of(agent), new ReportGenerator(), new InMemoryFeedbackStore(),
                 new InMemoryReviewHistoryStore(), new AdvancedAnalyzer(),
                 java.util.concurrent.ForkJoinPool.commonPool(),
-                new ImpactAnalyzer(), recorder);
+                new ImpactAnalyzer(), recorder, null, null, null, null, null, null, null,
+                indexBuilder);
 
-        PullRequest pr = new PullRequest(9003, "demo/enh", "t", "@bob", "main", List.of(cd));
+        // head SHA 必须传：影响面分析据此拉取与本次 diff 同一时刻的源码
+        PullRequest pr = new PullRequest(9003, "demo/enh", "t", "@bob", "main",
+                "default", List.of(cd), "deadbeef");
         ReviewReport report = coordinator.review(pr);
 
         // 1) 核心约束：仍覆盖代码审查，产出报告与发现
@@ -116,6 +140,8 @@ class CoordinatorEnhancementTest {
         assertTrue(content.contains("\"review.started\""), "轨迹应含 review.started");
         assertTrue(content.contains("\"agent.completed\""), "轨迹应含 agent.completed");
         assertTrue(content.contains("\"review.completed\""), "轨迹应含 review.completed");
+        // 索引统计落轨迹：「为什么这次没结论」要能事后诊断，而不是只能靠猜
+        assertTrue(content.contains("\"context.index-built\""), "轨迹应含索引构建统计");
     }
 
     @Test

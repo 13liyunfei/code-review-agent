@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -329,7 +330,96 @@ public class GiteaApiClient {
         }
     }
 
+    /**
+     * 拉取指定 ref 下某个文件的<b>完整内容</b>（不是 diff 片段）。
+     *
+     * <p>用途：结构化分析需要完整文件而非 hunk。真实 PR 的 diff 只含改动处
+     * ±3 行上下文，喂给解析器会失败（JavaParser 要求语法完整的编译单元），
+     * 或产出残缺结论（本仓库 AST 层曾因此长期静默产出 0 条结论）。
+     *
+     * <p>调用 {@code GET /repos/:owner/:repo/raw/:ref/:path}。
+     *
+     * @param owner 仓库所属用户/组织名
+     * @param repo  仓库名
+     * @param ref   提交 SHA 或分支名（推荐用 PR 的 head SHA，保证与 diff 一致）
+     * @param path  仓库内相对路径
+     * @return 文件全文；不存在或请求失败返回 null
+     */
+    public String fetchFileContent(String owner, String repo, String ref, String path) {
+        if (isBlank(owner) || isBlank(repo) || isBlank(ref) || isBlank(path)) {
+            return null;
+        }
+        try {
+            String url = "/repos/" + owner + "/" + repo + "/raw/"
+                    + encodeSegment(ref) + "/" + encodePath(path);
+            return getText(url);
+        } catch (Exception e) {
+            log.warn("[Gitea API] 拉取文件内容失败 {}/{}@{}:{} —— {}", owner, repo, ref, path, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 列出指定目录下的条目（非递归）。
+     *
+     * <p>用途：影响面分析按「同包」扩展索引范围时，需要知道同目录还有哪些源文件。
+     *
+     * <p>调用 {@code GET /repos/:owner/:repo/contents/:dir?ref=:ref}。
+     *
+     * @param owner 仓库所属用户/组织名
+     * @param repo  仓库名
+     * @param ref   提交 SHA 或分支名
+     * @param dir   目录路径；仓库根目录传 {@code ""}
+     * @return 子路径列表（含目录前缀）；失败返回空列表
+     */
+    public List<String> listDirectory(String owner, String repo, String ref, String dir) {
+        if (isBlank(owner) || isBlank(repo) || isBlank(ref)) {
+            return List.of();
+        }
+        try {
+            String d = dir == null ? "" : dir;
+            String url = "/repos/" + owner + "/" + repo + "/contents"
+                    + (d.isEmpty() ? "" : "/" + encodePath(d)) + "?ref=" + encodeSegment(ref);
+            JsonNode node = getJson(url);
+            if (node == null || !node.isArray()) {
+                return List.of();
+            }
+            List<String> out = new ArrayList<>();
+            for (JsonNode item : node) {
+                String p = item.path("path").asText(null);
+                if (p != null && !p.isEmpty()) {
+                    out.add(p);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("[Gitea API] 列目录失败 {}/{}@{}:{} —— {}", owner, repo, ref, dir, e.getMessage());
+            return List.of();
+        }
+    }
+
     // ===================== 内部工具 =====================
+
+    /** 路径按段编码：保留 {@code /} 作分隔符，各段单独编码（文件名可能含空格或中文）。 */
+    private static String encodePath(String path) {
+        StringBuilder sb = new StringBuilder();
+        for (String seg : path.split("/", -1)) {
+            if (sb.length() > 0) {
+                sb.append('/');
+            }
+            sb.append(encodeSegment(seg));
+        }
+        return sb.toString();
+    }
+
+    /** 单段编码。ref 中常见的 {@code /}（如 feature/foo）由 {@link #encodePath} 分段处理。 */
+    private static String encodeSegment(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
 
     /** 发送 GET 请求并解析 JSON，失败返回 null。 */
     private JsonNode getJson(String path) throws Exception {
