@@ -64,7 +64,7 @@ class CoordinatorPlanningTest {
     }
 
     @Test
-    void 启用规划时走DAG路径且各Agent仅执行一次(@TempDir Path tmp) throws Exception {
+    void planningEnabledRunsDagPathWithEachAgentOnce(@TempDir Path tmp) throws Exception {
         Files.createDirectories(tmp);
         ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());
         FakeAgent logic = new FakeAgent(AgentType.LOGIC);
@@ -103,7 +103,7 @@ class CoordinatorPlanningTest {
     }
 
     @Test
-    void 未启用规划时行为与旧版一致(@TempDir Path tmp) {
+    void planningDisabledBehavesLikeLegacyCoordinator(@TempDir Path tmp) {
         ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());
         FakeAgent logic = new FakeAgent(AgentType.LOGIC);
 

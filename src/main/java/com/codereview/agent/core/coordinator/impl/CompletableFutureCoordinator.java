@@ -292,8 +292,15 @@ public class CompletableFutureCoordinator implements Coordinator {
     public ReviewReport review(PullRequest pr) {
         ReviewContext ctx = pr.toContext();
         List<CodeDiff> diffs = pr.diffs();
-        // 全链路追踪：runId 与 traceId 统一，使审查历史/报告与日志链路可据同一 ID 关联
-        String runId = TraceContext.ensure();
+        // 断点续跑幂等键（关键修正）：
+        // 旧实现直接取 TraceContext.ensure()——那是每次请求随机生成的 traceId。
+        // 崩溃后「同 PR 重试」是新的 HTTP 请求，拿到的是另一串随机 traceId，
+        // 于是 resumeStore.load(runId) 永远查不到断点，断点续跑在生产上永远不生效
+        // （典型的「feature 只在测试里跑过、线上是死代码」）。
+        // 改为从 PR 身份派生稳定键：同一 PR（owner/repo + 编号 + head SHA）的多次审查共享同一 runId，
+        // 崩溃恢复时才能命中上次落盘的断点；traceId 仍写入 MDC 供日志链路关联。
+        String runId = resumeKey(pr);
+        TraceContext.set(runId);
         long start = System.currentTimeMillis();
         String teamId = pr.teamId();
 
@@ -434,7 +441,7 @@ public class CompletableFutureCoordinator implements Coordinator {
                 : CompletableFuture.supplyAsync(TraceContext.wrap(() -> {
                     long a0 = System.currentTimeMillis();
                     log.info("[Coordinator] 高级静态分析 开始（AST/调用图/SCA）");
-                    List<AgentResult> r = advancedAnalyzer.analyze(diffs);
+                    List<AgentResult> r = advancedAnalyzer.analyze(pr, diffs);
                     int total = r.stream().mapToInt(ar -> ar.findings().size()).sum();
                     log.info("[Coordinator] 高级静态分析 完成：{} 个 Agent 结果，共 {} 条，耗时 {}ms",
                             r.size(), total, System.currentTimeMillis() - a0);
@@ -565,6 +572,28 @@ public class CompletableFutureCoordinator implements Coordinator {
             recorder.close(runId);
         }
         return report;
+    }
+
+    /**
+     * 断点续跑幂等键：从 PR 身份派生，而非随机 traceId。
+     *
+     * <p>设计要点：
+     * <ul>
+     *   <li>必须稳定——同 PR 的多次审查（含崩溃后重试）算出同一个键，才能命中上次落盘的断点；
+     *       用随机 traceId 当键是此前断点续跑「永远不生效」的根因。</li>
+     *   <li>含 head SHA——同 PR 换了新的 commit 应重开审查而非续跑旧断点，
+     *       避免沿用上一个 commit 的半成品（残留断点仍会被 ResumeJanitor 按 TTL 回收）。</li>
+     *   <li>headSha 缺失时回落到 {@code repo#id}，保证旧调用方（不带 SHA）也能复用同一键。</li>
+     * </ul>
+     */
+    private static String resumeKey(PullRequest pr) {
+        String base = (pr.repo() == null ? "?" : pr.repo()) + "#" + pr.id();
+        String head = pr.headSha();
+        String key = (head == null || head.isBlank()) ? base : base + "@" + head;
+        // runId 同时被当作文件名使用（轨迹记录器 / 断点存储），必须文件系统安全：
+        // repo 形如 owner/repo 含 "/"，直接用会写出非法文件名（对应文件/目录创建失败，
+        // 表现为「轨迹丢了」「断点落不了盘 → 续跑永远命中不了」）。
+        return key.replace('/', '_').replace('\\', '_');
     }
 
     /**

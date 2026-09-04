@@ -62,24 +62,27 @@ public final class RepoIndex implements AutoCloseable {
     private final Map<String, AnalysisUnit> units;
     private final Map<String, List<AnalysisUnit.CallSite>> callersByCallee;
     private final Map<String, AnalysisUnit.MethodDecl> methodsBySignature;
+    private final Map<String, String> sources;
     private final Stats stats;
     private final boolean crossFileCapable;
 
     private RepoIndex(Path sourceRoot, Map<String, AnalysisUnit> units,
                       Map<String, List<AnalysisUnit.CallSite>> callersByCallee,
                       Map<String, AnalysisUnit.MethodDecl> methodsBySignature,
+                      Map<String, String> sources,
                       Stats stats, boolean crossFileCapable) {
         this.sourceRoot = sourceRoot;
         this.units = units;
         this.callersByCallee = callersByCallee;
         this.methodsBySignature = methodsBySignature;
+        this.sources = sources;
         this.stats = stats;
         this.crossFileCapable = crossFileCapable;
     }
 
     /** 空索引（无跨文件能力时的占位，避免调用方判空）。 */
     public static RepoIndex empty() {
-        return new RepoIndex(null, Map.of(), Map.of(), Map.of(), Stats.ZERO, false);
+        return new RepoIndex(null, Map.of(), Map.of(), Map.of(), Map.of(), Stats.ZERO, false);
     }
 
     /**
@@ -209,7 +212,7 @@ public final class RepoIndex implements AutoCloseable {
         log.info("[RepoIndex] 索引完成：拉取 {} 文件，分析成功 {}，失败 {}，跨文件能力={}",
                 stats.fetched(), stats.analyzed(), stats.failed(), crossFile);
         return new RepoIndex(root, Map.copyOf(units), Map.copyOf(inverted),
-                Map.copyOf(bySig), stats, crossFile);
+                Map.copyOf(bySig), Map.copyOf(contents), stats, crossFile);
     }
 
     /**
@@ -233,6 +236,11 @@ public final class RepoIndex implements AutoCloseable {
     /** 取某文件的分析单元。 */
     public Optional<AnalysisUnit> unit(String path) {
         return Optional.ofNullable(units.get(path));
+    }
+
+    /** 取某文件的完整源码（索引阶段从仓库拉取并物化的内容）。 */
+    public Optional<String> source(String path) {
+        return Optional.ofNullable(sources.get(path));
     }
 
     public Map<String, AnalysisUnit> units() {

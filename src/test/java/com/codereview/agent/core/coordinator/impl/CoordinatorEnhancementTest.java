@@ -146,11 +146,18 @@ class CoordinatorEnhancementTest {
 
     @Test
     void resumesFromCheckpointWithoutRerunningDoneAgents(@TempDir Path tempDir) {
+        // 断点续跑幂等键改为「从 PR 身份派生」——这是修复 P0 的核心：
+        // 旧实现用随机 traceId 当键，同 PR 重试永远命中不了断点，feature 生产上从不生效。
+        // 这里用与 Coordinator 相同的派生规则算出键，预置断点使其可命中。
+        String headSha = "sha1abc";
+        // 注意：repo 含 "/" 会被 resumeKey 替换为 "_"，故键里是 "demo_resume" 而非 "demo/resume"
+        String expectedKey = "demo_resume#9004@" + headSha;
+
         // 预置断点：SECURITY 已完成并产出 1 条 MAJOR 发现
         Finding restored = new Finding(AgentType.SECURITY, "T.java", 2, 2, Severity.MAJOR,
                 "security", "SEC-RESTORED", "title", "desc", "建议", 0.9, "RULE");
         FileResumeStore resumeStore = new FileResumeStore(tempDir);
-        resumeStore.save(new ResumeState("resume-run-1", 9004, "demo/resume", "default",
+        resumeStore.save(new ResumeState(expectedKey, 9004, "demo/resume", "default",
                 java.util.Set.of(AgentType.SECURITY), List.of(restored), System.currentTimeMillis()));
 
         CaptureAgent security = new CaptureAgent(AgentType.SECURITY, () -> List.of(f("T.java", 6)));
@@ -162,21 +169,21 @@ class CoordinatorEnhancementTest {
                 java.util.concurrent.ForkJoinPool.commonPool(), null, recorder,
                 new com.codereview.agent.core.enhance.ReviewEnhancements(resumeStore, null, null, null));
 
-        // 固定 runId，使断点可命中
-        com.codereview.agent.core.trace.TraceContext.set("resume-run-1");
+        // 带 headSha 的 PR：键 = repo#id@headSha，与预置断点一致 → 可命中
         PullRequest pr = new PullRequest(9004, "demo/resume", "t", "@bob", "main",
-                List.of(new CodeDiff("T.java", "+x", "java", 1, 0)));
+                "default", List.of(new CodeDiff("T.java", "+x", "java", 1, 0)), headSha);
         ReviewReport report = coordinator.review(pr);
 
-        // 1) 核心约束：仍产出报告，且恢复的发现 + 新 Agent 发现都在
+        // 1) 核心约束：仍产出报告，已完成 Agent 不重跑、未完成 Agent 执行
+        assertEquals(expectedKey, report.getRunId(), "runId 必须源自 PR 身份（修复 P0）");
         assertEquals(0, security.calls.get(), "已完成 Agent 不得重跑（断点续跑）");
         assertEquals(1, logic.calls.get(), "未完成 Agent 应执行");
         assertTrue(report.getFindings().stream().anyMatch(x -> x.ruleId().equals("SEC-RESTORED")),
                 "断点恢复的发现应并入报告");
-        // 2) 正常完成 → 断点清理
-        assertTrue(resumeStore.load("resume-run-1", "default").isEmpty(), "审查完成后断点应清理");
+        // 2) 正常完成 → 断点清理（以派生键为准）
+        assertTrue(resumeStore.load(expectedKey, "default").isEmpty(), "审查完成后断点应清理");
         // 3) 轨迹含 review.resumed 事件（断点续跑可审计）
-        Path file = tempDir.resolve("default").resolve("trajectories").resolve("resume-run-1.jsonl");
+        Path file = tempDir.resolve("default").resolve("trajectories").resolve(expectedKey + ".jsonl");
         try {
             String content = Files.readString(file);
             assertTrue(content.contains("\"review.resumed\""), "轨迹应含 review.resumed");

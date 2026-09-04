@@ -100,7 +100,9 @@ class CoordinatorTimeoutDegradationTest {
         BlockingAdvancedAnalyzer(long sleepMs) {
             this.sleepMs = sleepMs;
         }
-        @Override public List<AgentResult> analyze(List<CodeDiff> diffs) {
+        // 覆写生产签名 analyze(pr, diffs)：旧签名 analyze(List) 只是兼容委托，桩若覆写旧的
+        // 将不再拦截生产调用（Coordinator 已切新签名）——这正是本测试要守护的接线。
+        @Override public List<AgentResult> analyze(PullRequest pr, List<CodeDiff> diffs) {
             try {
                 Thread.sleep(sleepMs);
             } catch (InterruptedException e) {
