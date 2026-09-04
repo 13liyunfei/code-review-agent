@@ -79,10 +79,10 @@
   <rect x="58" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="74" y="542" fill="#27500A">Core analysis &amp; auto-fix</text>
   <text class="ts" x="74" y="560">• AstAnalyzer / CallGraphAnalyzer</text>
-  <text class="ts" x="74" y="578">• ScaScanner (component security)</text>
+  <text class="ts" x="74" y="578">• ScaScanner (SCA) · YamlRuleEngine</text>
   <text class="ts" x="74" y="596">• AdvancedAnalyzer (6-way aggregation)</text>
   <text class="ts" x="74" y="614">• AutoFixEngine + Sandbox probe</text>
-  <text class="ts" x="74" y="632">• YamlRuleEngine / ImpactAnalyzer</text>
+  <text class="ts" x="74" y="632">• ImpactAnalyzer (RepoIndex dual-engine)</text>
   <rect x="352" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="368" y="542" fill="#27500A">RAG &amp; memory (rebuilt)</text>
   <text class="ts" x="368" y="560">• KnowledgeStore (in-memory/Pg)</text>
@@ -130,9 +130,9 @@
   <text class="ts" x="337" y="1010" text-anchor="middle" dominant-baseline="central">message queue · fail-soft</text>
   <text class="ts" x="337" y="1028" text-anchor="middle" dominant-baseline="central">non-blocking degradation</text>
   <rect x="436" y="966" width="194" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="533" y="990" text-anchor="middle" dominant-baseline="central">TokenHub MaaS</text>
-  <text class="ts" x="533" y="1010" text-anchor="middle" dominant-baseline="central">multi-model gateway · failover</text>
-  <text class="ts" x="533" y="1028" text-anchor="middle" dominant-baseline="central">Egress egress control (GFW-resilient)</text>
+  <text class="th" x="533" y="990" text-anchor="middle" dominant-baseline="central">LLM gateway</text>
+  <text class="ts" x="533" y="1010" text-anchor="middle" dominant-baseline="central">token-factory first (opt-in)</text>
+  <text class="ts" x="533" y="1028" text-anchor="middle" dominant-baseline="central">TokenHub fallback · no Mock</text>
 
   <!-- CROSS-CUTTING -->
   <rect x="40" y="1070" width="600" height="166" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
@@ -151,10 +151,10 @@
   <text class="ts" x="570" y="1136" text-anchor="middle" dominant-baseline="central">SPI registry</text>
   <rect x="58" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
   <text class="th" x="158" y="1180" text-anchor="middle" dominant-baseline="central">Resume &amp; trajectory replay</text>
-  <text class="ts" x="158" y="1198" text-anchor="middle" dominant-baseline="central">ResumeStore / ReviewReplay</text>
+  <text class="ts" x="158" y="1198" text-anchor="middle" dominant-baseline="central">ResumeStore (runId=repo@headSha)</text>
   <rect x="270" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
   <text class="th" x="370" y="1180" text-anchor="middle" dominant-baseline="central">Prompt injection defense</text>
-  <text class="ts" x="370" y="1198" text-anchor="middle" dominant-baseline="central">InjectionDetector · custom-agent pre-check</text>
+  <text class="ts" x="370" y="1198" text-anchor="middle" dominant-baseline="central">Steg scan · Diff BLOCK/TAG · store gate</text>
   <rect x="482" y="1162" width="150" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
   <text class="th" x="557" y="1180" text-anchor="middle" dominant-baseline="central">i18n</text>
   <text class="ts" x="557" y="1198" text-anchor="middle" dominant-baseline="central">ReviewMessages</text>

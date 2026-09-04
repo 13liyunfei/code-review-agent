@@ -184,7 +184,7 @@ In the target project → **Settings → Webhooks**:
 Developer opens an MR
   → GitLab sends a Webhook (action=open/update)
   → The system asynchronously fetches MR changes (GET /projects/:id/merge_requests/:iid/changes)
-  → 5 agents review in parallel (Logic/Security/Performance/Style/Architecture + Hunyuan LLM)
+  → review in parallel (AdvancedAnalyzer + 5 built-in agents + team custom agents; LLM via ModelGateway → token-factory/TokenHub, no Mock)
   → Aggregate, de-duplicate, arbitrate conflicts, tier (Blocker/Major/Minor/Info)
   → The review report is written back to the MR as a Markdown comment
 ```
@@ -242,7 +242,7 @@ Repo → **Settings → Webhooks → Add Webhook → Gitea**:
 Developer opens/updates a PR
   → Gitea sends a Webhook (action=opened/synchronized/reopened)
   → The system asynchronously fetches the PR diff (GET /repos/:owner/:repo/pulls/:index.diff)
-  → 5 agents review in parallel (Logic/Security/Performance/Style/Architecture + Hunyuan LLM)
+  → review in parallel (AdvancedAnalyzer + 5 built-in agents + team custom agents; LLM via ModelGateway → token-factory/TokenHub, no Mock)
   → Aggregate, de-duplicate, arbitrate conflicts, tier (Blocker/Major/Minor/Info)
   → The review report is written back to the PR as a Markdown comment
 ```

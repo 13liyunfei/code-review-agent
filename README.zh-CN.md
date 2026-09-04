@@ -188,7 +188,7 @@ GITLAB_API_TOKEN=glpat-xxx ./mvnw spring-boot:run \
 开发者提交 MR
   → GitLab 发送 Webhook（action=open/update）
   → 系统异步拉取 MR 变更（GET /projects/:id/merge_requests/:iid/changes）
-  → 5 个 Agent 并行审查（逻辑/安全/性能/风格/架构 + 混元 LLM）
+  → 并行审查（高级分析器 + 5 个内置 Agent + 团队自定义 Agent；LLM 走 ModelGateway → token-factory/TokenHub，无 Mock）
   → 聚合去重、冲突仲裁、分级定档（Blocker/Major/Minor/Info）
   → 审查报告以 Markdown 评论回写到 MR
 ```
@@ -249,7 +249,7 @@ docker exec -u git gitea gitea admin user generate-access-token --username revie
 开发者提交/更新 PR
   → Gitea 发送 Webhook（action=opened/synchronized/reopened）
   → 系统异步拉取 PR diff（GET /repos/:owner/:repo/pulls/:index.diff）
-  → 5 个 Agent 并行审查（逻辑/安全/性能/风格/架构 + 混元 LLM）
+  → 并行审查（高级分析器 + 5 个内置 Agent + 团队自定义 Agent；LLM 走 ModelGateway → token-factory/TokenHub，无 Mock）
   → 聚合去重、冲突仲裁、分级定档（Blocker/Major/Minor/Info）
   → 审查报告以 Markdown 评论回写到 PR
 ```

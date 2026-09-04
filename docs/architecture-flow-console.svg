@@ -57,7 +57,7 @@
   <path class="a" d="M448 312 L464 312" stroke="#5F5E5A"/>
   <rect x="472" y="284" width="160" height="68" rx="8" fill="#D3D1C7" stroke="#5F5E5A"/>
   <text class="ts" x="552" y="300" text-anchor="middle" dominant-baseline="central">⑥ LLM 推理</text>
-  <text class="ts" x="552" y="316" text-anchor="middle" dominant-baseline="central">ModelGateway→TokenHub</text>
+  <text class="ts" x="552" y="316" text-anchor="middle" dominant-baseline="central">ModelGateway→TF/TokenHub</text>
   <text class="ts" x="552" y="332" text-anchor="middle" dominant-baseline="central">RAG 检索(向量+BM25)</text>
   <text class="ts" x="552" y="348" text-anchor="middle" dominant-baseline="central">可选：ToolCallingLoop</text>
   <path class="a" d="M552 352 L552 372" stroke="#5F5E5A"/>
@@ -85,6 +85,7 @@
   <text class="cap" x="52" y="600">每个环节日志带 [traceId]，</text>
   <text class="cap" x="52" y="616">grep 可重建全链路与耗时</text>
   <text class="cap" x="52" y="636">（观测性）</text>
+  <text class="cap" x="52" y="654">⑥ LLM：token-factory 优先（可插拔）· TokenHub 直连兜底 · 无 Mock</text>
 
   <!-- B2 -->
   <text class="lay" x="40" y="752" fill="#993556">B2 · 管理控制台后管链路 (code-review-console :8081)</text>

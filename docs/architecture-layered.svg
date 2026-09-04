@@ -79,10 +79,10 @@
   <rect x="58" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="74" y="542" fill="#27500A">核心分析 &amp; 自动修复</text>
   <text class="ts" x="74" y="560">• AstAnalyzer / CallGraphAnalyzer</text>
-  <text class="ts" x="74" y="578">• ScaScanner (组件安全)</text>
+  <text class="ts" x="74" y="578">• ScaScanner (SCA) · YamlRuleEngine</text>
   <text class="ts" x="74" y="596">• AdvancedAnalyzer (聚合 6 路)</text>
   <text class="ts" x="74" y="614">• AutoFixEngine + Sandbox 探针</text>
-  <text class="ts" x="74" y="632">• YamlRuleEngine / ImpactAnalyzer</text>
+  <text class="ts" x="74" y="632">• ImpactAnalyzer (RepoIndex 双引擎)</text>
   <rect x="352" y="524" width="280" height="120" rx="10" fill="#EAF3DE" stroke="#639922" stroke-width="0.5"/>
   <text class="th" x="368" y="542" fill="#27500A">RAG &amp; 记忆（重构）</text>
   <text class="ts" x="368" y="560">• KnowledgeStore (内存/Pg)</text>
@@ -130,9 +130,9 @@
   <text class="ts" x="337" y="1010" text-anchor="middle" dominant-baseline="central">消息队列 · fail-soft</text>
   <text class="ts" x="337" y="1028" text-anchor="middle" dominant-baseline="central">不可用时降级不阻断</text>
   <rect x="436" y="966" width="194" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text class="th" x="533" y="990" text-anchor="middle" dominant-baseline="central">TokenHub MaaS</text>
-  <text class="ts" x="533" y="1010" text-anchor="middle" dominant-baseline="central">多模型网关 · failover</text>
-  <text class="ts" x="533" y="1028" text-anchor="middle" dominant-baseline="central">Egress 出口管控(抗 GFW)</text>
+  <text class="th" x="533" y="990" text-anchor="middle" dominant-baseline="central">LLM 网关</text>
+  <text class="ts" x="533" y="1010" text-anchor="middle" dominant-baseline="central">token-factory 优先（可插拔）</text>
+  <text class="ts" x="533" y="1028" text-anchor="middle" dominant-baseline="central">TokenHub 直连兜底 · 无 Mock</text>
 
   <!-- CROSS-CUTTING -->
   <rect x="40" y="1070" width="600" height="166" rx="14" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
@@ -151,10 +151,10 @@
   <text class="ts" x="570" y="1136" text-anchor="middle" dominant-baseline="central">SPI 注册</text>
   <rect x="58" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
   <text class="th" x="158" y="1180" text-anchor="middle" dominant-baseline="central">断点续跑 &amp; 轨迹回放</text>
-  <text class="ts" x="158" y="1198" text-anchor="middle" dominant-baseline="central">ResumeStore / ReviewReplay</text>
+  <text class="ts" x="158" y="1198" text-anchor="middle" dominant-baseline="central">ResumeStore (runId=repo@headSha)</text>
   <rect x="270" y="1162" width="200" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
   <text class="th" x="370" y="1180" text-anchor="middle" dominant-baseline="central">Prompt 注入防护</text>
-  <text class="ts" x="370" y="1198" text-anchor="middle" dominant-baseline="central">InjectionDetector · 自定义Agent预检</text>
+  <text class="ts" x="370" y="1198" text-anchor="middle" dominant-baseline="central">Steg 零宽 · Diff BLOCK/TAG · 写库 3 层</text>
   <rect x="482" y="1162" width="150" height="50" rx="8" fill="#FBEAF0" stroke="#D4537E" stroke-width="0.5"/>
   <text class="th" x="557" y="1180" text-anchor="middle" dominant-baseline="central">i18n 多语言</text>
   <text class="ts" x="557" y="1198" text-anchor="middle" dominant-baseline="central">ReviewMessages</text>
