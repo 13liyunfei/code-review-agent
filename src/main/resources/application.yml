@@ -98,9 +98,11 @@ pgvector:
   # 生产环境务必通过环境变量注入用户名/密码（PGVECTOR_USERNAME / PGVECTOR_PASSWORD），不要写死
   username: ${PGVECTOR_USERNAME:yunfei}
   password: ${PGVECTOR_PASSWORD:}
-  # 默认 profile 使用 SimpleHashEmbeddingClient，必须使用 256 维；
-  # dev profile 开启真实 Embedding 时覆盖为 1024 维。
-  vector-dim: ${PGVECTOR_VECTOR_DIM:256}
+  # 向量维度必须与 review.llm.embedding 实际使用的模型一致（默认 kinfra-text-embedding-0.6b = 1024 维）。
+  # 注意：切换嵌入模型（如 4b=2560 维）或关闭真实嵌入仅用哈希(256 维)时，须同步修改此处——
+  # PgVectorMemoryStore 启动检测到配置维度与存量列不一致会「备份旧表后重建向量列」（存量向量作废），
+  # 因此维度口径在 dev/prod 必须一致，禁止各自覆盖。
+  vector-dim: ${PGVECTOR_VECTOR_DIM:1024}
 
 # ===== Redis 配置 =====
 # enabled=true 时使用 Redis 作为消息队列；false 回退到内存

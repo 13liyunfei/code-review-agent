@@ -1,5 +1,7 @@
 package com.codereview.agent.core.llm;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 /**
  * 模型网关配置（熔断器 / 重试 / 路由策略）。
  *
@@ -8,6 +10,7 @@ package com.codereview.agent.core.llm;
  * 启用熔断/重试后相当于在网关层加了一道「快速失败 + 暂时隔离」保护，
  * 是面向 JD「高可用」「故障降级」诉求的核心能力。
  */
+@ConfigurationProperties("review.llm.gateway")
 public class LlmGatewayProperties {
 
     /** 熔断器配置。 */
