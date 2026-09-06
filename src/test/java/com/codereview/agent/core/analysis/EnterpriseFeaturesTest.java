@@ -82,7 +82,8 @@ class EnterpriseFeaturesTest {
                 + "  <version>2.14.0</version>\n"
                 + "</dependency>\n";
         CodeDiff cd = javaDiff("pom.xml", pom);
-        ScaScanner.ScaReport report = ScaScanner.analyze(List.of(cd));
+        // 内置样本数据源 = 离线确定性 fixture（生产/开发走 OSV 真实库，见 ScaSourceConfig）
+        ScaScanner.ScaReport report = ScaScanner.builtinOnly().analyze(List.of(cd));
         assertTrue(report.vulnerabilities().stream()
                 .anyMatch(v -> v.cve().equals("CVE-2021-44228")), "应检出 Log4Shell");
         assertNotNull(report.sbomJson(), "应生成 SBOM");
