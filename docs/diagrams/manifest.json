@@ -4,7 +4,8 @@
   "subtitle": "从「PR 被推送」到「评论回写平台」的全链路，逐层拆解到单 Agent 内部与聚合仲裁细节。",
   "meta": [
     "入口：<code>GiteaWebhookController</code> · <code>GitLabWebhookController</code> · <code>ScheduledScanService</code> · <code>ReviewApiController</code> · <code>IdeReviewServer</code>",
-    "编排：<code>GiteaReviewService</code> → <code>CompletableFutureCoordinator</code> → <code>ReportGenerator</code>"
+    "编排：<code>GiteaReviewService</code> → <code>CompletableFutureCoordinator</code> → <code>ReportGenerator</code>",
+    "状态层：<code>PgDb</code> → PostgreSQL 8 张表（<code>pgvector.enabled</code> 开关，未启用则回退内存并告警）"
   ],
   "footer": "code-review-agent · 业务流程图集 · 全部节点均可在 <code>src/main/java/com/codereview/</code> 下按文件路径 grep 复现<br>\n  mermaid 源码：<code>docs/diagrams/*.mmd</code>",
   "sections": [
@@ -14,7 +15,7 @@
       "file": "l0-overview",
       "title": "系统全景",
       "sub": "五个入口 → 引擎内部六段流水线 → 平台四类回写动作。多租户以 <code>teamId</code> 贯穿全链路。",
-      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。<br><b>LLM 侧已接入公司级 Token 工厂</b>：工厂供应商与直连供应商同列候选，复用已有 failover；直连时由 <code>UsageReportingProvider</code> 把用量补报回工厂（无 usage 按字符数估算并打 estimated 标记）。"
+      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。<br><b>LLM 侧已接入公司级 Token 工厂</b>：工厂供应商与直连供应商同列候选，复用已有 failover；直连时由 <code>UsageReportingProvider</code> 把用量补报回工厂（无 usage 按字符数估算并打 estimated 标记）。<br><b>状态层已全量迁 PostgreSQL</b>：断点 / 经验 / 校准 / 反馈 / 历史 / 轨迹 / 团队配置 / 知识元数据共 8 张表，全部带 <code>team_id</code>；<code>pgvector.enabled=true</code> 时多实例读写同一份状态，<b>审查进程不再落任何本地状态文件</b>。"
     },
     {
       "id": "l1a",
@@ -238,19 +239,63 @@
       "id": "l6",
       "tag": "L6",
       "file": "l6-dataflow",
-      "title": "数据流 · 租户存储与状态落盘",
-      "sub": "所有持久化状态按 <code>teamId</code> 隔离在 <code>data-dir/&lt;teamId&gt;/</code> 下；基线 <code>__global__</code> + 团队叠加，缺失回退默认。",
+      "title": "数据流 · PostgreSQL 集群存储与租户隔离",
+      "sub": "8 张状态表统一由 <code>PgDb</code> 连接池承载，每行带 <code>team_id</code>；<code>pgvector.enabled</code> 一键切换 PG / 内存双后端。基线 <code>__global__</code> + 团队叠加，缺失回退默认。",
       "anchors": [
+        [
+          "统一连接池与 8 张表建表",
+          "<code>core/store/PgDb.java:46, 109</code>"
+        ],
+        [
+          "PG / 内存双后端装配开关",
+          "<code>core/store/StateStoreConfig.java:46-145</code>"
+        ],
+        [
+          "团队配置落 team_kv + 2s TTL 刷新",
+          "<code>core/skill/SkillRegistry.java:43, 68</code>"
+        ],
+        [
+          "反馈复合监听器（校准 + 经验证据）",
+          "<code>config/ReviewAgentConfig.java:614-619</code>"
+        ],
         [
           "断点定时清理（每日 03:30）",
           "<code>core/resume/ResumeJanitor.java:27, 47</code>"
-        ],
-        [
-          "purgeExpired 按 mtime 判超期",
-          "<code>core/resume/FileResumeStore.java:118</code>"
         ]
       ],
-      "note": "<b>崩溃遗留的断点会永久残留</b>——<code>complete()</code> 只在正常完成时调用，崩溃后若那个 runId 再也不被触发，JSON 就永远躺在磁盘上，几个月攒一目录垃圾。<br>判据用 <b>文件 mtime 而非 JSON 里的 updatedAt</b>：写入被中断留下的半截 JSON 根本读不出 updatedAt，但它同样该被清掉。审查推进时会不断 save 刷新 mtime，因此跑得再久也不会被误删（已加测试锁住）。<br><b>坑</b>：Spring 的 <code>Duration</code> 绑定，不带单位的纯数字按<b>毫秒</b>算——写成 <code>ttl: 24</code> 会变成 24 毫秒、把所有断点一扫而空。TTL 为 0 / 负数 / 未配置时一律不清理。"
+      "info": "<b>跨实例收敛靠「写穿 + 短 TTL 惰性刷新」</b>：团队配置（Skill 启停 / 自定义 Agent）写穿 <code>team_kv</code> JSONB，读方带 2s 短 TTL 惰性重载——A 实例管理端变更，B 实例最迟 2s 生效，不需要消息广播。",
+      "note": "<b>为什么迁</b>：改造前 8 类状态落在 <code>data-dir/&lt;teamId&gt;/</code> 本地 JSON，A 机沉淀 B 机不可见，多实例必然分叉——<b>「经验越用越准」在集群下反而退化成「每台机器各长一套记忆」</b>。<br><b>三个设计取舍</b>：<ul><li>沿用仓库既有风格——原生 JDBC + Hikari，<b>不引 starter-jdbc</b>，避免改变运行时行为；</li><li><code>StateStoreConfig</code> 按 <code>pgvector.enabled</code> 装配双后端，未启用时回退内存并<b>启动告警</b>（单机/测试可用，集群必须开 PG）；</li><li>表结构 <code>CREATE TABLE IF NOT EXISTS</code> 幂等初始化（无 Flyway），与既有 <code>memory_store</code> 口径一致。</li></ul><b>迁移后 <code>data-dir</code> 只剩一个用途</b>：agent-loop 开启时作为 <code>FileReadTool</code> 的默认读取根。<br><b>坑</b>：Spring 的 <code>Duration</code> 绑定，不带单位的纯数字按<b>毫秒</b>算——写成 <code>ttl: 24</code> 会变成 24 毫秒、把所有断点一扫而空。"
+    },
+    {
+      "id": "l6b",
+      "tag": "L6b",
+      "file": "l6b-memory-lifecycle",
+      "title": "记忆生命周期 · 证据驱动升级与 TTL 遗忘",
+      "sub": "经验条目四态：<code>CANDIDATE → ACTIVE → ARCHIVED → PURGED</code>。<b>升级靠证据不靠时间</b>，遗忘只作用于长期无命中的冷门经验。",
+      "anchors": [
+        [
+          "四态枚举与升级规则",
+          "<code>core/memory/ExperienceStage.java:21-25</code>"
+        ],
+        [
+          "接口：沉淀 / 反馈 / 命中 / 归档 / 清理",
+          "<code>core/memory/ExperienceLibrary.java:20-69</code>"
+        ],
+        [
+          "PG 实现（SQL 内原子判定）",
+          "<code>core/store/PgExperienceLibrary.java:27, 29, 46-48</code>"
+        ],
+        [
+          "每日维护 03:40（180d 归档 / 90d 硬删）",
+          "<code>core/memory/MemoryMaintenanceScheduler.java:36-48</code>"
+        ],
+        [
+          "管理端点",
+          "<code>core/memory/ExperienceAdminController.java:24-56</code>"
+        ]
+      ],
+      "info": "<b>反遗忘靠 spaced repetition</b>：每次检索命中都刷新 <code>lastHitAt</code> 与 <code>hitCount</code>，被反复用到的经验永远不会进入 TTL 归档——遗忘只清理「记忆衰退」的冷门条目，常用经验不衰退。",
+      "note": "<b>阈值是 SQL 常量</b>（<code>ACTIVE_EVIDENCE = 3</code> / <code>ARCHIVE_NEGATIVE = 2</code>），升级判定在 <code>UPDATE ... SET stage = CASE WHEN ...</code> 内<b>原子完成</b>，不存在读-改-写竞态。<br><b>坑</b>：Spring <code>Duration</code> 绑定不带单位的纯数字按<b>毫秒</b>算——<code>experience-idle: 180</code> 会变成 180 毫秒，一轮清空全部经验。默认值一律写成 <code>180d</code> / <code>90d</code>。<br>维护任务<b>与断点清理 03:30、巡检 02:00 错峰</b>在 03:40 执行，异常只记 WARN 跳过本轮，不影响审查主链路。"
     },
     {
       "id": "l7",

@@ -5,19 +5,22 @@ flowchart LR
         W2["Coordinator<br/>审查结束"]
         W3["Console / REST<br/>标记误报"]
         W4["Coordinator<br/>全流程事件"]
-        W5["Skill 规则变更"]
-        W6["Coordinator<br/>正常完成"]
-        W7["ResumeJanitor<br/>每日 03:30 定时"]
+        W5["管理端<br/>Skill / 自定义 Agent 变更"]
+        W6["知识摄入<br/>团队规范入库"]
+        W7["ReflectionService<br/>反思沉淀 / 跨 PR 复现"]
+        W8["ResumeJanitor<br/>每日 03:30"]
     end
 
-    subgraph STORE["持久化 · data-dir/teamId/"]
+    subgraph STORE["持久化 · PostgreSQL 统一连接池 PgDb"]
         direction TB
-        P1[("ResumeState<br/>doneAgents + findings")]
-        P2[("ReviewHistory<br/>支持复检对比")]
-        P3[("FeedbackStore<br/>抑制源")]
-        P4[("trajectories<br/>runId .jsonl")]
-        P5[("SkillRegistry<br/>内置 + 团队 YAML")]
-        P6[("RAG 知识库<br/>团队规范")]
+        P1[("resume_state<br/>run_id PK · payload JSONB")]
+        P2[("review_history<br/>team + hkey")]
+        P3[("review_feedback<br/>抑制源")]
+        P4[("trajectory_store<br/>run_id PK · events JSONB")]
+        P5[("team_kv<br/>团队配置 JSONB")]
+        P6[("knowledge_meta<br/>RAG 知识元数据")]
+        P7[("experience_entry<br/>四态 + 证据计数")]
+        P8[("calibration_accuracy<br/>rule_id PK")]
     end
 
     subgraph OUT["消费侧"]
@@ -26,8 +29,10 @@ flowchart LR
         C2["computeVerification<br/>已解决 / 新引入"]
         C3["aggregate 阶段<br/>误报抑制"]
         C4["ReviewReplay 回放"]
-        C5["runSkills<br/>自定义规则生效"]
+        C5["runSkills 规则生效<br/>跨实例 2s 收敛"]
         C6["RagContextBuilder<br/>注入提示词"]
+        C7["经验检索注入<br/>仅 CANDIDATE + ACTIVE"]
+        C8["ConfidenceCalibration<br/>置信度校准"]
     end
 
     W1 --> P1
@@ -35,9 +40,11 @@ flowchart LR
     W3 --> P3
     W4 --> P4
     W5 --> P5
-    W5 --> P6
-    W6 -->|"complete 清理"| P1
-    W7 -->|"purgeExpired<br/>按 mtime 判超期"| P1
+    W6 --> P6
+    W7 --> P7
+    W8 -->|"purgeExpired<br/>按 updated_at"| P1
+    P3 -.->|"复合 FeedbackListener<br/>校准 + 经验证据两路"| P8
+    P3 -.->|"误报 = 负证据"| P7
 
     P1 --> C1
     P2 --> C2
@@ -45,14 +52,17 @@ flowchart LR
     P4 --> C4
     P5 --> C5
     P6 --> C6
+    P7 --> C7
+    P8 --> C8
 
     G[("__global__ 基线<br/>团队配置叠加")] -.->|"缺失回退默认"| STORE
+    F[("pgvector.enabled=false<br/>InMemory 回退 + 启动告警")] -.->|"单机 / 测试"| STORE
 
     classDef grp fill:#FBFCFB,stroke:#2c7d2c,stroke-width:1.5px;
     classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
     classDef store fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1.5px,color:#1f2933;
     classDef base fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
     class IN,STORE,OUT grp;
-    class W1,W2,W3,W4,W5,W6,W7,C1,C2,C3,C4,C5,C6 n;
-    class P1,P2,P3,P4,P5,P6 store;
-    class G base;
+    class W1,W2,W3,W4,W5,W6,W7,W8,C1,C2,C3,C4,C5,C6,C7,C8 n;
+    class P1,P2,P3,P4,P5,P6,P7,P8 store;
+    class G,F base;

@@ -1,0 +1,35 @@
+flowchart TD
+    A1["反思沉淀 · 新 pattern 入库"] --> S1
+    A2["跨 PR 复现 · 同 pattern 再现"] -->|"evidence_pos + 1"| S1
+    A3["人工正报"] -->|"evidence_pos + 1"| S1
+    A4["人工误报"] -->|"evidence_neg + 1"| S1
+
+    S1["CANDIDATE<br/>候选 · 未经验证"]
+    S2["ACTIVE<br/>转正 · 检索权重最高"]
+    S3["ARCHIVED<br/>软删 · 退出检索注入"]
+    S4["PURGED<br/>物理删除 · 不可恢复"]
+
+    S1 -->|"evidence_pos ≥ 3<br/>SQL 内原子判定"| S2
+    S1 -->|"evidence_neg ≥ 2"| S3
+    S2 -->|"evidence_neg ≥ 2"| S3
+    S3 -->|"保留期 90d"| S4
+
+    MAINT["MemoryMaintenanceScheduler<br/>每日 03:40 · 与断点清理错峰"]
+    MAINT -.->|"无命中 / 无更新 180d"| S3
+    MAINT -.->|"purgeArchived"| S4
+
+    HIT["检索命中 recordHit<br/>刷新 lastHitAt + hitCount"] -.->|"spaced repetition<br/>常用经验不衰退"| S2
+    ADMIN["ExperienceAdminController<br/>/api/admin/memory/experiences"] -.->|"手动归档 / 删除"| S3
+
+    classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef cand fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef act fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef arch fill:#F5F7FA,stroke:#9aa5b1,stroke-width:1px,color:#52606d;
+    classDef purge fill:#FFFFFF,stroke:#b0443c,stroke-width:1.5px,color:#b0443c;
+    classDef side fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class A1,A2,A3,A4 n;
+    class S1 cand;
+    class S2 act;
+    class S3 arch;
+    class S4 purge;
+    class MAINT,HIT,ADMIN side;

@@ -35,14 +35,25 @@ flowchart TD
         O4["Commit<br/>Status"]
     end
 
+    subgraph STATE["⑤ 状态层 · PostgreSQL（多实例共享，进程无本地状态）"]
+        direction LR
+        T1["PgDb · 统一连接池<br/>HikariCP max 12"]
+        T2["8 张状态表<br/>每行带 team_id"]
+        T3["StateStoreConfig<br/>pgvector.enabled 开关<br/>关闭则内存回退 + 告警"]
+    end
+
     SRC --> E1
     E4 -.-> EXT
     X1 -.->|"直连时补报用量"| X4
     E6 --> OUT
+    E3 -.->|"断点 / 轨迹落库与续跑"| STATE
+    E4 -.->|"经验 / 校准 / 反馈<br/>抑制源回读"| STATE
 
     classDef grp fill:#FBFCFB,stroke:#2c7d2c,stroke-width:1.5px;
     classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
     classDef ext fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
-    class SRC,ENG,OUT grp;
+    classDef store fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1.5px,color:#1f2933;
+    class SRC,ENG,OUT,STATE grp;
     class S1,S2,S3,S4,S5,E1,E2,E3,E4,E5,E6,O1,O2,O3,O4 n;
     class X1,X2,X3,X4 ext;
+    class T1,T2,T3 store;
