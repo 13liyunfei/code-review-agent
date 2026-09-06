@@ -89,12 +89,11 @@ public class GiteaConfig {
                                                  ReviewWorkflowEngine workflowEngine,
                                                  TeamResolver teamResolver,
                                                  LlmClient llmClient,
+                                                 com.codereview.agent.core.memory.ExperienceStore experienceStore,
                                                  org.springframework.core.env.Environment env) {
         // 可选增强（默认关闭）：经验反思沉淀 + LLM 应用评估
-        var dataDir = java.nio.file.Path.of(env.getProperty("review.data-dir", "./data"));
         var reflection = Boolean.parseBoolean(env.getProperty("review.reflection.enabled", "false"))
-                ? new com.codereview.agent.core.memory.ReflectionService(
-                        new com.codereview.agent.core.memory.ExperienceStore(null, dataDir), llmClient)
+                ? new com.codereview.agent.core.memory.ReflectionService(experienceStore, llmClient)
                 : null;
         var judge = Boolean.parseBoolean(env.getProperty("review.eval.enabled", "false"))
                 ? new com.codereview.kit.eval.LlmJudge(llmClient)

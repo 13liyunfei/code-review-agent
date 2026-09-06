@@ -16,12 +16,11 @@ import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.planning.TaskPlanningSupport;
 import com.codereview.kit.planning.TaskPlanner;
 import com.codereview.agent.core.report.ReportGenerator;
+import com.codereview.agent.core.trajectory.InMemoryTrajectoryStore;
+import com.codereview.agent.core.trajectory.ReviewEvent;
 import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -64,9 +63,9 @@ class CoordinatorPlanningTest {
     }
 
     @Test
-    void planningEnabledRunsDagPathWithEachAgentOnce(@TempDir Path tmp) throws Exception {
-        Files.createDirectories(tmp);
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());
+    void planningEnabledRunsDagPathWithEachAgentOnce() {
+        InMemoryTrajectoryStore trajectoryStore = new InMemoryTrajectoryStore();
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(trajectoryStore);
         FakeAgent logic = new FakeAgent(AgentType.LOGIC);
         FakeAgent security = new FakeAgent(AgentType.SECURITY);
 
@@ -90,21 +89,15 @@ class CoordinatorPlanningTest {
         assertEquals(1, security.calls.get());
         assertTrue(report.getFindings().stream().anyMatch(f -> f.agentType() == AgentType.LOGIC));
         assertTrue(report.getFindings().stream().anyMatch(f -> f.agentType() == AgentType.SECURITY));
-        // 轨迹含规划事件
-        String traj = Files.readString(Path.of(tmp.toString(), "default", "trajectories")
-                .resolve(listFirst(tmp))).contains("plan.created") ? "y" : "";
-        assertEquals("y", traj);
-    }
-
-    private static String listFirst(Path tmp) throws Exception {
-        try (var s = Files.list(Path.of(tmp.toString(), "default", "trajectories"))) {
-            return s.findFirst().orElseThrow().getFileName().toString();
-        }
+        // 轨迹含规划事件（从轨迹存储读回，不依赖本机文件）
+        List<String> types = trajectoryStore.load(report.getRunId(), "default").orElse(List.of())
+                .stream().map(ReviewEvent::type).toList();
+        assertTrue(types.contains("plan.created"), "轨迹应含 plan.created");
     }
 
     @Test
-    void planningDisabledBehavesLikeLegacyCoordinator(@TempDir Path tmp) {
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());
+    void planningDisabledBehavesLikeLegacyCoordinator() {
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(new InMemoryTrajectoryStore());
         FakeAgent logic = new FakeAgent(AgentType.LOGIC);
 
         // 14 参构造（planningSupport=null）→ 走固定并行路径

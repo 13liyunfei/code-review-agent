@@ -1,12 +1,12 @@
 package com.codereview.agent.core.resume;
 
+import com.codereview.agent.core.model.AgentType;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.convert.ApplicationConversionService;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,30 +33,25 @@ class ResumeJanitorTest {
     }
 
     @Test
-    void purgeRemovesStaleCheckpoints(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        Path dir = tempDir.resolve("teamA").resolve("resume");
-        Files.createDirectories(dir);
-        Path stale = dir.resolve("stale.json");
-        Files.writeString(stale, "{}");
-        Files.setLastModifiedTime(stale, java.nio.file.attribute.FileTime.fromMillis(
+    void purgeRemovesStaleCheckpoints() {
+        InMemoryResumeStore store = new InMemoryResumeStore();
+        store.save(new ResumeState("stale", 1, "r", "teamA",
+                Set.of(AgentType.SECURITY), List.of(),
                 System.currentTimeMillis() - Duration.ofDays(3).toMillis()));
 
         new ResumeJanitor(store, Duration.ofHours(24)).purge();
 
-        assertFalse(Files.exists(stale), "定时任务应清理超期断点");
+        assertFalse(store.load("stale", "teamA").isPresent(), "定时任务应清理超期断点");
     }
 
     @Test
-    void purgeKeepsFreshCheckpoints(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        Path dir = tempDir.resolve("teamA").resolve("resume");
-        Files.createDirectories(dir);
-        Path fresh = dir.resolve("fresh.json");
-        Files.writeString(fresh, "{}");
+    void purgeKeepsFreshCheckpoints() {
+        InMemoryResumeStore store = new InMemoryResumeStore();
+        store.save(new ResumeState("fresh", 1, "r", "teamA",
+                Set.of(AgentType.SECURITY), List.of(), System.currentTimeMillis()));
 
         new ResumeJanitor(store, Duration.ofHours(24)).purge();
 
-        assertTrue(Files.exists(fresh), "未超期断点必须保留");
+        assertTrue(store.load("fresh", "teamA").isPresent(), "未超期断点必须保留");
     }
 }

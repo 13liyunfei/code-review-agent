@@ -4,11 +4,7 @@ import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.Severity;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -19,7 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 断点续跑存储：原子落盘 / 读取 / 正常完成清理。
+ * 断点续跑存储（集群改造后）：PG 行级 UPSERT 为生产实现、{@code InMemoryResumeStore}
+ * 为单测/降级实现——这里锁定接口契约（保存 / 读取 / 正常完成清理 / TTL 残留回收）。
+ *
+ * <p>替代改造前的 {@code FileResumeStore} 测试：本地 JSON + mtime 判据已删除
+ * （孤儿 tmp / 半截 JSON 是文件系统特有问题，PG 行模型天然免疫），
+ * TTL 判据改为断点自身的 updatedAt（PG 侧为行级 updated_at 列，原子更新）。
  */
 class ResumeStoreTest {
 
@@ -28,11 +29,15 @@ class ResumeStoreTest {
                 "R-1", "title", "desc", "建议", 0.9, "RULE");
     }
 
+    private static ResumeState state(String runId, String teamId, long updatedAt) {
+        return new ResumeState(runId, 9001, "demo/repo", teamId,
+                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), updatedAt);
+    }
+
     @Test
-    void saveLoadCompleteRoundTrip(@TempDir Path tempDir) {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        ResumeState state = new ResumeState("runX", 9001, "demo/repo", "teamA",
-                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis());
+    void saveLoadCompleteRoundTrip() {
+        ResumeStore store = new InMemoryResumeStore();
+        ResumeState state = state("runX", "teamA", System.currentTimeMillis());
 
         store.save(state);
         Optional<ResumeState> loaded = store.load("runX", "teamA");
@@ -40,19 +45,20 @@ class ResumeStoreTest {
         assertEquals(Set.of(AgentType.SECURITY), loaded.get().doneAgents());
         assertEquals(1, loaded.get().findings().size());
 
-        // 断点文件确实落盘（可跨进程恢复）
-        Path file = tempDir.resolve("teamA").resolve("resume").resolve("runX.json");
-        assertTrue(Files.exists(file), "断点应落盘为 JSON");
+        // 同 runId 再次保存 = 覆盖刷新（审查推进）
+        store.save(new ResumeState("runX", 9001, "demo/repo", "teamA",
+                Set.of(AgentType.SECURITY, AgentType.LOGIC), List.of(), System.currentTimeMillis()));
+        assertEquals(Set.of(AgentType.SECURITY, AgentType.LOGIC),
+                store.load("runX", "teamA").orElseThrow().doneAgents());
 
         // 正常完成 → 清理
         store.complete("runX", "teamA");
-        assertFalse(Files.exists(file), "正常完成后断点应删除");
         assertTrue(store.load("runX", "teamA").isEmpty());
     }
 
     @Test
-    void loadMissingReturnsEmpty(@TempDir Path tempDir) {
-        FileResumeStore store = new FileResumeStore(tempDir);
+    void loadMissingReturnsEmpty() {
+        ResumeStore store = new InMemoryResumeStore();
         assertTrue(store.load("nope", "teamA").isEmpty());
     }
 
@@ -66,53 +72,36 @@ class ResumeStoreTest {
         assertTrue(partial.hasPending(Set.of(AgentType.SECURITY, AgentType.LOGIC)));
     }
 
-    /**
-     * 把文件最后修改时间往回拨，模拟「很久没被写过」。
-     */
-    private static void age(Path file, Duration howOld) throws Exception {
-        Files.setLastModifiedTime(file, FileTime.fromMillis(System.currentTimeMillis() - howOld.toMillis()));
-    }
-
-    private static Path checkpointFile(Path tempDir, String teamId, String runId) {
-        return tempDir.resolve(teamId).resolve("resume").resolve(runId + ".json");
-    }
-
     @Test
-    void purgeExpiredRemovesStaleCheckpoint(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        store.save(new ResumeState("old", 9002, "demo/repo", "teamA",
-                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));
-        Path file = checkpointFile(tempDir, "teamA", "old");
-        age(file, Duration.ofDays(2));
+    void purgeExpiredRemovesStaleCheckpoint() {
+        ResumeStore store = new InMemoryResumeStore();
+        store.save(state("old", "teamA",
+                System.currentTimeMillis() - Duration.ofDays(2).toMillis()));
 
         assertEquals(1, store.purgeExpired(Duration.ofHours(24)), "超期断点应被清理");
-        assertFalse(Files.exists(file), "超期断点文件应删除");
         assertTrue(store.load("old", "teamA").isEmpty());
     }
 
     @Test
-    void purgeExpiredKeepsFreshCheckpoint(@TempDir Path tempDir) {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        store.save(new ResumeState("fresh", 9003, "demo/repo", "teamA",
-                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));
+    void purgeExpiredKeepsFreshCheckpoint() {
+        ResumeStore store = new InMemoryResumeStore();
+        store.save(state("fresh", "teamA", System.currentTimeMillis()));
 
         assertEquals(0, store.purgeExpired(Duration.ofHours(24)), "未超期断点不得清理");
         assertTrue(store.load("fresh", "teamA").isPresent(), "未超期断点应保留");
     }
 
     /**
-     * TTL 方案的<b>核心安全性质</b>：只要审查还在推进就会不断 save、刷新 mtime，
+     * TTL 方案的<b>核心安全性质</b>：只要审查还在推进就会不断 save、刷新 updatedAt，
      * 因此跑得再久的审查也不会被当成残留删掉。
      */
     @Test
-    void saveRefreshesMtimeSoLongRunningReviewSurvives(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        Path file = checkpointFile(tempDir, "teamD", "long");
-        store.save(new ResumeState("long", 9004, "demo/repo", "teamD",
-                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));
-        age(file, Duration.ofHours(23));
+    void saveRefreshesUpdatedAtSoLongRunningReviewSurvives() {
+        ResumeStore store = new InMemoryResumeStore();
+        store.save(state("long", "teamD",
+                System.currentTimeMillis() - Duration.ofHours(23).toMillis()));
 
-        // 审查仍在推进：又完成一个 Agent，再次保存 → mtime 刷新回当下
+        // 审查仍在推进：又完成一个 Agent，再次保存 → updatedAt 刷新回当下
         store.save(new ResumeState("long", 9004, "demo/repo", "teamD",
                 Set.of(AgentType.SECURITY, AgentType.LOGIC), List.of(), System.currentTimeMillis()));
 
@@ -120,64 +109,11 @@ class ResumeStoreTest {
         assertTrue(store.load("long", "teamD").isPresent());
     }
 
-    /**
-     * 损坏到无法解析的断点也必须能被清掉——这正是判据用 mtime 而不是 JSON 里 updatedAt 的原因：
-     * 半截 JSON 根本读不出 updatedAt，按业务时间清理会让它永久残留。
-     */
-    @Test
-    void purgeExpiredRemovesUnparseableCheckpoint(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        Path dir = tempDir.resolve("teamC").resolve("resume");
-        Files.createDirectories(dir);
-        Path broken = dir.resolve("broken.json");
-        Files.writeString(broken, "{\"runId\":\"broken\",\"doneAgents\":[");
-        age(broken, Duration.ofDays(5));
-
-        assertTrue(store.load("broken", "teamC").isEmpty(), "前置条件：损坏断点读不出来");
-        assertEquals(1, store.purgeExpired(Duration.ofHours(24)), "损坏断点同样应被清理");
-        assertFalse(Files.exists(broken));
-    }
-
-    /** 崩溃若发生在「写完临时文件、ATOMIC_MOVE 之前」，tmp 同样会成为无人回收的残留。 */
-    @Test
-    void purgeExpiredRemovesOrphanTmpFile(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        Path dir = tempDir.resolve("teamB").resolve("resume");
-        Files.createDirectories(dir);
-        Path tmp = dir.resolve("half.json.tmp");
-        Files.writeString(tmp, "{\"runId\":\"half\"");
-        age(tmp, Duration.ofDays(3));
-
-        assertEquals(1, store.purgeExpired(Duration.ofHours(24)), "孤儿临时文件应被清理");
-        assertFalse(Files.exists(tmp));
-    }
-
-    @Test
-    void purgeExpiredIgnoresUnrelatedFiles(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        Path dir = tempDir.resolve("teamE").resolve("resume");
-        Files.createDirectories(dir);
-        Path unrelated = dir.resolve("notes.txt");
-        Files.writeString(unrelated, "别删我");
-        age(unrelated, Duration.ofDays(30));
-
-        assertEquals(0, store.purgeExpired(Duration.ofHours(24)), "非断点文件不得清理");
-        assertTrue(Files.exists(unrelated));
-    }
-
-    @Test
-    void purgeExpiredWithoutDataDirIsNoop(@TempDir Path tempDir) {
-        FileResumeStore store = new FileResumeStore(tempDir.resolve("not-created"));
-        assertEquals(0, store.purgeExpired(Duration.ofHours(24)), "根目录不存在时不应报错");
-    }
-
     /** TTL 配成 0 / 负数 / 未配置时一律不清理：宁可泄漏，也不能删掉正在跑的审查。 */
     @Test
-    void purgeExpiredRejectsNonPositiveTtl(@TempDir Path tempDir) throws Exception {
-        FileResumeStore store = new FileResumeStore(tempDir);
-        store.save(new ResumeState("keep", 9005, "demo/repo", "teamA",
-                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));
-        age(checkpointFile(tempDir, "teamA", "keep"), Duration.ofDays(99));
+    void purgeExpiredRejectsNonPositiveTtl() {
+        ResumeStore store = new InMemoryResumeStore();
+        store.save(state("keep", "teamA", System.currentTimeMillis() - Duration.ofDays(99).toMillis()));
 
         assertEquals(0, store.purgeExpired(Duration.ZERO), "TTL=0 不得清理");
         assertEquals(0, store.purgeExpired(Duration.ofHours(-1)), "负 TTL 不得清理");

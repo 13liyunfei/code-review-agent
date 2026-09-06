@@ -1,5 +1,6 @@
 package com.codereview.agent.core.eval;
 
+import com.codereview.agent.core.trajectory.InMemoryTrajectoryStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -26,7 +27,7 @@ class ReviewReplayTest {
         Path file = tempDir.resolve("t.jsonl");
         Files.writeString(file, EV);
 
-        ReviewReplay.ReplayResult r = new ReviewReplay(tempDir).replayFile(file);
+        ReviewReplay.ReplayResult r = new ReviewReplay(new InMemoryTrajectoryStore()).replayFile(file);
         assertTrue(r.ok(), "合法轨迹应回放通过：" + r.issues());
         assertTrue(r.eventCount() == 4);
     }
@@ -36,7 +37,7 @@ class ReviewReplayTest {
         Path file = tempDir.resolve("t.jsonl");
         Files.writeString(file, EV.replace("{\"type\":\"review.completed\"", "{\"type\":\"x-completed\""));
 
-        ReviewReplay.ReplayResult r = new ReviewReplay(tempDir).replayFile(file);
+        ReviewReplay.ReplayResult r = new ReviewReplay(new InMemoryTrajectoryStore()).replayFile(file);
         assertFalse(r.ok(), "缺失 review.completed 应判定失败");
         assertFalse(r.issues().isEmpty());
     }
@@ -45,6 +46,6 @@ class ReviewReplayTest {
     void emptyTrajectoryFails(@TempDir Path tempDir) throws Exception {
         Path file = tempDir.resolve("t.jsonl");
         Files.writeString(file, "");
-        assertFalse(new ReviewReplay(tempDir).replayFile(file).ok(), "空轨迹应判定失败");
+        assertFalse(new ReviewReplay(new InMemoryTrajectoryStore()).replayFile(file).ok(), "空轨迹应判定失败");
     }
 }

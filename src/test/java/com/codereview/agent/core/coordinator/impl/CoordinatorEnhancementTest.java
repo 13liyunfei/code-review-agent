@@ -7,6 +7,7 @@ import com.codereview.agent.core.analysis.index.ImpactIndexBuilder;
 import com.codereview.agent.core.analysis.index.IndexScope;
 import com.codereview.agent.core.analysis.index.RepoSourceLocator;
 import com.codereview.agent.core.analysis.index.SourceFetcher;
+import com.codereview.agent.core.enhance.ReviewEnhancements;
 import com.codereview.agent.core.feedback.InMemoryFeedbackStore;
 import com.codereview.agent.core.history.InMemoryReviewHistoryStore;
 import com.codereview.agent.core.impact.ImpactAnalyzer;
@@ -19,14 +20,13 @@ import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.model.Severity;
 import com.codereview.agent.core.report.ReportGenerator;
-import com.codereview.agent.core.resume.FileResumeStore;
+import com.codereview.agent.core.resume.InMemoryResumeStore;
 import com.codereview.agent.core.resume.ResumeState;
+import com.codereview.agent.core.trajectory.InMemoryTrajectoryStore;
+import com.codereview.agent.core.trajectory.ReviewEvent;
 import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,6 +39,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 增强能力接入后的端到端验证：确保「事件源轨迹 + 影响面切片」接入后，
  * Coordinator 仍能正常覆盖代码审查（产出报告），且新能力真实生效。
+ *
+ * <p>轨迹存储为接口（{@code InMemoryTrajectoryStore} 单测 / PG 生产）：审查事件在
+ * 结束时写入轨迹存储，断言从存储读回事件序列——不依赖本机 JSONL 文件。
  */
 class CoordinatorEnhancementTest {
 
@@ -78,8 +81,13 @@ class CoordinatorEnhancementTest {
         }
     }
 
+    /** 从轨迹存储读出事件类型列表（断言用）。 */
+    private static List<String> eventTypes(InMemoryTrajectoryStore store, String runId, String teamId) {
+        return store.load(runId, teamId).orElse(List.of()).stream().map(ReviewEvent::type).toList();
+    }
+
     @Test
-    void reviewStillWorksWithTrajectoryAndImpact(@TempDir Path tempDir) {
+    void reviewStillWorksWithTrajectoryAndImpact() {
         String src = "package demo;\n"
                 + "public class T {\n"
                 + "  public void a() { m(); }\n"
@@ -104,7 +112,8 @@ class CoordinatorEnhancementTest {
         ImpactIndexBuilder indexBuilder = new ImpactIndexBuilder(
                 locator, AnalysisEngines.defaults(), IndexScope.DEFAULT);
 
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tempDir.toString());
+        InMemoryTrajectoryStore trajectoryStore = new InMemoryTrajectoryStore();
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(trajectoryStore);
         CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(
                 List.of(agent), new ReportGenerator(), new InMemoryFeedbackStore(),
                 new InMemoryReviewHistoryStore(), new AdvancedAnalyzer(),
@@ -128,24 +137,17 @@ class CoordinatorEnhancementTest {
         assertTrue(ctx.impactSummary().contains("m"),
                 "影响面摘要应提及变更方法 m（注入生效）");
 
-        // 3) 轨迹已落盘且含关键事件
-        Path file = tempDir.resolve("default").resolve("trajectories").resolve(
-                report.getRunId() + ".jsonl");
-        assertTrue(Files.exists(file), "审查轨迹应已落盘");
-        String content = "";
-        try {
-            content = Files.readString(file);
-        } catch (Exception ignored) {
-        }
-        assertTrue(content.contains("\"review.started\""), "轨迹应含 review.started");
-        assertTrue(content.contains("\"agent.completed\""), "轨迹应含 agent.completed");
-        assertTrue(content.contains("\"review.completed\""), "轨迹应含 review.completed");
+        // 3) 轨迹已入存储且含关键事件（不依赖本机 JSONL）
+        List<String> types = eventTypes(trajectoryStore, report.getRunId(), "default");
+        assertTrue(types.contains("review.started"), "轨迹应含 review.started");
+        assertTrue(types.contains("agent.completed"), "轨迹应含 agent.completed");
+        assertTrue(types.contains("review.completed"), "轨迹应含 review.completed");
         // 索引统计落轨迹：「为什么这次没结论」要能事后诊断，而不是只能靠猜
-        assertTrue(content.contains("\"context.index-built\""), "轨迹应含索引构建统计");
+        assertTrue(types.contains("context.index-built"), "轨迹应含索引构建统计");
     }
 
     @Test
-    void resumesFromCheckpointWithoutRerunningDoneAgents(@TempDir Path tempDir) {
+    void resumesFromCheckpointWithoutRerunningDoneAgents() {
         // 断点续跑幂等键改为「从 PR 身份派生」——这是修复 P0 的核心：
         // 旧实现用随机 traceId 当键，同 PR 重试永远命中不了断点，feature 生产上从不生效。
         // 这里用与 Coordinator 相同的派生规则算出键，预置断点使其可命中。
@@ -156,18 +158,19 @@ class CoordinatorEnhancementTest {
         // 预置断点：SECURITY 已完成并产出 1 条 MAJOR 发现
         Finding restored = new Finding(AgentType.SECURITY, "T.java", 2, 2, Severity.MAJOR,
                 "security", "SEC-RESTORED", "title", "desc", "建议", 0.9, "RULE");
-        FileResumeStore resumeStore = new FileResumeStore(tempDir);
+        InMemoryResumeStore resumeStore = new InMemoryResumeStore();
         resumeStore.save(new ResumeState(expectedKey, 9004, "demo/resume", "default",
                 java.util.Set.of(AgentType.SECURITY), List.of(restored), System.currentTimeMillis()));
 
         CaptureAgent security = new CaptureAgent(AgentType.SECURITY, () -> List.of(f("T.java", 6)));
         CaptureAgent logic = new CaptureAgent(AgentType.LOGIC, () -> List.of(f("T.java", 7)));
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tempDir.toString());
+        InMemoryTrajectoryStore trajectoryStore = new InMemoryTrajectoryStore();
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(trajectoryStore);
         CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(
                 List.of(security, logic), new ReportGenerator(), new InMemoryFeedbackStore(),
                 new InMemoryReviewHistoryStore(), new AdvancedAnalyzer(),
                 java.util.concurrent.ForkJoinPool.commonPool(), null, recorder,
-                new com.codereview.agent.core.enhance.ReviewEnhancements(resumeStore, null, null, null));
+                new ReviewEnhancements(resumeStore, null, null));
 
         // 带 headSha 的 PR：键 = repo#id@headSha，与预置断点一致 → 可命中
         PullRequest pr = new PullRequest(9004, "demo/resume", "t", "@bob", "main",
@@ -183,13 +186,8 @@ class CoordinatorEnhancementTest {
         // 2) 正常完成 → 断点清理（以派生键为准）
         assertTrue(resumeStore.load(expectedKey, "default").isEmpty(), "审查完成后断点应清理");
         // 3) 轨迹含 review.resumed 事件（断点续跑可审计）
-        Path file = tempDir.resolve("default").resolve("trajectories").resolve(expectedKey + ".jsonl");
-        try {
-            String content = Files.readString(file);
-            assertTrue(content.contains("\"review.resumed\""), "轨迹应含 review.resumed");
-        } catch (Exception e) {
-            throw new AssertionError("轨迹文件应存在", e);
-        }
+        List<String> types = eventTypes(trajectoryStore, expectedKey, "default");
+        assertTrue(types.contains("review.resumed"), "轨迹应含 review.resumed");
     }
 
     @Test

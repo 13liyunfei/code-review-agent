@@ -11,6 +11,8 @@ import com.codereview.agent.core.security.DiffInputGuard;
 import com.codereview.agent.core.security.KeywordInjectionDetector;
 import com.codereview.agent.core.security.StegInjectionScanner;
 import com.codereview.agent.core.skill.SkillRegistry;
+import com.codereview.agent.core.store.InMemoryCalibrationStore;
+import com.codereview.agent.core.store.InMemoryTeamConfigStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -54,8 +56,8 @@ class SecurityAgentTest {
         DiffInputGuard guard = new DiffInputGuard(new KeywordInjectionDetector(),
                 new StegInjectionScanner(), null);
         agent = new SecurityAgent(llm, new ClasspathPromptLoader(),
-                new SkillRegistry(List.of(), tmp.resolve("skills")),
-                new ConfidenceCalibrationService(tmp.resolve("calibration")),
+                new SkillRegistry(List.of(), new InMemoryTeamConfigStore()),
+                new ConfidenceCalibrationService(new InMemoryCalibrationStore()),
                 guard, null);
     }
 

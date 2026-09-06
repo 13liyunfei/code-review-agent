@@ -11,17 +11,17 @@ import java.time.Duration;
 /**
  * 断点残留清理任务（孤儿断点的兜底回收）。
  *
- * <p>{@link FileResumeStore#complete} 只在审查<b>正常完成</b>时被调用。进程被杀、机器重启之后，
- * 若那个 runId 再也不被触发（PR 被关闭 / 合并 / 换了新的 commit），断点 JSON 就会永远躺在磁盘上。
- * 文件存储最容易被忽略的运维问题不是性能、不是一致性，而是这种<b>缓慢的磁盘泄漏</b>：
- * 每次崩溃漏一个，攒几个月就攒出一目录垃圾。
+ * <p>{@link ResumeStore#complete} 只在审查<b>正常完成</b>时被调用。进程被杀、机器重启之后，
+ * 若那个 runId 再也不被触发（PR 被关闭 / 合并 / 换了新的 commit），断点就会永远残留在存储中。
+ * 文件存储最容易被忽略的运维问题不是性能、不是一致性，而是这种<b>缓慢的泄漏</b>：
+ * 每次崩溃漏一个，攒几个月就攒出一堆垃圾（PG 行版同样需要兜底回收）。
  *
  * <p>为什么不放进 {@code ScheduledScanService}：那是技术债务巡检服务，装配需要
  * {@code GiteaApiClient} / {@code Coordinator} 一整套依赖，且 {@code scan.enabled=false} 时整体跳过。
  * 断点清理是存储自身的生命周期管理，与是否开启巡检无关，必须独立。
  *
- * <p>为什么不用 {@code updatedAt} 而用 mtime、以及为什么不会误删正在进行的审查，
- * 见 {@link FileResumeStore#purgeExpired}。
+ * <p>为什么不会误删正在进行的审查：判据是断点最后更新时间，只要审查还在推进就会不断
+ * {@link ResumeStore#save} 覆盖刷新，超过 TTL 没有任何写入就等价于「这次审查已经死了」。
  */
 @Component
 public class ResumeJanitor {
@@ -34,10 +34,10 @@ public class ResumeJanitor {
      */
     private static final int NOISY_THRESHOLD = 100;
 
-    private final FileResumeStore store;
+    private final ResumeStore store;
     private final Duration maxAge;
 
-    public ResumeJanitor(FileResumeStore store,
+    public ResumeJanitor(ResumeStore store,
                          @Value("${review.resume.ttl:24h}") Duration maxAge) {
         this.store = store;
         this.maxAge = maxAge;

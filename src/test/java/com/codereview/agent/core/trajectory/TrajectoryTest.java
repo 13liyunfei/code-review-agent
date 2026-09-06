@@ -52,8 +52,9 @@ class TrajectoryTest {
     }
 
     @Test
-    void recorderPersistsJsonl(@TempDir Path tempDir) throws Exception {
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tempDir.toString());
+    void recorderPersistsToStoreOnClose() {
+        InMemoryTrajectoryStore store = new InMemoryTrajectoryStore();
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(store);
         String runId = "run-test-1";
         recorder.begin(runId, "teamA");
         recorder.append(runId, "review.started", Map.of("prId", 1L, "repo", "demo"));
@@ -61,23 +62,17 @@ class TrajectoryTest {
         recorder.append(runId, "review.completed", Map.of("totalFindings", 3));
         recorder.close(runId);
 
-        Path file = tempDir.resolve("teamA").resolve("trajectories").resolve(runId + ".jsonl");
-        assertTrue(Files.exists(file), "轨迹文件应已落盘");
-
-        List<String> lines = List.of(Files.readString(file).split("\n"));
-        assertEquals(3, lines.size());
-        ObjectMapper om = new ObjectMapper();
-        JsonNode n0 = om.readTree(lines.get(0));
-        assertEquals("review.started", n0.get("type").asText());
-        assertNotNull(n0.get("data").get("repo"));
-        JsonNode n2 = om.readTree(lines.get(2));
-        assertEquals("review.completed", n2.get("type").asText());
+        List<ReviewEvent> events = store.load(runId, "teamA").orElseThrow();
+        assertEquals(3, events.size());
+        assertEquals("review.started", events.get(0).type());
+        assertEquals("demo", events.get(0).data().get("repo"));
+        assertEquals("review.completed", events.get(2).type());
         assertFalse(recorder.getInMemory(runId).isPresent(), "close 后内存应释放");
     }
 
     @Test
     void recorderNullSafe() {
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder("./target/traj-test");
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(new InMemoryTrajectoryStore());
         // 未 begin 直接 append 不应抛异常（自动建未知团队会话）
         recorder.append("orphan", "review.started", Map.of());
         assertTrue(recorder.getInMemory("orphan").isPresent());

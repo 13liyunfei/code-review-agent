@@ -12,8 +12,8 @@ import com.codereview.agent.core.enhance.ReviewEnhancements;
 import com.codereview.agent.core.impact.ImpactAnalyzer;
 import com.codereview.agent.core.permission.VetoPolicy;
 import com.codereview.agent.core.profile.ReviewProfile;
-import com.codereview.agent.core.resume.FileResumeStore;
 import com.codereview.agent.core.resume.ResumeState;
+import com.codereview.agent.core.resume.ResumeStore;
 import com.codereview.agent.core.tools.ToolGate;
 import com.codereview.agent.core.trajectory.ReviewEvent;
 import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;
@@ -94,7 +94,7 @@ public class CompletableFutureCoordinator implements Coordinator {
     /** 审查轨迹记录器（可空：为 null 时不记录轨迹，零侵入）。 */
     private final ReviewTrajectoryRecorder recorder;
     /** 断点续跑存储（P0-③，可空）。 */
-    private final FileResumeStore resumeStore;
+    private final ResumeStore resumeStore;
     /** 权限收敛：BLOCKER 免于抑制/覆盖（P1-⑥，可空）。 */
     private final VetoPolicy vetoPolicy;
     /** 工具分级门控（P1-⑦，可空）。 */

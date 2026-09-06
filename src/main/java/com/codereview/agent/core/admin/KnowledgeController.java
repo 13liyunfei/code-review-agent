@@ -13,14 +13,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 /**
  * 团队知识控制器（规范文档 / 操作手册 / 视频上传后端）。
  *
  * <p>接收 multipart 文件与可选的文字稿 {@code text}，经 {@link TextExtractor}
- * 解析后由 {@link KnowledgeIngestionService} 写入 RAG 与本地存储。所有内容按团队隔离。
+ * 解析后由 {@link KnowledgeIngestionService} 写入 RAG 与共享元数据存储。
+ * 内容均按团队隔离；知识正文只存共享存储，不在本地落盘。
  */
 @RestController
 @RequestMapping("/api/admin/knowledge")
@@ -45,7 +43,6 @@ public class KnowledgeController {
                                @RequestParam(value = "text", required = false) String text) throws Exception {
         String teamId = Teams.fromRequest(teamHeader, teamParam);
         String originalFilename = (file != null && !file.isEmpty()) ? file.getOriginalFilename() : null;
-        String storedPath = null;
         long sizeBytes = 0;
         String extracted = (text != null && !text.isBlank()) ? text : null;
 
@@ -53,14 +50,11 @@ public class KnowledgeController {
             if (extracted == null) {
                 extracted = extractor.extract(file);
             }
-            Path tmp = Files.createTempFile("kb-up-", ".bin");
-            file.transferTo(tmp.toFile());
-            storedPath = tmp.toString();
-            sizeBytes = Files.size(tmp);
+            sizeBytes = file.getSize();
         }
 
         KnowledgeUpload upload = new KnowledgeUpload(source, category, type,
-                extracted, originalFilename, sizeBytes, storedPath);
+                extracted, originalFilename, sizeBytes, null);
         return ingestion.ingest(teamId, upload);
     }
 

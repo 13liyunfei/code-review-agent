@@ -2,6 +2,7 @@ package com.codereview.agent.core.skill;
 
 import com.codereview.agent.core.admin.dto.CustomRuleRequest;
 import com.codereview.agent.core.admin.dto.SkillInfo;
+import com.codereview.agent.core.store.TeamConfigStore;
 import com.codereview.agent.tenant.Teams;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,10 +11,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.annotation.PostConstruct;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,9 +28,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>自定义技能：团队在前端提交的 {@link CustomRule}，运行时编译为正则技能，<b>按团队隔离</b>。</li>
  * </ul>
  *
- * <p><b>团队隔离模型</b>：内置技能跨团队共享，但其「启用/停用」状态按团队叠加（团队可关闭某内置技能）；
- * 自定义规则、启停状态均按 {@code data-dir/&lt;teamId&gt;/} 子目录持久化，团队间互不可见。
- * 保留团队 {@code __global__} 仅承载系统级共享内容（当前无独立用途）。
+ * <p><b>持久化（改造后）</b>：团队「启停状态 / 自定义规则」经 {@link TeamConfigStore}
+ * 落共享存储（生产为 PG {@code team_kv} JSONB 行，替代改造前的 {@code data-dir/<teamId>/*.json}）。
+ * 进程内保留内存态做高频读取，写操作写穿共享存储；读取带 {@value #REFRESH_MS}ms 短 TTL 惰性重载，
+ * 因此集群下 A 实例管理端改配置，B 实例审查最迟 {@value #REFRESH_MS}ms 后生效——多实例行为一致。
  *
  * <p>所有方法均接收 {@code teamId}；未匹配的仓库回退到默认团队（{@link Teams#DEFAULT}）。
  */
@@ -41,8 +39,14 @@ public class SkillRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(SkillRegistry.class);
 
+    /** 团队配置读缓存有效期（毫秒）：跨实例配置变更的最长可见延迟。 */
+    static final long REFRESH_MS = 2_000;
+
+    private static final String SCOPE_ENABLED = "skills-enabled";
+    private static final String SCOPE_RULES = "custom-rules";
+
     private final List<Skill> builtInSkills;
-    private final Path dataDir;
+    private final TeamConfigStore configStore;
     private final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -53,133 +57,84 @@ public class SkillRegistry {
     private final Map<String, Map<String, CustomRule>> customRuleDefsByTeam = new ConcurrentHashMap<>();
     /** teamId → (ruleId → 编译后的自定义技能)。 */
     private final Map<String, Map<String, Skill>> customSkillsByTeam = new ConcurrentHashMap<>();
-    /** 已加载的团队集合（懒加载去重）。 */
-    private final Map<String, Boolean> loadedTeams = new ConcurrentHashMap<>();
+    /** 已加载的团队集合（懒加载去重 + 刷新时间戳）。 */
+    private final Map<String, Long> loadedTeams = new ConcurrentHashMap<>();
 
-    public SkillRegistry(List<Skill> builtInSkills, Path dataDir) {
+    public SkillRegistry(List<Skill> builtInSkills, TeamConfigStore configStore) {
         this.builtInSkills = builtInSkills == null ? List.of() : builtInSkills;
-        this.dataDir = dataDir;
+        this.configStore = configStore;
     }
 
-    @PostConstruct
-    public void init() {
-        try {
-            Files.createDirectories(dataDir);
-            migrateLegacyGlobalToDefaultTeam();
-        } catch (Exception e) {
-            log.warn("[SkillRegistry] 初始化失败：{}", e.getMessage());
-        }
-    }
-
-    /**
-     * 兼容迁移：将改造前位于 data-dir 根目录的全局 custom-rules.json / skills-enabled.json
-     * 迁移为默认团队（{@link Teams#DEFAULT}）的内容，避免既有自定义规则丢失。
-     */
-    private void migrateLegacyGlobalToDefaultTeam() {
-        Path legacyRules = dataDir.resolve("custom-rules.json");
-        Path legacyEnabled = dataDir.resolve("skills-enabled.json");
-        Path defaultDir = teamDir(Teams.DEFAULT);
-        Path defaultRules = defaultDir.resolve("custom-rules.json");
-        Path defaultEnabled = defaultDir.resolve("skills-enabled.json");
-        boolean migrated = false;
-        try {
-            if (Files.exists(legacyRules) && !Files.exists(defaultRules)) {
-                Files.createDirectories(defaultDir);
-                Files.move(legacyRules, defaultRules);
-                migrated = true;
-                log.info("[SkillRegistry] 已将全局 custom-rules.json 迁移至默认团队 {}", Teams.DEFAULT);
-            }
-            if (Files.exists(legacyEnabled) && !Files.exists(defaultEnabled)) {
-                Files.createDirectories(defaultDir);
-                Files.move(legacyEnabled, defaultEnabled);
-                migrated = true;
-                log.info("[SkillRegistry] 已将全局 skills-enabled.json 迁移至默认团队 {}", Teams.DEFAULT);
-            }
-        } catch (Exception e) {
-            log.warn("[SkillRegistry] 全局→默认团队迁移失败（不影响启动）：{}", e.getMessage());
-        }
-        if (migrated) {
-            loadedTeams.remove(Teams.DEFAULT);
-        }
-    }
-
-    private Path teamDir(String teamId) {
-        return dataDir.resolve(Teams.sanitize(teamId));
-    }
-
-    private Path enabledFile(String teamId) {
-        return teamDir(teamId).resolve("skills-enabled.json");
-    }
-
-    private Path rulesFile(String teamId) {
-        return teamDir(teamId).resolve("custom-rules.json");
-    }
-
-    /** 懒加载某团队的持久化配置（启用状态 + 自定义规则）。 */
+    /** 懒加载某团队的持久化配置（启用状态 + 自定义规则）；带短 TTL 惰性刷新以感知他实例变更。 */
     private void ensureTeamLoaded(String teamId) {
         String t = Teams.sanitize(teamId);
-        if (loadedTeams.containsKey(t)) {
+        Long last = loadedTeams.get(t);
+        if (last != null && System.currentTimeMillis() - last < REFRESH_MS) {
             return;
         }
         synchronized (loadedTeams) {
-            if (loadedTeams.containsKey(t)) {
+            Long again = loadedTeams.get(t);
+            if (again != null && System.currentTimeMillis() - again < REFRESH_MS) {
                 return;
             }
             try {
-                Files.createDirectories(teamDir(t));
                 loadEnabled(t);
                 loadCustomRules(t);
             } catch (Exception e) {
                 log.warn("[SkillRegistry] 加载团队 {} 持久化配置失败，使用默认（全部启用）：{}", t, e.getMessage());
             }
-            loadedTeams.put(t, Boolean.TRUE);
+            loadedTeams.put(t, System.currentTimeMillis());
         }
     }
 
     private void loadEnabled(String teamId) {
-        Path f = enabledFile(teamId);
-        if (!Files.exists(f)) {
-            return;
-        }
         try {
-            Map<String, Boolean> map = mapper.readValue(Files.readString(f), new TypeReference<>() {
+            configStore.loadJson(teamId, SCOPE_ENABLED).ifPresent(json -> {
+                try {
+                    Map<String, Boolean> map = mapper.readValue(json, new TypeReference<>() {
+                    });
+                    if (map != null) {
+                        enabledByTeam.put(teamId, new ConcurrentHashMap<>(map));
+                    }
+                } catch (Exception e) {
+                    log.warn("[SkillRegistry] 解析团队 {} 启停配置失败：{}", teamId, e.getMessage());
+                }
             });
-            if (map != null) {
-                enabledByTeam.put(teamId, new ConcurrentHashMap<>(map));
-            }
         } catch (Exception e) {
-            log.warn("[SkillRegistry] 读取 {} 失败：{}", f, e.getMessage());
+            log.warn("[SkillRegistry] 读取团队 {} 启停配置失败：{}", teamId, e.getMessage());
         }
     }
 
     private void loadCustomRules(String teamId) {
-        Path f = rulesFile(teamId);
-        if (!Files.exists(f)) {
-            return;
-        }
         try {
-            List<CustomRule> list = mapper.readValue(Files.readString(f), new TypeReference<>() {
+            configStore.loadJson(teamId, SCOPE_RULES).ifPresent(json -> {
+                try {
+                    List<CustomRule> list = mapper.readValue(json, new TypeReference<>() {
+                    });
+                    if (list == null) {
+                        return;
+                    }
+                    Map<String, CustomRule> defs = new ConcurrentHashMap<>();
+                    Map<String, Skill> skills = new ConcurrentHashMap<>();
+                    for (CustomRule r : list) {
+                        defs.put(r.id(), r);
+                        skills.put(r.id(), new CustomRuleSkill(r));
+                    }
+                    customRuleDefsByTeam.put(teamId, defs);
+                    customSkillsByTeam.put(teamId, skills);
+                } catch (Exception e) {
+                    log.warn("[SkillRegistry] 解析团队 {} 自定义规则失败：{}", teamId, e.getMessage());
+                }
             });
-            if (list == null) {
-                return;
-            }
-            Map<String, CustomRule> defs = new ConcurrentHashMap<>();
-            Map<String, Skill> skills = new ConcurrentHashMap<>();
-            for (CustomRule r : list) {
-                defs.put(r.id(), r);
-                skills.put(r.id(), new CustomRuleSkill(r));
-            }
-            customRuleDefsByTeam.put(teamId, defs);
-            customSkillsByTeam.put(teamId, skills);
         } catch (Exception e) {
-            log.warn("[SkillRegistry] 读取 {} 失败：{}", f, e.getMessage());
+            log.warn("[SkillRegistry] 读取团队 {} 自定义规则失败：{}", teamId, e.getMessage());
         }
     }
 
     private void persistEnabled(String teamId) {
         try {
             Map<String, Boolean> map = enabledByTeam.getOrDefault(teamId, Map.of());
-            mapper.writerWithDefaultPrettyPrinter().writeValue(enabledFile(teamId).toFile(), map);
+            configStore.saveJson(teamId, SCOPE_ENABLED, mapper.writeValueAsString(map));
         } catch (Exception e) {
             log.warn("[SkillRegistry] 持久化团队 {} 启停状态失败：{}", teamId, e.getMessage());
         }
@@ -189,7 +144,7 @@ public class SkillRegistry {
         try {
             List<CustomRule> list = new ArrayList<>(customRuleDefsByTeam
                     .getOrDefault(teamId, Map.of()).values());
-            mapper.writerWithDefaultPrettyPrinter().writeValue(rulesFile(teamId).toFile(), list);
+            configStore.saveJson(teamId, SCOPE_RULES, mapper.writeValueAsString(list));
         } catch (Exception e) {
             log.warn("[SkillRegistry] 持久化团队 {} 自定义规则失败：{}", teamId, e.getMessage());
         }

@@ -18,12 +18,12 @@ import com.codereview.agent.core.model.PullRequest;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.security.KeywordInjectionDetector;
+import com.codereview.agent.core.store.InMemoryTeamConfigStore;
+import com.codereview.agent.core.trajectory.InMemoryTrajectoryStore;
+import com.codereview.agent.core.trajectory.ReviewEvent;
 import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 自定义 Agent 接入 Coordinator 的端到端验证：团队在 store 中启用自定义 Agent 后，
  * Coordinator 在 review() 内按 teamId 展开并与内置 Agent 并行；自定义 Agent 产出
  * CUSTOM 类型发现，且轨迹记录 {@code agent.custom.expanded}（可观测/可回放）。
+ *
+ * <p>配置存储为接口（InMemory 单测 / PG team_kv 生产）：不再读写本机 data-dir。
  */
 class CoordinatorCustomAgentTest {
 
@@ -66,11 +68,15 @@ class CoordinatorCustomAgentTest {
         return new CodeDiff("PayService.java", body, "java", 1, 0);
     }
 
+    private static List<String> eventTypes(InMemoryTrajectoryStore store, String runId, String teamId) {
+        return store.load(runId, teamId).orElse(List.of()).stream().map(ReviewEvent::type).toList();
+    }
+
     @Test
-    void customAgentExpandedAndRunsInParallel(@TempDir Path tempDir) {
-        // 1) 团队在 store 中启用一个自定义 Agent
-        CustomAgentStore store = new CustomAgentStore(tempDir, new KeywordInjectionDetector());
-        store.init();
+    void customAgentExpandedAndRunsInParallel() {
+        // 1) 团队在 store 中启用一个自定义 Agent（共享 TeamConfigStore，无本机文件）
+        CustomAgentStore store = new CustomAgentStore(
+                new InMemoryTeamConfigStore(), new KeywordInjectionDetector());
         CustomAgentDef def = store.add("default", "支付合规审查", "检查支付链路合规",
                 List.of("不得明文存储卡号"), "MAJOR");
         assertTrue(store.listEnabled("default").stream().anyMatch(d -> d.id().equals(def.id())));
@@ -79,7 +85,8 @@ class CoordinatorCustomAgentTest {
         FakeAiService ai = new FakeAiService();
         ai.result = new ReviewResultDto(List.of(
                 new ReviewFindingDto("PAY-001", "明文卡号", "desc", "建议", "BLOCKER", "PayService.java", 12, 0.9)));
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tempDir.toString());
+        InMemoryTrajectoryStore trajectoryStore = new InMemoryTrajectoryStore();
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(trajectoryStore);
 
         CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(
                 List.of(), new ReportGenerator(), new InMemoryFeedbackStore(),
@@ -102,21 +109,16 @@ class CoordinatorCustomAgentTest {
         assertEquals("custom:" + def.id(), custom.category());
 
         // 5) 轨迹记录展开事件（可观测/可回放）
-        Path file = tempDir.resolve("default").resolve("trajectories").resolve(report.getRunId() + ".jsonl");
-        assertTrue(Files.exists(file), "审查轨迹应已落盘");
-        String content = "";
-        try {
-            content = Files.readString(file);
-        } catch (Exception ignored) {
-        }
-        assertTrue(content.contains("\"agent.custom.expanded\""), "轨迹应含 agent.custom.expanded");
-        assertFalse(content.contains("\"agent.custom.disabled\""), "展开成功不应记录 disabled");
+        List<String> types = eventTypes(trajectoryStore, report.getRunId(), "default");
+        assertTrue(types.contains("agent.custom.expanded"), "轨迹应含 agent.custom.expanded");
+        assertFalse(types.contains("agent.custom.disabled"), "展开成功不应记录 disabled");
     }
 
     @Test
-    void customAgentStoreFailureDegradesToBuiltinOnly(@TempDir Path tempDir) {
+    void customAgentStoreFailureDegradesToBuiltinOnly() {
         // store 为 null → Coordinator 仅跑内置 Agent，不抛异常
-        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tempDir.toString());
+        InMemoryTrajectoryStore trajectoryStore = new InMemoryTrajectoryStore();
+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(trajectoryStore);
         CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(
                 List.of(), new ReportGenerator(), new InMemoryFeedbackStore(),
                 new InMemoryReviewHistoryStore(), new AdvancedAnalyzer(),
@@ -129,12 +131,8 @@ class CoordinatorCustomAgentTest {
 
         // 无内置/无自定义 → 空报告，但不崩
         assertTrue(report.getFindings().isEmpty());
-        Path file = tempDir.resolve("default").resolve("trajectories").resolve(report.getRunId() + ".jsonl");
-        try {
-            String content = Files.readString(file);
-            assertTrue(content.contains("\"agent.custom.disabled\"") || !content.contains("agent.custom.expanded"),
-                    "store 为 null 时不应展开自定义 Agent");
-        } catch (Exception ignored) {
-        }
+        List<String> types = eventTypes(trajectoryStore, report.getRunId(), "default");
+        assertFalse(types.contains("agent.custom.expanded"),
+                "store 为 null 时不应展开自定义 Agent");
     }
 }

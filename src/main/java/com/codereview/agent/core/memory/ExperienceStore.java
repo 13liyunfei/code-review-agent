@@ -1,54 +1,48 @@
 package com.codereview.agent.core.memory;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
- * 经验库（长期记忆的检索入口 + 文件经验条目层）。
+ * 经验库（长期记忆的检索门面）。
  *
- * <p>两段能力：
+ * <p>两段能力（重构后均为共享存储，替代改造前的「PG 向量 + experience.json 文件」双通道）：
  * <ul>
- *   <li>**向量检索**（原有）：封装 {@link MemoryStore} 检索相关经验，格式化注入
- *       提示词【历史经验参考】区块（{@link #getRelevantExperiences}）；</li>
- *   <li>**文件经验条目**（新增）：沉淀「问题模式 → 有效建议」条目，按团队落盘
- *       {@code <dataDir>/<teamId>/experience.json}，关键词重合度检索（零外部依赖），
- *       由 {@link ReflectionService} 反思写入。</li>
+ *   <li><b>向量检索</b>：封装 {@link MemoryStore} 检索团队经验（metadata type=experience），
+ *       格式化注入提示词【历史经验参考】区块（{@link #getRelevantExperiences}）；</li>
+ *   <li><b>经验条目</b>（{@link ExperienceLibrary}，生产为 PostgreSQL）：沉淀「问题模式 →
+ *       有效建议」条目，带生命周期（{@link ExperienceStage}：复现证据升级 ACTIVE、
+ *       人工误报降级 ARCHIVED、TTL 遗忘），由 {@code ReflectionService} 反思写入、
+ *       {@code MemoryMaintenanceScheduler} 定时维护。</li>
  * </ul>
+ *
+ * <p>检索 = 向量命中 + 条目命中合并；条目命中即 {@code recordHit}（spaced repetition：
+ * 常用经验刷新遗忘时钟，不因 TTL 被误删）。
  */
-@Component
 public class ExperienceStore {
 
-    /** 一条可复用的审查经验（文件条目层）。 */
-    public record Experience(String pattern, String advice, long createdAt) {}
+    private static final Logger log = LoggerFactory.getLogger(ExperienceStore.class);
 
-    private final MemoryStore memoryStore; // 可空（独立测试 / 纯文件模式）
-    private final Path dataDir;
-    private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    /** 检索注入的条目上限。 */
+    private static final int TOP_N = 3;
 
-    @Autowired
-    public ExperienceStore(MemoryStore memoryStore) {
-        this(memoryStore, Path.of("./data"));
-    }
+    private final MemoryStore memoryStore; // 可空（纯条目模式）
+    private final ExperienceLibrary library;
 
-    public ExperienceStore(MemoryStore memoryStore, Path dataDir) {
+    public ExperienceStore(MemoryStore memoryStore, ExperienceLibrary library) {
         this.memoryStore = memoryStore;
-        this.dataDir = dataDir == null ? Path.of("./data") : dataDir;
+        this.library = library == null ? new InMemoryExperienceLibrary() : library;
     }
 
     /**
      * 获取与当前审查相关的历史经验文本（团队自有经验，不含全局基线）。
-     * 向量命中 + 文件条目关键词命中合并输出。
+     * 向量命中 + 条目关键词命中合并输出；被选中的条目刷新命中（反遗忘）。
      */
     public String getRelevantExperiences(String teamId, String agentType, String text) {
         StringBuilder sb = new StringBuilder();
@@ -60,36 +54,49 @@ public class ExperienceStore {
                 }
             }
         }
-        for (Experience e : top(teamId, text, 3)) {
+        for (ExperienceEntry e : top(teamId, text, TOP_N)) {
             sb.append("- ").append(e.pattern()).append(" → ").append(e.advice()).append('\n');
+            try {
+                library.recordHit(teamId, e.pattern());
+            } catch (Exception ignored) {
+                // 命中统计失败不影响检索
+            }
         }
         return sb.toString().trim();
     }
 
-    /** 写入一条文件经验（同 pattern 去重，更新时间戳；异常静默不阻断主链路）。 */
-    public synchronized void add(String teamId, String pattern, String advice) {
+    /** 写入/复现一条经验（反思沉淀；同 pattern 复现证据 +1，达阈值升级 ACTIVE）。 */
+    public void add(String teamId, String pattern, String advice) {
         if (pattern == null || pattern.isBlank() || advice == null || advice.isBlank()) {
             return;
         }
         try {
-            List<Experience> list = new ArrayList<>(load(teamId));
-            list.removeIf(e -> e.pattern().equalsIgnoreCase(pattern.trim()));
-            list.add(new Experience(pattern.trim(), advice.trim(), System.currentTimeMillis()));
-            persist(teamId, list);
+            library.upsertReflection(teamId, pattern.trim(), advice.trim());
         } catch (Exception e) {
-            // 经验沉淀失败不阻断审查主链路
+            log.warn("[Experience] 经验沉淀失败（不阻断主链路）：team={}, 原因={}", teamId, e.getMessage());
         }
     }
 
-    /** 按查询关键词重合度检索 Top-N（无命中返回空）。 */
-    public List<Experience> top(String teamId, String query, int limit) {
+    /** 人工反馈驱动经验证据（误报降级 / 正报升级）。 */
+    public void recordFeedback(String teamId, String ruleId, boolean falsePositive) {
+        try {
+            library.recordFeedback(teamId, ruleId, falsePositive);
+        } catch (Exception e) {
+            log.warn("[Experience] 经验反馈证据登记失败：team={}, ruleId={}, 原因={}",
+                    teamId, ruleId, e.getMessage());
+        }
+    }
+
+    /** 按查询关键词重合度检索 Top-N（ACTIVE 优先，未遗忘条目）。 */
+    public List<ExperienceEntry> top(String teamId, String query, int limit) {
         try {
             Set<String> q = tokenize(query);
-            Comparator<Experience> byOverlap = Comparator.comparingInt(
-                    (Experience e) -> overlap(q, tokenize(e.pattern()))).reversed();
-            return load(teamId).stream()
-                    .sorted(byOverlap)
+            return library.list(teamId).stream()
                     .filter(e -> overlap(q, tokenize(e.pattern())) > 0)
+                    .sorted(Comparator
+                            .comparing((ExperienceEntry e) -> e.stage() == ExperienceStage.ACTIVE ? 0 : 1)
+                            .thenComparingInt(e -> -overlap(q, tokenize(e.pattern())))
+                            .thenComparingLong(e -> -e.updatedAt()))
                     .limit(Math.max(1, limit))
                     .toList();
         } catch (Exception e) {
@@ -97,12 +104,30 @@ public class ExperienceStore {
         }
     }
 
+    /** 当前未遗忘条目数。 */
     public int size(String teamId) {
         try {
-            return load(teamId).size();
+            return library.size(teamId);
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /** 管理视图：全部条目（含归档）。 */
+    public List<ExperienceEntry> listAll(String teamId) {
+        return library.listAll(teamId);
+    }
+
+    public Optional<ExperienceEntry> get(String teamId, long id) {
+        return library.get(teamId, id);
+    }
+
+    public boolean archive(String teamId, long id) {
+        return library.archive(teamId, id);
+    }
+
+    public boolean purge(String teamId, long id) {
+        return library.purge(teamId, id);
     }
 
     private Set<String> tokenize(String s) {
@@ -126,28 +151,5 @@ public class ExperienceStore {
             }
         }
         return n;
-    }
-
-    private Path file(String teamId) {
-        return dataDir.resolve(sanitize(teamId)).resolve("experience.json");
-    }
-
-    private List<Experience> load(String teamId) throws IOException {
-        Path f = file(teamId);
-        if (!Files.exists(f)) {
-            return new ArrayList<>();
-        }
-        return List.of(mapper.readValue(f.toFile(), Experience[].class));
-    }
-
-    private void persist(String teamId, List<Experience> list) throws IOException {
-        Path f = file(teamId);
-        Files.createDirectories(f.getParent());
-        mapper.writeValue(f.toFile(), list);
-    }
-
-    private static String sanitize(String teamId) {
-        return teamId == null || teamId.isBlank() ? "default"
-                : teamId.replaceAll("[^a-zA-Z0-9_\\-\\u4e00-\\u9fa5]", "_");
     }
 }

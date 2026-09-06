@@ -9,6 +9,7 @@ import com.codereview.agent.core.model.ReviewContext;
 import com.codereview.agent.core.prompt.PromptTemplate;
 import com.codereview.agent.core.prompt.PromptTemplateLoader;
 import com.codereview.agent.core.skill.SkillRegistry;
+import com.codereview.agent.core.store.InMemoryTeamConfigStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -51,8 +52,9 @@ class AgentKitStructuredOutputTest {
         }
     };
 
-    private LogicAgent agent(ScriptedLlm llm, Path dataDir) {
-        return new LogicAgent(llm, LOADER, new SkillRegistry(List.of(), dataDir),
+    private LogicAgent agent(ScriptedLlm llm) {
+        return new LogicAgent(llm, LOADER,
+                new SkillRegistry(List.of(), new InMemoryTeamConfigStore()),
                 new ConfidenceCalibrationService(), null);
     }
 
@@ -72,7 +74,7 @@ class AgentKitStructuredOutputTest {
                 "suggestion":"增加判空","severity":"MAJOR","file":"PayService.java","line":12,"confidence":0.9}]}
                 """;
 
-        List<Finding> findings = agent(llm, dataDir).review(List.of(diff("+int x=1;")), ctx());
+        List<Finding> findings = agent(llm).review(List.of(diff("+int x=1;")), ctx());
 
         assertEquals(1, findings.size(), "agent-kit 结构化通路应解析出 1 条发现");
         Finding f = findings.get(0);
@@ -90,7 +92,7 @@ class AgentKitStructuredOutputTest {
                 + "\"description\":\"d\",\"suggestion\":\"s\",\"severity\":\"BLOCKER\","
                 + "\"file\":\"A.java\",\"line\":3,\"confidence\":0.8}]}\n```\n希望有帮助。";
 
-        List<Finding> findings = agent(llm, dataDir).review(List.of(diff("+int x=1;")), ctx());
+        List<Finding> findings = agent(llm).review(List.of(diff("+int x=1;")), ctx());
 
         assertEquals(1, findings.size());
         assertEquals("资源未关闭", findings.get(0).title());
@@ -101,7 +103,7 @@ class AgentKitStructuredOutputTest {
         ScriptedLlm llm = new ScriptedLlm();
         llm.response = "抱歉，我无法完成这次审查。";
 
-        List<Finding> findings = agent(llm, dataDir).review(List.of(diff("+int x=1;")), ctx());
+        List<Finding> findings = agent(llm).review(List.of(diff("+int x=1;")), ctx());
 
         // 结构化失败后回退文本解析，文本也解析不出 → 空列表，且绝不抛异常打断审查
         assertTrue(findings.isEmpty());
@@ -117,7 +119,7 @@ class AgentKitStructuredOutputTest {
                 "severity":"MINOR","file":"B.java","line":7,"confidence":0.6}]
                 """;
 
-        List<Finding> findings = agent(llm, dataDir).review(List.of(diff("+int x=1;")), ctx());
+        List<Finding> findings = agent(llm).review(List.of(diff("+int x=1;")), ctx());
 
         assertFalse(findings.isEmpty(), "结构化失败时应复用原始输出走文本解析，不能丢结果");
         assertEquals("魔法数字", findings.get(0).title());

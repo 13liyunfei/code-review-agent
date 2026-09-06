@@ -1,6 +1,7 @@
 package com.codereview.agent.core.admin;
 
 import com.codereview.agent.core.security.InjectionDetector;
+import com.codereview.agent.core.store.TeamConfigStore;
 import com.codereview.agent.tenant.Teams;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,9 +9,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.annotation.PostConstruct;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,75 +20,67 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 自定义审查 Agent 存储（按团队隔离）。
  *
- * <p>复用 {@link com.codereview.agent.core.skill.SkillRegistry} 的团队目录范式：
- * 落盘 {@code data-dir/&lt;teamId&gt;/custom-agents.json}，内存态即时更新，写穿持久化，
- * 新增/编辑/删除后下一次 PR 即生效（无需重启）。所有写操作前对业务方提交内容进行
- * {@link InjectionDetector} 预检，命中即拒绝（防止业务方自己写入越权提示）。
+ * <p>持久化（改造后）：经 {@link TeamConfigStore} 落共享存储（生产为 PG {@code team_kv}
+ * JSONB 行，替代改造前的 {@code data-dir/<teamId>/custom-agents.json}）——多实例共享同一配置，
+ * A 实例管理端变更，B 实例审查最迟 {@value #REFRESH_MS}ms 生效。内存态即时更新 + 写穿。
+ * 所有写操作前对业务方提交内容进行 {@link InjectionDetector} 预检，命中即拒绝。
  */
 public class CustomAgentStore {
 
     private static final Logger log = LoggerFactory.getLogger(CustomAgentStore.class);
 
-    private final Path dataDir;
+    /** 团队配置读缓存有效期（毫秒）。 */
+    static final long REFRESH_MS = 2_000;
+
+    private static final String SCOPE = "custom-agents";
+
+    private final TeamConfigStore configStore;
     private final InjectionDetector injectionDetector;
     private final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule());
 
-    /** teamId → (agentId → def)；内存态，写穿落盘。 */
+    /** teamId → (agentId → def)；内存态，写穿落库。 */
     private final Map<String, Map<String, CustomAgentDef>> byTeam = new ConcurrentHashMap<>();
-    /** 已加载的团队集合（去重懒加载）。 */
-    private final Map<String, Boolean> loadedTeams = new ConcurrentHashMap<>();
+    /** 已加载的团队集合（懒加载去重 + 刷新时间戳）。 */
+    private final Map<String, Long> loadedTeams = new ConcurrentHashMap<>();
 
-    public CustomAgentStore(Path dataDir, InjectionDetector injectionDetector) {
-        this.dataDir = dataDir;
+    public CustomAgentStore(TeamConfigStore configStore, InjectionDetector injectionDetector) {
+        this.configStore = configStore;
         this.injectionDetector = injectionDetector;
     }
 
-    @PostConstruct
-    public void init() {
-        try {
-            Files.createDirectories(dataDir);
-        } catch (Exception e) {
-            log.warn("[CustomAgentStore] 初始化失败：{}", e.getMessage());
-        }
-    }
-
-    private Path teamDir(String teamId) {
-        return dataDir.resolve(Teams.sanitize(teamId));
-    }
-
-    private Path file(String teamId) {
-        return teamDir(teamId).resolve("custom-agents.json");
-    }
-
-    /** 懒加载某团队的持久化定义。 */
+    /** 懒加载某团队的持久化定义；带短 TTL 惰性刷新以感知他实例变更。 */
     private void ensureLoaded(String teamId) {
         String t = Teams.sanitize(teamId);
-        if (loadedTeams.containsKey(t)) {
+        Long last = loadedTeams.get(t);
+        if (last != null && System.currentTimeMillis() - last < REFRESH_MS) {
             return;
         }
         synchronized (loadedTeams) {
-            if (loadedTeams.containsKey(t)) {
+            Long again = loadedTeams.get(t);
+            if (again != null && System.currentTimeMillis() - again < REFRESH_MS) {
                 return;
             }
             try {
-                Files.createDirectories(teamDir(t));
-                Path f = file(t);
-                if (Files.exists(f)) {
-                    List<CustomAgentDef> list = mapper.readValue(Files.readString(f), new TypeReference<>() {
-                    });
-                    Map<String, CustomAgentDef> map = new ConcurrentHashMap<>();
-                    if (list != null) {
-                        for (CustomAgentDef d : list) {
-                            map.put(d.id(), d);
+                configStore.loadJson(t, SCOPE).ifPresent(json -> {
+                    try {
+                        List<CustomAgentDef> list = mapper.readValue(json, new TypeReference<>() {
+                        });
+                        Map<String, CustomAgentDef> map = new ConcurrentHashMap<>();
+                        if (list != null) {
+                            for (CustomAgentDef d : list) {
+                                map.put(d.id(), d);
+                            }
                         }
+                        byTeam.put(t, map);
+                    } catch (Exception e) {
+                        log.warn("[CustomAgentStore] 解析团队 {} 自定义 Agent 失败，使用空：{}", t, e.getMessage());
                     }
-                    byTeam.put(t, map);
-                }
+                });
             } catch (Exception e) {
                 log.warn("[CustomAgentStore] 加载团队 {} 自定义 Agent 失败，使用空：{}", t, e.getMessage());
             }
-            loadedTeams.put(t, Boolean.TRUE);
+            loadedTeams.put(t, System.currentTimeMillis());
         }
     }
 
@@ -98,7 +88,7 @@ public class CustomAgentStore {
         try {
             Map<String, CustomAgentDef> map = byTeam.getOrDefault(teamId, Map.of());
             List<CustomAgentDef> list = new ArrayList<>(map.values());
-            mapper.writerWithDefaultPrettyPrinter().writeValue(file(teamId).toFile(), list);
+            configStore.saveJson(teamId, SCOPE, mapper.writeValueAsString(list));
         } catch (Exception e) {
             log.warn("[CustomAgentStore] 持久化团队 {} 自定义 Agent 失败：{}", teamId, e.getMessage());
         }

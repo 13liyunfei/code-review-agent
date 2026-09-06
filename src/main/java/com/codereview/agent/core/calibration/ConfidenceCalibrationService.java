@@ -2,15 +2,9 @@ package com.codereview.agent.core.calibration;
 
 import com.codereview.agent.core.feedback.FeedbackListener;
 import com.codereview.agent.core.memory.ReviewFeedback;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,15 +18,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * 其中 historicalAccuracy 初始为 1.0，误报时衰减、正报时提升。
  *
  * <p><b>闭环（P0-3 修复）</b>：本服务实现 {@link FeedbackListener}，由反馈存储
- * （{@code FileFeedbackStore / InMemoryFeedbackStore}）在每次 {@code save} 时驱动
+ * （{@code PgFeedbackStore / InMemoryFeedbackStore}）在每次 {@code save} 时驱动
  * {@link #onFeedback} → {@link #markFalsePositive} / {@link #markTruePositive}。
- * 此前这两个方法与 {@code ruleAccuracy} 无任何调用方，校准恒等于乘 1.0（空转）。
  *
- * <p><b>持久化（2026-09-03）</b>：规则准确率是<b>派生状态</b>——反馈事件本身已由
- * {@code FileFeedbackStore} 落盘，但派生出的 {@code ruleAccuracy} 若只存内存，进程重启后
- * 校准学习全部归零，重新退化为「乘 1.0」。本服务每次标记后把 {@code ruleAccuracy}
- * 快照原子写入 {@code <data-dir>/calibration/accuracy.json}，构造时自动加载，重启不丢失。
- * 无 {@code data-dir} 的构造（单测/内存模式）不做持久化。
+ * <p><b>持久化（集群改造）</b>：规则准确率是<b>派生状态</b>——反馈事件本身已落库，
+ * 但派生出的 {@code ruleAccuracy} 若只存内存，进程重启或<b>多实例各自为政</b>时
+ * 校准学习互相不可见。本服务每次标记后把 {@code ruleAccuracy} 快照写入
+ * {@link CalibrationStore}（生产为 PG {@code calibration_accuracy}），构造时自动加载，
+ * 重启/换实例不丢失——A 机的反馈学习 B 机同样生效。
  *
  * <p><b>准确率下界（防一票否决）</b>：单次误报最多把准确率打到下界 {@link #MIN_ACCURACY}，
  * 不会因一次标记就近乎清零；正报回升封顶 1.0。
@@ -47,10 +40,8 @@ public class ConfidenceCalibrationService implements FeedbackListener {
     /** 规则 ID -> 历史准确率（初始 1.0）。 */
     private final Map<String, Double> ruleAccuracy = new ConcurrentHashMap<>();
 
-    /** 准确率快照文件（null = 不持久化，内存模式）。 */
-    private final Path accuracyFile;
-
-    private final ObjectMapper mapper = new ObjectMapper();
+    /** 派生状态后端（null = 内存模式，不持久化）。 */
+    private final CalibrationStore store;
 
     /** 内存模式（单测 / 无盘环境）：不持久化派生状态。 */
     public ConfidenceCalibrationService() {
@@ -58,11 +49,11 @@ public class ConfidenceCalibrationService implements FeedbackListener {
     }
 
     /**
-     * @param dataDir 数据根目录；派生准确率快照写入 {@code <dataDir>/calibration/accuracy.json}
+     * @param store 派生状态持久化后端（可空：null 时仅存内存）
      */
-    public ConfidenceCalibrationService(Path dataDir) {
-        this.accuracyFile = dataDir == null ? null : dataDir.resolve("calibration").resolve("accuracy.json");
-        loadSnapshot();
+    public ConfidenceCalibrationService(CalibrationStore store) {
+        this.store = store;
+        load();
     }
 
     /**
@@ -136,33 +127,29 @@ public class ConfidenceCalibrationService implements FeedbackListener {
         }
     }
 
-    /** 构造时加载已有快照；缺失 / 损坏时不阻断启动（退化为无学习记录）。 */
-    private void loadSnapshot() {
-        if (accuracyFile == null || !Files.exists(accuracyFile)) {
+    /** 构造时加载已有快照；后端缺失 / 异常时不阻断启动（退化为无学习记录）。 */
+    private void load() {
+        if (store == null) {
             return;
         }
         try {
-            Map<String, Double> loaded = mapper.readValue(
-                    Files.readString(accuracyFile), new TypeReference<Map<String, Double>>() {});
+            Map<String, Double> loaded = store.loadAll();
             ruleAccuracy.putAll(loaded);
-            log.info("[Calibration] 已从 {} 恢复 {} 条规则准确率", accuracyFile, loaded.size());
-        } catch (IOException e) {
-            log.warn("[Calibration] 读取准确率快照 {} 失败（本次从空开始）：{}", accuracyFile, e.getMessage());
+            log.info("[Calibration] 已恢复 {} 条规则准确率（共享存储）", loaded.size());
+        } catch (Exception e) {
+            log.warn("[Calibration] 读取准确率快照失败（本次从空开始）：{}", e.getMessage());
         }
     }
 
-    /** 每次标记后原子写快照（tmp + ATOMIC_MOVE，与断点存储同款）。持久化失败不影响校准本身。 */
+    /** 每次标记后全量写快照（规则量小）。持久化失败不影响校准本身。 */
     private void persist() {
-        if (accuracyFile == null) {
+        if (store == null) {
             return;
         }
         try {
-            Files.createDirectories(accuracyFile.getParent());
-            Path tmp = accuracyFile.resolveSibling(accuracyFile.getFileName() + ".tmp");
-            mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), ruleAccuracy);
-            Files.move(tmp, accuracyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
-            log.warn("[Calibration] 写入准确率快照 {} 失败（本次学习仅存内存）：{}", accuracyFile, e.getMessage());
+            store.saveAll(ruleAccuracy);
+        } catch (Exception e) {
+            log.warn("[Calibration] 写入准确率快照失败（本次学习仅存内存）：{}", e.getMessage());
         }
     }
 }

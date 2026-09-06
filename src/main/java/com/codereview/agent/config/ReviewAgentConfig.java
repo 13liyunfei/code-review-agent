@@ -10,13 +10,17 @@ import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
 import com.codereview.kit.obs.AggregateTracer;
+import com.codereview.agent.core.calibration.CalibrationStore;
 import com.codereview.agent.core.calibration.ConfidenceCalibrationService;
 import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.coordinator.impl.CompletableFutureCoordinator;
+import com.codereview.agent.core.feedback.FeedbackListener;
 import com.codereview.agent.core.feedback.FeedbackStore;
-import com.codereview.agent.core.feedback.FileFeedbackStore;
-import com.codereview.agent.core.history.FileReviewHistoryStore;
 import com.codereview.agent.core.history.ReviewHistoryStore;
+import com.codereview.agent.core.memory.ExperienceLibrary;
+import com.codereview.agent.core.memory.ExperienceStore;
+import com.codereview.agent.core.memory.MemoryStore;
+import com.codereview.agent.core.store.TeamConfigStore;
 import com.codereview.agent.core.llm.BackoffPolicy;
 import com.codereview.agent.core.llm.CircuitBreakerProvider;
 import com.codereview.agent.core.llm.DefaultRetryClassifier;
@@ -457,12 +461,12 @@ public class ReviewAgentConfig {
     }
 
     /**
-     * 技能注册中心：统一管理内置与团队自定义技能，支持运行期启停与持久化。
+     * 技能注册中心：统一管理内置与团队自定义技能，支持运行期启停。
+     * 团队持久化状态经 {@link TeamConfigStore} 落共享存储（生产 PG）。
      */
     @Bean
-    public SkillRegistry skillRegistry(List<Skill> allSkills,
-                                      @Value("${review.data-dir:./data}") String dataDir) {
-        return new SkillRegistry(allSkills, Path.of(dataDir));
+    public SkillRegistry skillRegistry(List<Skill> allSkills, TeamConfigStore teamConfigStore) {
+        return new SkillRegistry(allSkills, teamConfigStore);
     }
 
     /**
@@ -477,15 +481,15 @@ public class ReviewAgentConfig {
     /**
      * 自定义审查 Agent 存储（后管「自定义 Agent 列表」后端核心）。
      *
-     * <p>按 teamId 隔离，落盘 <code>data-dir/&lt;teamId&gt;/custom-agents.json</code>；
+     * <p>按 teamId 隔离，状态经 {@link TeamConfigStore} 落共享存储（生产 PG {@code team_kv}）；
      * 写库前用 {@link com.codereview.agent.core.security.ContentInjectionDetector}（异常填充 + 关键词 HIGH +
      * LOW 语义复核）对业务方提交内容做注入预检（命中即拒绝）——这是本仓库唯一把
      * 业务方文本「提升为系统提示内容」的边界，语义层在此才真正有价值。
      */
     @Bean
     public CustomAgentStore customAgentStore(EmbeddingClient embeddingClient,
-                                            @Value("${review.data-dir:./data}") String dataDir) {
-        return new CustomAgentStore(Path.of(dataDir), new ContentInjectionDetector(embeddingClient));
+                                            TeamConfigStore teamConfigStore) {
+        return new CustomAgentStore(teamConfigStore, new ContentInjectionDetector(embeddingClient));
     }
 
     /** 工具定义（供 ToolRouter 注册与白名单路由）。 */
@@ -585,35 +589,46 @@ public class ReviewAgentConfig {
     }
 
     /**
-     * 置信度校准服务（反馈 → 规则准确率 → 校准）：注入规则准确率快照目录，
-     * 使派生状态（ruleAccuracy）在重启后不丢失。
+     * 置信度校准服务（反馈 → 规则准确率 → 校准）：派生状态经 {@link CalibrationStore}
+     * 落共享存储（生产 PG），多实例共享同一份校准学习。
+     */
+    @Bean
+    public ConfidenceCalibrationService confidenceCalibrationService(CalibrationStore calibrationStore) {
+        return new ConfidenceCalibrationService(calibrationStore);
+    }
+
+    /**
+     * 经验库门面（反思沉淀 + 检索注入）：向量通道（{@link MemoryStore}）与条目通道
+     * （{@link ExperienceLibrary}，生产 PG）合一；供反思服务 / 反馈证据登记使用。
+     */
+    @Bean
+    public ExperienceStore experienceStore(MemoryStore memoryStore, ExperienceLibrary experienceLibrary) {
+        return new ExperienceStore(memoryStore, experienceLibrary);
+    }
+
+    /**
+     * 反馈落库复合监听器：一条反馈同时驱动两路旁路——
+     * ① 置信度校准（规则准确率衰减/回升）；② 经验证据登记（正报升级 ACTIVE / 误报降级 ARCHIVED）。
+     * 装配进 {@link FeedbackStore}（StateStoreConfig 提供 PG / 内存实现）。
      *
-     * <p>不再用 {@code @Service} 组件扫描——需要 {@code review.data-dir} 做快照持久化，
-     * 由本方法显式装配，避免扫描路径拿不到配置。
+     * <p>{@code @Primary}：{@code ConfidenceCalibrationService} 也实现 {@link FeedbackListener}，
+     * 而反馈存储需要的是「两路都跑」的复合监听器——标注后 ObjectProvider / 类型注入
+     * 默认取本复合实现，避免容器内 FeedbackListener 双候选歧义。
      */
     @Bean
-    public ConfidenceCalibrationService confidenceCalibrationService(
-            @Value("${review.data-dir:./data}") String dataDir) {
-        return new ConfidenceCalibrationService(Path.of(dataDir));
-    }
-
-    /**
-     * 反馈存储（误报反馈闭环）：默认基于本地 JSON 文件持久化，目录不可用时回退内存。
-     * 注入置信度校准服务作为落库监听器：每次保存反馈即驱动 markFalsePositive / markTruePositive，
-     * 打通「反馈 → 规则准确率 → 置信度校准」闭环（此前校准恒为空转）。
-     */
-    @Bean
-    public FeedbackStore feedbackStore(@Value("${review.data-dir:./data}") String dataDir,
-                                       ConfidenceCalibrationService calibration) {
-        return new FileFeedbackStore(Path.of(dataDir), calibration);
-    }
-
-    /**
-     * 审查历史存储（修复后复检 / 质量趋势）：默认基于本地 JSON 文件持久化。
-     */
-    @Bean
-    public ReviewHistoryStore reviewHistoryStore(@Value("${review.data-dir:./data}") String dataDir) {
-        return new FileReviewHistoryStore(Path.of(dataDir));
+    @Primary
+    public FeedbackListener feedbackListener(ConfidenceCalibrationService calibration,
+                                             ExperienceStore experienceStore) {
+        return (teamId, feedback) -> {
+            calibration.onFeedback(teamId, feedback);
+            if (feedback != null && feedback.ruleId() != null && !feedback.ruleId().isBlank()) {
+                try {
+                    experienceStore.recordFeedback(teamId, feedback.ruleId(), feedback.isFalsePositive());
+                } catch (Exception e) {
+                    // 旁路：经验证据登记失败不影响校准与反馈保存
+                }
+            }
+        };
     }
 
     @Bean

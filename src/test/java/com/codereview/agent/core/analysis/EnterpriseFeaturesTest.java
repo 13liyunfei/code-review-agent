@@ -14,6 +14,7 @@ import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.skill.SkillRegistry;
 import com.codereview.agent.core.skill.YamlRuleEngine;
+import com.codereview.agent.core.store.InMemoryTeamConfigStore;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -90,8 +91,7 @@ class EnterpriseFeaturesTest {
 
     @Test
     void yamlRuleEngineImportsTeamRules() {
-        SkillRegistry registry = new SkillRegistry(List.of(), Path.of("./target/yaml-test"));
-        registry.init();
+        SkillRegistry registry = new SkillRegistry(List.of(), new InMemoryTeamConfigStore());
         YamlRuleEngine engine = new YamlRuleEngine(registry);
         String yaml = "rules:\n"
                 + "  - name: 禁止提交 TODO\n"

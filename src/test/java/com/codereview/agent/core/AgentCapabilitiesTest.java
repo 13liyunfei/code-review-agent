@@ -5,7 +5,9 @@ import com.codereview.kit.eval.LlmJudge;
 import com.codereview.kit.extension.ExtensionPoint;
 import com.codereview.kit.extension.ExtensionRegistry;
 import com.codereview.agent.core.llm.LlmClient;
+import com.codereview.agent.core.memory.ExperienceEntry;
 import com.codereview.agent.core.memory.ExperienceStore;
+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;
 import com.codereview.agent.core.memory.ReflectionService;
 import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
@@ -99,23 +101,23 @@ class AgentCapabilitiesTest {
     }
 
     @Test
-    void experienceStoreWriteRetrieveAndTeamIsolation(@TempDir Path tmp) {
-        ExperienceStore store = new ExperienceStore(null, tmp);
+    void experienceStoreWriteRetrieveAndTeamIsolation() {
+        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());
         store.add("teamA", "sql-injection 拼接漏洞", "使用参数化查询");
         store.add("teamA", "system-out 调试输出", "改用 SLF4J 日志");
         store.add("teamB", "other 经验", "其他建议");
         assertEquals(2, store.size("teamA"));
-        List<ExperienceStore.Experience> hits = store.top("teamA", "修复 sql-injection 注入", 1);
+        List<ExperienceEntry> hits = store.top("teamA", "修复 sql-injection 注入", 1);
         assertEquals(1, hits.size());
         assertTrue(hits.get(0).pattern().contains("sql-injection"));
         assertTrue(store.top("teamB", "sql-injection", 5).isEmpty());
-        store.add("teamA", "sql-injection 拼接漏洞", "更新建议"); // 同 pattern 去重
+        store.add("teamA", "sql-injection 拼接漏洞", "更新建议"); // 同 pattern 去重（证据 +1）
         assertEquals(2, store.size("teamA"));
     }
 
     @Test
-    void reflectionServiceDistillsMajorExperienceFromReport(@TempDir Path tmp) {
-        ExperienceStore store = new ExperienceStore(null, tmp);
+    void reflectionServiceDistillsMajorExperienceFromReport() {
+        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());
         ReflectionService service = new ReflectionService(store, null);
         ReviewReport report = new ReportGenerator().aggregate(1, "r", List.of(
                 new com.codereview.agent.core.model.AgentResult(1, AgentType.SECURITY, List.of(
