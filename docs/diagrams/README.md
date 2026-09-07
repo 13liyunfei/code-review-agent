@@ -2,8 +2,9 @@
 
 - `*.mmd` —— mermaid 源码。**改图改这里**。
 - `manifest.json` —— 章节元数据：标题、每图说明、源码锚点表、提示/警示块。
-- `_build/` —— 构建脚本（渲染 → 内联 → 验收），来自 skill `mermaid-diagram-book`。
-- `../business-flow.html` —— 最终产物，SVG 全部内联、零外部依赖、可离线查看。
+- `_build/` —— 构建脚本（渲染 → 内联 → 验收 / 导出 Markdown），来自 skill `mermaid-diagram-book`。
+- `../business-flow.html` —— 可视化产物，SVG 全部内联、零外部依赖、可离线查看（**看图用**）。
+- `../business-flow.md` —— Markdown 产物，内嵌 mermaid 源码（**走查 / 贴 GitHub / 给 LLM 读用**）。
 
 ## 重建流程
 
@@ -13,7 +14,12 @@ npm i @mermaid-js/mermaid-cli        # 一次性，需 Chromium；已有安装�
 node render.mjs                      # 渲染 SVG 到 .render/，打印每张图尺寸
 node build-doc.mjs                   # 内联生成 ../../business-flow.html
 node verify.mjs ../../business-flow.html   # 验收（需 puppeteer，可设 PUPPETEER_MODULE_PATH）
+node export-md.mjs                   # 导出 ../../business-flow.md（纯 manifest + *.mmd，不依赖渲染）
 ```
+
+两份产物**共用同一份 `manifest.json`**：改文案只改 manifest，然后 HTML 与 Markdown
+各重跑一次。`export-md.mjs` 不读 `.render/`，改图后先 `render.mjs` + `build-doc.mjs`
+再导出，否则 md 里的图会比 HTML 新/旧不同步。
 
 `render.mjs` 会打印每张图的像素尺寸并标记是否超界：
 
