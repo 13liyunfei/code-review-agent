@@ -1,5 +1,7 @@
 package com.codereview.agent.core.rag;
 
+import com.codereview.agent.core.memory.ExperienceStore;
+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;
 import com.codereview.agent.core.memory.MemoryEntry;
 import com.codereview.agent.core.memory.MemoryLevel;
 import com.codereview.agent.core.memory.RagContextBuilder;
@@ -53,7 +55,8 @@ class RagRecallBaselineTest {
     }
 
     private RagContextBuilder builderWith(StubKnowledgeStore store) {
-        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(MIN_SIM, true));
+        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(MIN_SIM, true),
+                new ExperienceStore(new InMemoryExperienceLibrary()));
     }
 
     @Test

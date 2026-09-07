@@ -283,7 +283,7 @@ public class DemoRunner implements CommandLineRunner {
                 new ReviewFeedback("LOGIC-001", "LOGIC", false, "确为有效问题"));
         reflectionAgent.reflect(DEMO_TEAM, feedbacks).forEach(memoryStore::save);
 
-        String exp = experienceStore.getRelevantExperiences(DEMO_TEAM, "SECURITY",
+        String exp = experienceStore.getRelevantExperiences(DEMO_TEAM,
                 "SELECT * FROM users 是否安全");
         System.out.println("\n【长期经验参考】\n" + (exp.isBlank() ? "(空)" : exp));
     }

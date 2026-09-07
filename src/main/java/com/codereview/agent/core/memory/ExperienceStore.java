@@ -12,18 +12,16 @@ import java.util.Set;
 /**
  * 经验库（长期记忆的检索门面）。
  *
- * <p>两段能力（重构后均为共享存储，替代改造前的「PG 向量 + experience.json 文件」双通道）：
- * <ul>
- *   <li><b>向量检索</b>：封装 {@link MemoryStore} 检索团队经验（metadata type=experience），
- *       格式化注入提示词【历史经验参考】区块（{@link #getRelevantExperiences}）；</li>
- *   <li><b>经验条目</b>（{@link ExperienceLibrary}，生产为 PostgreSQL）：沉淀「问题模式 →
- *       有效建议」条目，带生命周期（{@link ExperienceStage}：复现证据升级 ACTIVE、
- *       人工误报降级 ARCHIVED、TTL 遗忘），由 {@code ReflectionService} 反思写入、
- *       {@code MemoryMaintenanceScheduler} 定时维护。</li>
- * </ul>
+ * <p><b>生产唯一通道为经验条目</b>（{@link ExperienceLibrary}，生产为 PostgreSQL）：
+ * 沉淀「问题模式 → 有效建议」条目，带生命周期（{@link ExperienceStage}：复现证据升级 ACTIVE、
+ * 人工误报降级 ARCHIVED、TTL 遗忘），由 {@code ReflectionService} 反思写入、
+ * {@code MemoryMaintenanceScheduler} 定时维护；检索侧由 {@code RagContextBuilder} 在生产审查链路
+ * 调用（{@link #getRelevantExperiences} 命中即 {@code recordHit}，spaced repetition 反遗忘）。
  *
- * <p>检索 = 向量命中 + 条目命中合并；条目命中即 {@code recordHit}（spaced repetition：
- * 常用经验刷新遗忘时钟，不因 TTL 被误删）。
+ * <p><b>历史说明</b>：早期版本还保留一条「向量通道」（{@code MemoryStore} 中
+ * {@code metadata.type=experience} 的向量），但唯一写入方 {@code ReflectionAgent}
+ * 未接生产主链路（主链路零调用），向量经验无生产数据源，故该通道已废弃，
+ * 检索一律走条目通道。
  */
 public class ExperienceStore {
 
@@ -32,28 +30,21 @@ public class ExperienceStore {
     /** 检索注入的条目上限。 */
     private static final int TOP_N = 3;
 
-    private final MemoryStore memoryStore; // 可空（纯条目模式）
     private final ExperienceLibrary library;
 
-    public ExperienceStore(MemoryStore memoryStore, ExperienceLibrary library) {
-        this.memoryStore = memoryStore;
+    public ExperienceStore(ExperienceLibrary library) {
         this.library = library == null ? new InMemoryExperienceLibrary() : library;
     }
 
     /**
      * 获取与当前审查相关的历史经验文本（团队自有经验，不含全局基线）。
-     * 向量命中 + 条目关键词命中合并输出；被选中的条目刷新命中（反遗忘）。
+     * 条目关键词命中输出；被选中的条目刷新命中（反遗忘）。
+     *
+     * @param teamId 团队标识（应已净化，与写入侧同口径）
+     * @param text   查询文本（通常为 diff 摘要，供关键词重合匹配）
      */
-    public String getRelevantExperiences(String teamId, String agentType, String text) {
+    public String getRelevantExperiences(String teamId, String text) {
         StringBuilder sb = new StringBuilder();
-        if (memoryStore != null) {
-            List<MemoryEntry> entries = memoryStore.search(text, agentType, 5, teamId, false);
-            for (MemoryEntry e : entries) {
-                if ("experience".equals(e.metadata().get("type"))) {
-                    sb.append("- ").append(e.content()).append('\n');
-                }
-            }
-        }
         for (ExperienceEntry e : top(teamId, text, TOP_N)) {
             sb.append("- ").append(e.pattern()).append(" → ").append(e.advice()).append('\n');
             try {

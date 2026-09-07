@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * RAG 上下文构建器（见文档“RAG 的使用位置”）。
+ * RAG 上下文构建器（见文档"RAG 的使用位置"）。
  *
  * <p>审查前检索规范文档 / 历史 PR / 安全 Wiki，将相关内容作为【相关历史知识】注入提示词。
  * 内部链路对标业界最佳实践：
@@ -27,7 +27,11 @@ import java.util.List;
  *   <li>重排：{@link Reranker}（{@link HeuristicReranker} 默认，可配 {@code ApiReranker}）；</li>
  *   <li>评估 / 可观测：{@link RagEvaluator}（记录命中、相似度、trace）。</li>
  * </ul>
- * 检索时始终纳入团队自身内容 + 全局基线（编码规范手册），实现“全局基线 + 团队叠加”。
+ * 检索时始终纳入团队自身内容 + 全局基线（编码规范手册），实现"全局基线 + 团队叠加"。
+ *
+ * <p><b>历史经验回流</b>：知识块之外，同时把 {@link ExperienceStore}（反思沉淀的「问题模式 →
+ * 建议」条目）命中项以【历史经验参考】分区注入——闭合记忆闭环的"读"侧
+ * （写侧由 ReflectionService 在审查完成后执行）。经验命中即刷新遗忘时钟（spaced repetition）。
  */
 @Component
 public class RagContextBuilder {
@@ -37,6 +41,7 @@ public class RagContextBuilder {
     private final KnowledgeStore knowledgeStore;
     private final Reranker reranker;
     private final RagEvaluator evaluator;
+    private final ExperienceStore experienceStore;
 
     /** 初检召回数（重排前）。 */
     private static final int CANDIDATE_K = 10;
@@ -46,10 +51,12 @@ public class RagContextBuilder {
     @org.springframework.beans.factory.annotation.Autowired
     public RagContextBuilder(KnowledgeStore knowledgeStore,
                              Reranker reranker,
-                             RagEvaluator evaluator) {
+                             RagEvaluator evaluator,
+                             ExperienceStore experienceStore) {
         this.knowledgeStore = knowledgeStore;
         this.reranker = reranker;
         this.evaluator = evaluator;
+        this.experienceStore = experienceStore;
     }
 
     /**
@@ -69,32 +76,63 @@ public class RagContextBuilder {
                 Teams.sanitize(teamId), true);
         // 3. 阈值过滤（低于 minSimilarity 的块剔除；全低于则 abstain）
         List<MemoryEntry> passed = evaluator.filterByThreshold(candidates);
-        if (passed.isEmpty()) {
-            log.info("[RAG] 无相关知识（候选 {} 条均低于阈值或为空），选择性跳过注入, 耗时 {}ms",
-                    candidates.size(), System.currentTimeMillis() - t0);
-            return "";
-        }
-        // 4. Cross-Encoder 重排 → Top-5
-        List<MemoryEntry> reranked = reranker.rerank(query, passed, INJECT_TOP_N);
-        // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）
-        List<MemoryEntry> deduped = dedupeByContent(reranked);
-        if (deduped.size() < reranked.size()) {
-            log.info("[RAG] 去重：注入前剔除 {} 个重复块（重叠切块导致），{} → {}",
-                    reranked.size() - deduped.size(), reranked.size(), deduped.size());
-        }
-        // 6. 评估指标 + 格式化
-        RagEvaluator.RagMetrics metrics = evaluator.evaluate(deduped, null);
         StringBuilder sb = new StringBuilder();
-        for (MemoryEntry e : deduped) {
-            sb.append("- [").append(e.metadata().getOrDefault("source", "knowledge"))
-                    .append("] ").append(e.content()).append('\n');
+        if (passed.isEmpty()) {
+            log.info("[RAG] 无相关知识（候选 {} 条均低于阈值或为空），知识分区 abstain, 耗时 {}ms",
+                    candidates.size(), System.currentTimeMillis() - t0);
+        } else {
+            // 4. Cross-Encoder 重排 → Top-5
+            List<MemoryEntry> reranked = reranker.rerank(query, passed, INJECT_TOP_N);
+            // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）
+            List<MemoryEntry> deduped = dedupeByContent(reranked);
+            if (deduped.size() < reranked.size()) {
+                log.info("[RAG] 去重：注入前剔除 {} 个重复块（重叠切块导致），{} → {}",
+                        reranked.size() - deduped.size(), reranked.size(), deduped.size());
+            }
+            // 6. 评估指标 + 格式化
+            RagEvaluator.RagMetrics metrics = evaluator.evaluate(deduped, null);
+            for (MemoryEntry e : deduped) {
+                sb.append("- [").append(e.metadata().getOrDefault("source", "knowledge"))
+                        .append("] ").append(e.content()).append('\n');
+            }
+            log.info("[RAG] 上下文构建：team={}, agent={}, 查询={}字符, 候选 {} → 放行 {} → 注入 Top-{} (maxSim={}), 耗时 {}ms",
+                    Teams.sanitize(teamId), agentType, query.length(), candidates.size(),
+                    passed.size(), deduped.size(),
+                    String.format("%.4f", metrics.maxSimilarity()),
+                    System.currentTimeMillis() - t0);
         }
-        log.info("[RAG] 上下文构建：team={}, agent={}, 查询={}字符, 候选 {} → 放行 {} → 注入 Top-{} (maxSim={}), 耗时 {}ms",
-                Teams.sanitize(teamId), agentType, query.length(), candidates.size(),
-                passed.size(), deduped.size(),
-                String.format("%.4f", metrics.maxSimilarity()),
-                System.currentTimeMillis() - t0);
-        return sb.toString().trim();
+        // 7. 历史经验回流（记忆闭环读侧；独立于知识 abstain——经验命中仍注入）
+        appendExperience(sb, teamId, agentType, query);
+        String result = sb.toString().trim();
+        if (!result.isBlank()) {
+            log.info("[RAG] 注入上下文合计 {} 字符（知识分区 + 历史经验参考）, 总耗时 {}ms",
+                    result.length(), System.currentTimeMillis() - t0);
+        }
+        return result;
+    }
+
+    /**
+     * 经验条目通道注入：反思沉淀的「问题模式 → 建议」命中项以【历史经验参考】分区回流审查提示词。
+     * 命中即由 {@link ExperienceStore} 刷新 recordHit（spaced repetition 反遗忘）。
+     * 失败只 WARN 不阻断主链路（与知识通道同级的降级策略）。
+     */
+    private void appendExperience(StringBuilder sb, String teamId, String agentType, String query) {
+        if (experienceStore == null || query == null || query.isBlank()) {
+            return;
+        }
+        try {
+            String exp = experienceStore.getRelevantExperiences(Teams.sanitize(teamId), query);
+            if (!exp.isBlank()) {
+                if (!sb.isEmpty()) {
+                    sb.append('\n');
+                }
+                sb.append("【历史经验参考】\n").append(exp).append('\n');
+                log.info("[RAG] 历史经验注入：team={}, agent={}, 命中 {} 字符",
+                        Teams.sanitize(teamId), agentType, exp.length());
+            }
+        } catch (Exception e) {
+            log.warn("[RAG] 经验检索失败，跳过注入（不影响主审查）：{}", e.getMessage());
+        }
     }
 
     /**

@@ -598,12 +598,13 @@ public class ReviewAgentConfig {
     }
 
     /**
-     * 经验库门面（反思沉淀 + 检索注入）：向量通道（{@link MemoryStore}）与条目通道
-     * （{@link ExperienceLibrary}，生产 PG）合一；供反思服务 / 反馈证据登记使用。
+     * 经验库门面（反思沉淀 + 检索注入）：生产为 PostgreSQL 条目通道
+     * （{@link ExperienceLibrary}，PG 关闭时 InMemory 回退）；供反思服务沉淀 /
+     * 反馈证据登记 / RAG 上下文检索注入使用。
      */
     @Bean
-    public ExperienceStore experienceStore(MemoryStore memoryStore, ExperienceLibrary experienceLibrary) {
-        return new ExperienceStore(memoryStore, experienceLibrary);
+    public ExperienceStore experienceStore(ExperienceLibrary experienceLibrary) {
+        return new ExperienceStore(experienceLibrary);
     }
 
     /**

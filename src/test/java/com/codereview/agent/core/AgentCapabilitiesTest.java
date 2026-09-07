@@ -102,7 +102,7 @@ class AgentCapabilitiesTest {
 
     @Test
     void experienceStoreWriteRetrieveAndTeamIsolation() {
-        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());
+        ExperienceStore store = new ExperienceStore(new InMemoryExperienceLibrary());
         store.add("teamA", "sql-injection 拼接漏洞", "使用参数化查询");
         store.add("teamA", "system-out 调试输出", "改用 SLF4J 日志");
         store.add("teamB", "other 经验", "其他建议");
@@ -117,7 +117,7 @@ class AgentCapabilitiesTest {
 
     @Test
     void reflectionServiceDistillsMajorExperienceFromReport() {
-        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());
+        ExperienceStore store = new ExperienceStore(new InMemoryExperienceLibrary());
         ReflectionService service = new ReflectionService(store, null);
         ReviewReport report = new ReportGenerator().aggregate(1, "r", List.of(
                 new com.codereview.agent.core.model.AgentResult(1, AgentType.SECURITY, List.of(

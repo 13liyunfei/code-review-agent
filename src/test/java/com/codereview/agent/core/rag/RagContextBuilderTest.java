@@ -1,6 +1,8 @@
 package com.codereview.agent.core.rag;
 
 import com.codereview.agent.core.llm.SimpleHashEmbeddingClient;
+import com.codereview.agent.core.memory.ExperienceStore;
+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;
 import com.codereview.agent.core.memory.MemoryEntry;
 import com.codereview.agent.core.memory.MemoryLevel;
 import com.codereview.agent.core.memory.RagContextBuilder;
@@ -27,7 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RagContextBuilderTest {
 
     private RagContextBuilder builderWith(InMemoryKnowledgeStore store) {
-        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(0.0, false));
+        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(0.0, false),
+                new ExperienceStore(new InMemoryExperienceLibrary()));
     }
 
     private CodeDiff diff(String patch) {
