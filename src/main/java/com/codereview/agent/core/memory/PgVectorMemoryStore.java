@@ -57,6 +57,8 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
     private final HikariDataSource hikari;
     private final DataSource dataSource;
     private final int vectorDim;
+    /** ANN 索引类型：hnsw（默认，pgvector≥0.5）或 ivfflat（老版本兼容回退）。 */
+    private final String indexType;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -78,8 +80,24 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
                                String host, int port, String database,
                                String username, String password,
                                int vectorDim) {
+        this(embeddingClient, host, port, database, username, password, vectorDim, "hnsw");
+    }
+
+    /**
+     * 构造 PgVector 记忆存储（可指定 ANN 索引类型）。
+     *
+     * @param indexType 索引类型：hnsw（默认，pgvector≥0.5 推荐，召回精度更高）或 ivfflat
+     */
+    public PgVectorMemoryStore(EmbeddingClient embeddingClient,
+                               String host, int port, String database,
+                               String username, String password,
+                               int vectorDim, String indexType) {
         this.embeddingClient = embeddingClient;
         this.vectorDim = vectorDim;
+        this.indexType = (indexType == null || indexType.isBlank()) ? "hnsw" : indexType.toLowerCase();
+        if (!"hnsw".equals(this.indexType) && !"ivfflat".equals(this.indexType)) {
+            throw new IllegalArgumentException("不支持的向量索引类型: " + indexType + "（仅支持 hnsw / ivfflat）");
+        }
 
         HikariConfig cfg = new HikariConfig();
         cfg.setJdbcUrl("jdbc:postgresql://" + host + ":" + port + "/" + database);
@@ -96,7 +114,8 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
         cfg.setConnectionTestQuery("SELECT 1");
         this.hikari = new HikariDataSource(cfg);
         this.dataSource = this.hikari;
-        log.info("[PgVector] 已创建 HikariCP 连接池（{}:{}/{}, 最大连接={}）", host, port, database, 10);
+        log.info("[PgVector] 已创建 HikariCP 连接池（{}:{}/{}, 最大连接={}，ANN 索引={}）",
+                host, port, database, 10, this.indexType);
     }
 
     /**
@@ -110,7 +129,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
      * </ol>
      */
     @PostConstruct
-    protected void init() {
+    public void init() {
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
             // 启用 pgvector 扩展
@@ -123,12 +142,9 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
                 migrate(conn, stmt);
             }
 
-            // 建索引：IVFFlat 近似最近邻索引（余弦距离）
-            stmt.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_memory_embedding
-                    ON memory_store USING ivfflat (embedding vector_cosine_ops)
-                    WITH (lists = 100)
-                    """);
+            // 建向量 ANN 索引：HNSW 优先（pgvector≥0.5，召回精度与速度均优），
+            // 存量 ivfflat 库自动迁移；HNSW 不可用（老 pgvector）时回退 ivfflat。
+            ensureVectorIndex(stmt);
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_memory_agent ON memory_store (agent_type)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_memory_team ON memory_store (team_id)");
 
@@ -142,9 +158,89 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
                     ON memory_store USING gin (search_vector)
                     """);
 
-            log.info("[PgVector] 表与索引就绪（vector({}), ivfflat 索引, gin(tsvector)）", vectorDim);
+            log.info("[PgVector] 表与索引就绪（vector({}), {} 索引, gin(tsvector)）",
+                    vectorDim, indexType);
         } catch (SQLException e) {
             throw new IllegalStateException("[PgVector] 初始化失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 确保向量 ANN 索引存在且为期望类型（hnsw / ivfflat），幂等。
+     *
+     * <p>策略：
+     * <ul>
+     *   <li>索引不存在 → 直接按期望类型创建（hnsw 失败则 WARN 回退 ivfflat，老 pgvector 无 hnsw）；</li>
+     *   <li>存量库为 ivfflat 而期望 hnsw → DROP 后重建迁移（启动时一次性，数据量小时可接受；
+     *       数据量大时仍会执行——hnsw 在 pgvector 0.5+ 均可用，迁移收益明确）；</li>
+     *   <li>已为期望类型 → 跳过（幂等，不重复重建大索引）。</li>
+     * </ul>
+     */
+    private void ensureVectorIndex(Statement stmt) throws SQLException {
+        String existing = currentEmbeddingIndexType();
+        if (indexType.equals(existing)) {
+            log.info("[PgVector] 向量索引已就绪（{}），跳过创建", existing);
+            return;
+        }
+        if (existing != null) {
+            log.warn("[PgVector] 存量向量索引为 {}，按配置迁移为 {}（DROP 后重建）", existing, indexType);
+            stmt.execute("DROP INDEX IF EXISTS idx_memory_embedding");
+        }
+        try {
+            createVectorIndex(stmt, indexType);
+        } catch (SQLException e) {
+            if ("hnsw".equals(indexType)) {
+                // 老 pgvector（<0.5）无 hnsw access method → 回退 ivfflat，保证服务可启动
+                log.warn("[PgVector] HNSW 索引创建失败（pgvector < 0.5?），回退 IVFFlat：{}", e.getMessage());
+                stmt.execute("DROP INDEX IF EXISTS idx_memory_embedding");
+                createVectorIndex(stmt, "ivfflat");
+                return;
+            }
+            throw e;
+        }
+        log.info("[PgVector] 向量索引已创建：{}", indexType);
+    }
+
+    /** 当前 idx_memory_embedding 的索引类型（hnsw / ivfflat），不存在返回 null。 */
+    private String currentEmbeddingIndexType() {
+        String sql = """
+                SELECT indexdef FROM pg_indexes
+                WHERE tablename = 'memory_store' AND indexname = 'idx_memory_embedding'
+                """;
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                String def = rs.getString(1);
+                if (def != null && def.contains("USING hnsw")) {
+                    return "hnsw";
+                }
+                if (def != null && def.contains("USING ivfflat")) {
+                    return "ivfflat";
+                }
+                return "unknown";
+            }
+            return null;
+        } catch (SQLException e) {
+            log.warn("[PgVector] 查询现有向量索引类型失败（按不存在处理）: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void createVectorIndex(Statement stmt, String type) throws SQLException {
+        if ("hnsw".equals(type)) {
+            // HNSW：无需 lists；m=16/ef_construction=64 为 pgvector 默认，显式声明便于调优可观测
+            stmt.execute("""
+                    CREATE INDEX idx_memory_embedding
+                    ON memory_store USING hnsw (embedding vector_cosine_ops)
+                    WITH (m = 16, ef_construction = 64)
+                    """);
+        } else {
+            stmt.execute("""
+                    CREATE INDEX idx_memory_embedding
+                    ON memory_store USING ivfflat (embedding vector_cosine_ops)
+                    WITH (lists = 100)
+                    """);
         }
     }
 

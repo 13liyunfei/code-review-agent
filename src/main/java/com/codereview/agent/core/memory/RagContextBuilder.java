@@ -2,14 +2,19 @@ package com.codereview.agent.core.memory;
 
 import com.codereview.agent.core.model.CodeDiff;
 import com.codereview.agent.core.rag.HeuristicReranker;
+import com.codereview.agent.core.rag.IdentityQueryRewriter;
 import com.codereview.agent.core.rag.KnowledgeStore;
 import com.codereview.agent.core.rag.RagEvaluator;
 import com.codereview.agent.core.rag.Reranker;
+import com.codereview.agent.core.rag.ReviewQueryRewriter;
 import com.codereview.agent.tenant.Teams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -18,16 +23,24 @@ import java.util.List;
  * <p>审查前检索规范文档 / 历史 PR / 安全 Wiki，将相关内容作为【相关历史知识】注入提示词。
  * 内部链路对标业界最佳实践：
  * <pre>
- *   提取查询 → 混合检索(向量+BM25,RRF融合) → 阈值过滤(abstain) → Cross-Encoder重排 → Top-5格式化
+ *   提取查询 → [查询改写(可选)] → 混合检索(向量+BM25,RRF融合) → 阈值过滤(abstain)
+ *        → Cross-Encoder重排 → Top-5格式化
  * </pre>
  * 各阶段能力由协作组件提供，均可离线运行（无 API 时自动降级到启发式）：
  * <ul>
- *   <li>混合检索：{@link KnowledgeStore#searchKnowledge}（PG 实现含 tsvector BM25 + 向量 RRF）；</li>
+ *   <li>查询改写：{@link ReviewQueryRewriter}（默认 {@link IdentityQueryRewriter} 恒等；
+ *       配置 {@code review.rag.query-rewrite.enabled=true} 时切 LLM 改写，失败自动降级）；</li>
+ *   <li>混合检索：{@link KnowledgeStore#searchKnowledge}（PG 实现含 tsvector BM25 + 向量 RRF，
+ *       候选窗大小由 {@code review.rag.retrieve-k} 控制，默认 50 对标业界 Top-50~200 召回）；</li>
  *   <li>阈值过滤 / 选择性回答：{@link RagEvaluator#filterByThreshold}；</li>
  *   <li>重排：{@link Reranker}（{@link HeuristicReranker} 默认，可配 {@code ApiReranker}）；</li>
- *   <li>评估 / 可观测：{@link RagEvaluator}（记录命中、相似度、trace）。</li>
+ *   <li>评估 / 可观测：{@link RagEvaluator}（记录命中、相似度、golden 排序指标 firstHitRank/MRR）。</li>
  * </ul>
  * 检索时始终纳入团队自身内容 + 全局基线（编码规范手册），实现"全局基线 + 团队叠加"。
+ *
+ * <p><b>freshness（知识时效）</b>：{@code review.rag.max-age-days} 控制召回的知识块最大入库年龄
+ * （默认 0 = 不过滤），检索侧（Pg/InMemory 的 {@code searchKnowledge} 5 参重载）按 created_at 过滤，
+ * 避免过期历史 PR 复盘 / 旧版规范污染当前审查。
  *
  * <p><b>历史经验回流</b>：知识块之外，同时把 {@link ExperienceStore}（反思沉淀的「问题模式 →
  * 建议」条目）命中项以【历史经验参考】分区注入——闭合记忆闭环的"读"侧
@@ -43,12 +56,19 @@ public class RagContextBuilder {
     private final RagEvaluator evaluator;
     private final ExperienceStore experienceStore;
 
-    /** 初检召回数（重排前）。 */
-    private static final int CANDIDATE_K = 10;
-    /** 最终注入 Top-N。 */
-    private static final int INJECT_TOP_N = 5;
+    /** 初检召回数（重排前）。业界召回窗 Top-50~200 再精排，默认 50（可配 {@code review.rag.retrieve-k}）。 */
+    @Value("${review.rag.retrieve-k:50}")
+    private int retrieveK = 50;
+    /** 最终注入 Top-N（精排输出）。 */
+    @Value("${review.rag.inject-top-n:5}")
+    private int injectTopN = 5;
+    /** freshness：知识块最大入库年龄（天），0 = 不过滤。 */
+    @Value("${review.rag.max-age-days:0}")
+    private long maxAgeDays = 0;
+    /** 查询改写器（默认恒等；由容器按配置注入 LLM 实现，无 Spring 时测试可 new 后覆写）。 */
+    private ReviewQueryRewriter queryRewriter = new IdentityQueryRewriter();
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public RagContextBuilder(KnowledgeStore knowledgeStore,
                              Reranker reranker,
                              RagEvaluator evaluator,
@@ -57,6 +77,36 @@ public class RagContextBuilder {
         this.reranker = reranker;
         this.evaluator = evaluator;
         this.experienceStore = experienceStore;
+    }
+
+    /**
+     * 容器注入查询改写器（{@code review.rag.query-rewrite.enabled=true} 时由配置类装配
+     * LLM 实现；否则容器无此 bean，required=false 保留默认恒等，链路零感知）。
+     */
+    @Autowired(required = false)
+    public void setQueryRewriter(ReviewQueryRewriter queryRewriter) {
+        if (queryRewriter != null) {
+            this.queryRewriter = queryRewriter;
+        }
+    }
+
+    /** 测试 / 工具用：直接设定改写器与窗口（跳过 Spring 装配）。 */
+    public RagContextBuilder withQueryRewriter(ReviewQueryRewriter rewriter) {
+        this.queryRewriter = rewriter == null ? new IdentityQueryRewriter() : rewriter;
+        return this;
+    }
+
+    /** 测试 / 工具用：直接设定检索窗口。 */
+    public RagContextBuilder withRetrievalWindow(int retrieveK, int injectTopN) {
+        this.retrieveK = retrieveK;
+        this.injectTopN = injectTopN;
+        return this;
+    }
+
+    /** 测试 / 工具用：直接设定 freshness 天数。 */
+    public RagContextBuilder withMaxAgeDays(long days) {
+        this.maxAgeDays = days;
+        return this;
     }
 
     /**
@@ -69,11 +119,18 @@ public class RagContextBuilder {
      */
     public String buildContext(String teamId, String agentType, List<CodeDiff> diffs) {
         long t0 = System.currentTimeMillis();
-        // 1. 从代码提取查询意图
-        String query = extractQueryFromDiffs(diffs);
-        // 2. 混合检索（向量 + BM25 + RRF），含全局基线
-        List<MemoryEntry> candidates = knowledgeStore.searchKnowledge(query, CANDIDATE_K,
-                Teams.sanitize(teamId), true);
+        // 1. 从代码提取查询意图（diff 形态）
+        String rawQuery = extractQueryFromDiffs(diffs);
+        // 1b. 查询改写：diff 形态 → 规范术语形态（可选；失败降级恒等，绝不劣化）
+        String query = queryRewriter.rewrite(rawQuery);
+        if (!query.equals(rawQuery)) {
+            log.info("[RAG] 查询改写（{} → {}）：{} 字符 → {} 字符",
+                    queryRewriter.name(), agentType, rawQuery.length(), query.length());
+        }
+        // 2. 混合检索（向量 + BM25 + RRF），含全局基线 + freshness 过滤
+        Duration maxAge = maxAgeDays > 0 ? Duration.ofDays(maxAgeDays) : null;
+        List<MemoryEntry> candidates = knowledgeStore.searchKnowledge(query, retrieveK,
+                Teams.sanitize(teamId), true, maxAge);
         // 3. 阈值过滤（低于 minSimilarity 的块剔除；全低于则 abstain）
         List<MemoryEntry> passed = evaluator.filterByThreshold(candidates);
         StringBuilder sb = new StringBuilder();
@@ -81,8 +138,8 @@ public class RagContextBuilder {
             log.info("[RAG] 无相关知识（候选 {} 条均低于阈值或为空），知识分区 abstain, 耗时 {}ms",
                     candidates.size(), System.currentTimeMillis() - t0);
         } else {
-            // 4. Cross-Encoder 重排 → Top-5
-            List<MemoryEntry> reranked = reranker.rerank(query, passed, INJECT_TOP_N);
+            // 4. Cross-Encoder 重排 → Top-N
+            List<MemoryEntry> reranked = reranker.rerank(query, passed, injectTopN);
             // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）
             List<MemoryEntry> deduped = dedupeByContent(reranked);
             if (deduped.size() < reranked.size()) {
@@ -102,7 +159,7 @@ public class RagContextBuilder {
                     System.currentTimeMillis() - t0);
         }
         // 7. 历史经验回流（记忆闭环读侧；独立于知识 abstain——经验命中仍注入）
-        appendExperience(sb, teamId, agentType, query);
+        appendExperience(sb, teamId, agentType, rawQuery);
         String result = sb.toString().trim();
         if (!result.isBlank()) {
             log.info("[RAG] 注入上下文合计 {} 字符（知识分区 + 历史经验参考）, 总耗时 {}ms",

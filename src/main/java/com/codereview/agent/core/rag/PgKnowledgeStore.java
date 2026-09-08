@@ -51,7 +51,7 @@ import java.util.Map;
  *   <li>结果归一化为 {@code similarity} 元数据，供 {@link RagEvaluator} 阈值过滤。</li>
  * </ul>
  */
-public class PgKnowledgeStore implements KnowledgeStore {
+public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(PgKnowledgeStore.class);
 
@@ -131,7 +131,13 @@ public class PgKnowledgeStore implements KnowledgeStore {
 
     @Override
     public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal) {
-        return hybridSearch(query, topK, teamId, includeGlobal);
+        return hybridSearch(query, topK, teamId, includeGlobal, null);
+    }
+
+    @Override
+    public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,
+                                             boolean includeGlobal, java.time.Duration maxAge) {
+        return hybridSearch(query, topK, teamId, includeGlobal, maxAge);
     }
 
     @Override
@@ -140,9 +146,24 @@ public class PgKnowledgeStore implements KnowledgeStore {
     }
 
     /**
-     * 混合检索：稠密向量 + BM25(ts_rank)，RRF 融合。
+     * 关闭只读检索连接池（E2E / 容器销毁时调用；写入器连接池由 MemoryStore 负责）。
      */
-    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId, boolean includeGlobal) {
+    @Override
+    public void close() {
+        if (readPool != null && !readPool.isClosed()) {
+            readPool.close();
+            log.info("[PgKnowledge] 只读检索连接池已关闭");
+        }
+    }
+
+    /**
+     * 混合检索：稠密向量 + BM25(ts_rank)，RRF 融合。
+     *
+     * @param maxAge freshness 过滤：仅保留 {@code created_at} 距今不超过 {@code maxAge}
+     *               的知识块；null / <=0 表示不过滤（向后兼容默认）。
+     */
+    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId,
+                                           boolean includeGlobal, java.time.Duration maxAge) {
         long t0 = System.currentTimeMillis();
         float[] q = embeddingClient.embed(query == null ? "" : query);
         if (q == null || q.length == 0) {
@@ -157,6 +178,12 @@ public class PgKnowledgeStore implements KnowledgeStore {
         // 稠密路：取 topK*2 扩大召回；BM25 路：同样 topK*2
         int widen = Math.max(topK * 2, 20);
 
+        // freshness：超过 maxAge 的陈旧知识不参与召回（null / <=0 = 不过滤）
+        String freshSql = "";
+        if (maxAge != null && !maxAge.isNegative() && !maxAge.isZero()) {
+            freshSql = " AND created_at >= now() - (? || ' seconds')::interval";
+        }
+
         Map<Long, Double> denseRank = new HashMap<>();
         Map<Long, Double> sparseRank = new HashMap<>();
         Map<Long, MemoryEntry> byId = new HashMap<>();
@@ -165,20 +192,22 @@ public class PgKnowledgeStore implements KnowledgeStore {
                 SELECT id, agent_type, team_id, content, metadata, level, created_at,
                        1 - (embedding <=> ?::vector) AS sim
                 FROM memory_store
-                WHERE agent_type = 'RAG' AND %s
+                WHERE agent_type = 'RAG' AND %s %s
                 ORDER BY embedding <=> ?::vector
                 LIMIT ?
-                """.formatted(teamFilter);
+                """.formatted(teamFilter, freshSql);
+        // freshSql 为空时是空串，不会产生多余 AND；非空自带前导空格，与 %s 拼接为
+        // "AND (team...) AND created_at ..." —— freshSql 前不含模板空格（%s%s 紧贴）。
 
         String sparseSql = """
                 SELECT id, agent_type, team_id, content, metadata, level, created_at,
                        ts_rank(search_vector, plainto_tsquery('simple', ?)) AS bm25
                 FROM memory_store
-                WHERE agent_type = 'RAG' AND %s
+                WHERE agent_type = 'RAG' AND %s %s
                   AND search_vector @@ plainto_tsquery('simple', ?)
                 ORDER BY ts_rank(search_vector, plainto_tsquery('simple', ?)) DESC
                 LIMIT ?
-                """.formatted(teamFilter);
+                """.formatted(teamFilter, freshSql);
 
         try (Connection conn = getConnection()) {
             try (PreparedStatement ps = conn.prepareStatement(denseSql)) {
@@ -187,6 +216,9 @@ public class PgKnowledgeStore implements KnowledgeStore {
                 ps.setString(idx++, t);
                 if (includeGlobal) {
                     ps.setString(idx++, Teams.GLOBAL);
+                }
+                if (!freshSql.isEmpty()) {
+                    ps.setLong(idx++, maxAge.toSeconds());
                 }
                 ps.setString(idx++, vectorStr);
                 ps.setInt(idx++, widen);
@@ -205,6 +237,9 @@ public class PgKnowledgeStore implements KnowledgeStore {
                 ps.setString(idx++, t);
                 if (includeGlobal) {
                     ps.setString(idx++, Teams.GLOBAL);
+                }
+                if (!freshSql.isEmpty()) {
+                    ps.setLong(idx++, maxAge.toSeconds());
                 }
                 ps.setString(idx++, query == null ? "" : query);
                 ps.setString(idx++, query == null ? "" : query);

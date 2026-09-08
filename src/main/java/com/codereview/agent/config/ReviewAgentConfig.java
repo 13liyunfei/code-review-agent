@@ -74,6 +74,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -329,6 +330,21 @@ public class ReviewAgentConfig {
             @Value("${review.rag.eval-enabled:false}") boolean evalEnabled) {
         log.info("已装配 RagEvaluator（minSimilarity={}, evalEnabled={}）", minSimilarity, evalEnabled);
         return new com.codereview.agent.core.rag.RagEvaluator(minSimilarity, evalEnabled);
+    }
+
+    /**
+     * RAG 检索查询改写器（业界 query rewrite，弥合代码 diff ↔ 规范文档语义鸿沟）。
+     *
+     * <p>{@code review.rag.query-rewrite.enabled=true} 时装配 {@link LlmQueryRewriter}
+     * （复用统一模型网关，失败/超时自动降级恒等改写，绝不劣化检索）；
+     * 默认关闭 → 容器无此 bean → {@code RagContextBuilder} 使用恒等改写（离线可用）。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "review.rag.query-rewrite.enabled", havingValue = "true")
+    public com.codereview.agent.core.rag.ReviewQueryRewriter reviewQueryRewriter(
+            LlmClient llmClient) {
+        log.info("已启用 RAG 查询改写（LLM 驱动，失败自动降级恒等）");
+        return new com.codereview.agent.core.rag.LlmQueryRewriter(llmClient);
     }
 
     /**

@@ -68,9 +68,18 @@ public class RagEvaluator {
     }
 
     /**
-     * 计算检索质量指标（无 ground-truth 时仅返回命中/相似度统计）。
+     * 计算检索质量指标。
      *
-     * @param passed      通过阈值的块
+     * <p><b>排序质量指标（golden 指标扩展）</b>：传入列表按相关性降序（如重排后 Top-N），
+     * 计算首个命中 ground-truth 的位置与 MRR（Mean Reciprocal Rank，业界排序质量核心指标）：
+     * <ul>
+     *   <li>{@code firstHitRank}：首个相关块的位置（1-based）；无命中为 0；</li>
+     *   <li>{@code mrr}：{@code 1 / firstHitRank}（无命中为 0）。</li>
+     * </ul>
+     * hit@k 语义由调用方组合表达：Top-N 注入命中即 {@code hitCount>0}，
+     * {@code firstHitRank <= N} 表示候选窗口内可召回。
+     *
+     * @param passed      按相关性排序的候选块（生产为重排后注入集；golden 测试可为检索候选）
      * @param groundTruth 已知相关 chunk 的 id 集合（可空）
      * @return 指标快照
      */
@@ -78,15 +87,26 @@ public class RagEvaluator {
         double maxSim = passed.stream().mapToDouble(this::parseSimilarity).max().orElse(0.0);
         double avgSim = passed.stream().mapToDouble(this::parseSimilarity).average().orElse(0.0);
         double precision = Double.NaN, recall = Double.NaN;
+        int firstHitRank = 0;
+        double mrr = 0.0;
         if (evalEnabled && groundTruth != null && !groundTruth.isEmpty()) {
-            long tp = passed.stream()
-                    .map(e -> String.valueOf(e.id()))
-                    .filter(groundTruth::contains)
-                    .count();
+            long tp = 0;
+            int rank = 0;
+            for (MemoryEntry e : passed) {
+                rank++;
+                String id = String.valueOf(e.id());
+                if (groundTruth.contains(id)) {
+                    tp++;
+                    if (firstHitRank == 0) {
+                        firstHitRank = rank;
+                    }
+                }
+            }
             precision = passed.isEmpty() ? 0.0 : (double) tp / passed.size();
             recall = (double) tp / groundTruth.size();
+            mrr = firstHitRank == 0 ? 0.0 : 1.0 / firstHitRank;
         }
-        return new RagMetrics(passed.size(), maxSim, avgSim, precision, recall);
+        return new RagMetrics(passed.size(), maxSim, avgSim, precision, recall, firstHitRank, mrr);
     }
 
     /** 从 MemoryEntry 元数据解析相似度（由检索实现写入）。 */
@@ -101,9 +121,22 @@ public class RagEvaluator {
         }
     }
 
-    /** 检索质量指标快照。 */
+    /**
+     * 检索质量指标快照。
+     *
+     * <p>golden 扩展：{@code firstHitRank}（首个相关块位置，1-based，无命中 0）
+     * 与 {@code mrr}（1/首个命中位，无命中 0）为排序质量指标（Mean Reciprocal Rank）。
+     */
     public record RagMetrics(int hitCount, double maxSimilarity, double avgSimilarity,
-                             double precision, double recall) {
+                             double precision, double recall,
+                             int firstHitRank, double mrr) {
+
+        /**
+         * hit@k 便捷判断：首个相关块是否落在前 k 位（业界 golden 评估口径）。
+         */
+        public boolean hitAtK(int k) {
+            return firstHitRank > 0 && firstHitRank <= k;
+        }
     }
 
     /**

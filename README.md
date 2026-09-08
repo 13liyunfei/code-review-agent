@@ -353,6 +353,11 @@ review:
       api-key: ${RERANK_API_KEY:}   # leave empty → offline heuristic rerank
       model: ${RERANK_MODEL:rerank-english-v3.0}
       timeout-ms: 5000
+    retrieve-k: ${RAG_RETRIEVE_K:50}           # hybrid pre-rerank candidates (recall window)
+    inject-top-n: ${RAG_INJECT_TOP_N:5}        # final top-N injected after rerank
+    max-age-days: ${RAG_MAX_AGE_DAYS:0}        # freshness cutoff: 0 = no filter (backward compat)
+    query-rewrite:
+      enabled: ${RAG_QUERY_REWRITE_ENABLED:false}  # LLM rewrite of diff-style query; auto-fallback to identity
     min-similarity: ${RAG_MIN_SIMILARITY:0.3}   # 0.0 = no gate
     eval-enabled: ${RAG_EVAL_ENABLED:true}
   # Egress: explicit per-dependency egress control (does NOT hijack localhost PG/Redis/Gitea)

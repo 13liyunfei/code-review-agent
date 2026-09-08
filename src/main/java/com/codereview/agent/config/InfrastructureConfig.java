@@ -46,9 +46,10 @@ public class InfrastructureConfig {
                                            @Value("${pgvector.database:codereview}") String database,
                                            @Value("${pgvector.username:}") String username,
                                            @Value("${pgvector.password:}") String password,
-                                           @Value("${pgvector.vector-dim:256}") int vectorDim) {
-        log.info("已启用 PgVector 记忆存储（{}:{}/{}, dim={}）", host, port, database, vectorDim);
-        return new PgVectorMemoryStore(embeddingClient, host, port, database, username, password, vectorDim);
+                                           @Value("${pgvector.vector-dim:256}") int vectorDim,
+                                           @Value("${pgvector.index-type:hnsw}") String indexType) {
+        log.info("已启用 PgVector 记忆存储（{}:{}/{}, dim={}, ANN 索引={}）", host, port, database, vectorDim, indexType);
+        return new PgVectorMemoryStore(embeddingClient, host, port, database, username, password, vectorDim, indexType);
     }
 
     /**
