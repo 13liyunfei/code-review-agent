@@ -1,7 +1,8 @@
 # RAG 语义正确性修复（similarity 口径 / 中文分词 / 结构化查询 / MMR / small-to-big）测试报告
 
 - **分支**：`feature/rag-hardening`（续 `a36992d`、`31e6656`）
-- **PR**：[reviewer/code-review-agent#6](http://localhost:3000/reviewer/code-review-agent/pulls/6)（base: `main`）
+- **PR**：[reviewer/code-review-agent#5](http://localhost:3000/reviewer/code-review-agent/pulls/5)（base: `main`）
+  —— 本轮与上一轮同分支 `feature/rag-hardening`，提交后自动并入既有 PR #5（已同步更新其标题/描述为两轮合并说明），未重复开 PR。
 - **日期**：2026-09-08
 - **结论**：✅ **`mvn clean test` 全量 338 测试全绿（0 失败 / 0 错误 / 0 跳过）**；较上一轮基线 318 新增 20 条。
   真库（PostgreSQL 17.11 + pgvector 0.8.6）对照实验给出「修复前 f / 修复后 t」的硬证据。
