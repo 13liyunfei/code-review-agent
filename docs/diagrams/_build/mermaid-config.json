@@ -5,8 +5,8 @@
     "useMaxWidth": false,
     "htmlLabels": false,
     "curve": "basis",
-    "rankSpacing": 30,
-    "nodeSpacing": 26,
+    "rankSpacing": 26,
+    "nodeSpacing": 22,
     "padding": 8,
     "diagramPadding": 10
   },

@@ -3,25 +3,25 @@ flowchart TD
         direction LR
         S1["Gitea<br/>Webhook"]
         S2["GitLab<br/>Webhook"]
-        S3["定时<br/>全量扫描"]
+        S3["定时<br/>扫描"]
         S4["REST<br/>API"]
         S5["IDE<br/>本地审查"]
     end
 
     subgraph ENG["② 审查引擎 :8080"]
         direction TB
-        E1["接入层 · 验签 / 事件过滤 / 异步分发"]
-        E2["编排层 · GiteaReviewService"]
-        E3["协调层 · CompletableFutureCoordinator"]
-        E4["执行层 · 5 内置 + N 自定义 + AdvancedAnalyzer"]
-        E5["聚合层 · ReportGenerator"]
-        E6["输出层 · AutoFixEngine / ReviewWorkflowEngine"]
+        E1["接入层 验签<br/>事件过滤 / 异步"]
+        E2["编排层 GiteaReviewService<br/>幂等判重 resumeKey"]
+        E3["协调层 Coordinator"]
+        E4["执行层 5 内置 + N 自定义<br/>supports 准入过滤"]
+        E5["聚合层<br/>ReportGenerator"]
+        E6["输出层 AutoFix<br/>工作流引擎"]
         E1 --> E2 --> E3 --> E4 --> E5 --> E6
     end
 
     subgraph EXT["③ 外部依赖"]
         direction LR
-        X1["LLM 网关<br/>熔断 / 退避重试 / 路由"]
+        X1["LLM 网关<br/>熔断 + 路由"]
         X2["LangChain4j<br/>AiServices"]
         X3["agent-kit<br/>基座"]
         X4["Token 工厂<br/>公司级计量计费"]
@@ -29,17 +29,18 @@ flowchart TD
 
     subgraph OUT["④ 平台回写 · 4 类"]
         direction LR
-        O1["PR 顶层<br/>评论"]
+        O1["顶层<br/>评论"]
         O2["行内<br/>suggestion"]
-        O3["Issue<br/>整改工单"]
+        O3["Issue<br/>工单"]
         O4["Commit<br/>Status"]
     end
 
-    subgraph STATE["⑤ 状态层 · PostgreSQL（多实例共享，进程无本地状态）"]
+    subgraph STATE["⑤ 状态层 · PostgreSQL"]
         direction LR
-        T1["PgDb · 统一连接池<br/>HikariCP max 12"]
+        T1["PgDb 统一连接池<br/>HikariCP max 12"]
         T2["8 张状态表<br/>每行带 team_id"]
-        T3["StateStoreConfig<br/>pgvector.enabled 开关<br/>关闭则内存回退 + 告警"]
+        T3["StateStoreConfig<br/>关闭则内存回退"]
+        T4["RAG 知识库<br/>tsvector + 向量"]
     end
 
     SRC --> E1
@@ -48,6 +49,8 @@ flowchart TD
     E6 --> OUT
     E3 -.->|"断点 / 轨迹落库与续跑"| STATE
     E4 -.->|"经验 / 校准 / 反馈<br/>抑制源回读"| STATE
+    E3 -.->|"知识检索增强上下文"| T4
+    T4 -.->|"enrichedCtx"| E4
 
     classDef grp fill:#FBFCFB,stroke:#2c7d2c,stroke-width:1.5px;
     classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
@@ -56,4 +59,4 @@ flowchart TD
     class SRC,ENG,OUT,STATE grp;
     class S1,S2,S3,S4,S5,E1,E2,E3,E4,E5,E6,O1,O2,O3,O4 n;
     class X1,X2,X3,X4 ext;
-    class T1,T2,T3 store;
+    class T1,T2,T3,T4 store;

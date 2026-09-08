@@ -3,6 +3,8 @@ flowchart LR
     ROOT --> A6["CUSTOM<br/>DeclarativeReviewAgent<br/>按 teamId 隔离"]
     ROOT --> A7["AdvancedAnalyzer<br/>静态分析"]
     ROOT --> GW["LLM 网关<br/>优先级路由 + 熔断"]
+    ROOT --> RAG["RAG 检索子系统<br/>读侧 L2d / 写侧 L2f"]
+    ROOT --> QA["工程门禁 DeadCodeGuardTest<br/>main 生产零引用即 CI 失败<br/>防死代码复发"]
 
     BI --> A1["SECURITY 安全<br/>权重 100"]
     BI --> A2["LOGIC 逻辑<br/>权重 90"]
@@ -25,8 +27,12 @@ flowchart LR
 
     A7 --> Z1["AstAnalyzer<br/>AST 结构"]
     A7 --> Z2["CallGraphAnalyzer<br/>调用图"]
-    A7 --> Z3["ScaScanner<br/>依赖安全"]
+    A7 --> Z3["ScaScanner 依赖安全<br/>primary / fallback 降级链"]
     A7 --> Z4["影响面 · 双引擎<br/>Java 跨文件 / 其余文件内"]
+
+    Z3 --> V1["OsvVulnSource 真实漏洞库<br/>OSV /v1/query 逐组件<br/>Maven group:artifact · npm 剥 semver<br/>severity 归一 + aliases 取 CVE<br/>代理仅本源出站"]
+    Z3 --> V2["BuiltinVulnSource 内置样本<br/>离线兜底 + 确定性单测 fixture<br/>绝不冒充真实扫描"]
+    Z3 --> V3["结果标注<br/>报告 + CycloneDX-lite SBOM<br/>sourceUsed / degraded"]
 
     GW --> L1["直连供应商<br/>包 UsageReportingProvider 补报"]
     GW --> L2["TokenFactoryChatProvider<br/>工厂路由 / 计价 / 计量"]
@@ -37,7 +43,9 @@ flowchart LR
     A4 --> P
     A5 --> P
 
+    P --> P0["⓪ supports 内容准入<br/>纯文档 PR 跳过语义 Agent"]
     P --> P1["① 逐文件注入分级"]
+    P --> P5["⑤ diff 字符预算<br/>按文件均摊截断 + 标注"]
     P --> P2["② Skill 并行预扫描"]
     P --> P3["③ 置信度校准"]
     P --> P4["④ LLM 三级降级"]
@@ -48,5 +56,6 @@ flowchart LR
     classDef leaf fill:#FFFFFF,stroke:#9aa5b1,stroke-width:1px,color:#52606d;
     class ROOT,BI root;
     class A1,A2,A3,A4,A5 agent;
-    class A6,A7,GW,S3,S5,Z1,Z2,Z3,Z4,D1,D5,L1,L2 custom;
+    class A6,A7,GW,S3,S5,Z1,Z2,Z3,Z4,D1,D5,L1,L2,QA,RAG custom;
+    class V1,V2,V3 leaf;
     class S1,S2,S4,P,P1,P2,P3,P4,D2,D3,D4 leaf;

@@ -1,0 +1,33 @@
+flowchart TD
+    S(["承接 L2d 阈值放行候选"]) --> RR["⑤ 重排池 max Top-N×3<br/>池子太小，MMR 等于没开"]
+
+    RR --> RR1{"Reranker 选型"}
+    RR1 -->|"有 key"| RR2["ApiReranker<br/>Cohere / Jina"]
+    RR1 -->|"无 key / 超时"| RR3["HeuristicReranker<br/>离线兜底，绝不阻断"]
+    RR2 --> MM
+    RR3 --> MM
+
+    MM{"⑥ MMR 多样性挑选 λ=0.7"}
+    MM -->|"开"| MM1["相关性 − 冗余度贪心<br/>Jaccard on 中文 bigram"]
+    MM -->|"关 / 候选不足"| MM2["直接取重排 Top-N"]
+    MM1 --> DD
+    MM2 --> DD
+
+    DD["⑦ 内容去重<br/>按 content hash 剔重叠块"] --> EV["⑧ RagEvaluator<br/>hit@k / MRR / maxSim"]
+    EV --> FMT["⑨ small-to-big<br/>回填 parentExcerpt 父章节摘要"]
+    FMT --> INJ["【相关历史知识】<br/>格式化注入提示词"]
+
+    AB["L2d 的 abstain 分支<br/>也走这一步"] -.-> EXP
+    INJ --> EXP["⑩ 经验回流独立于知识 abstain<br/>命中即 recordHit 刷新遗忘时钟"]
+    EXP --> OUT(["返回 enrichedCtx 到各 Agent"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef enh fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class S start;
+    class OUT endn;
+    class RR,DD,EV,FMT,INJ,EXP proc;
+    class RR1,MM dec;
+    class RR2,RR3,MM1,MM2,AB enh;

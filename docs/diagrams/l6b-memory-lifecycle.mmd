@@ -18,7 +18,9 @@ flowchart TD
     MAINT -.->|"无命中 / 无更新 180d"| S3
     MAINT -.->|"purgeArchived"| S4
 
-    HIT["检索命中 recordHit<br/>刷新 lastHitAt + hitCount"] -.->|"spaced repetition<br/>常用经验不衰退"| S2
+    INJ["注入点 · RagContextBuilder<br/>追加【历史经验参考】分区<br/>Coordinator 主链路自动生效"] -.->|"仅读 CANDIDATE + ACTIVE"| S2
+    INJ -.->|"知识 abstain 时经验仍注入"| S1
+    HIT["命中即 recordHit<br/>刷新 lastHitAt + hitCount"] -.->|"spaced repetition<br/>常用经验不衰退"| S2
     ADMIN["ExperienceAdminController<br/>/api/admin/memory/experiences"] -.->|"手动归档 / 删除"| S3
 
     classDef n fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
@@ -32,4 +34,4 @@ flowchart TD
     class S2 act;
     class S3 arch;
     class S4 purge;
-    class MAINT,HIT,ADMIN side;
+    class MAINT,HIT,ADMIN,INJ side;
