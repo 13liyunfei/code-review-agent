@@ -1,12 +1,12 @@
 package com.codereview.agent.config;
 
+import com.codereview.agent.core.agent.AbstractReviewAgent;
 import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.agent.impl.ArchitectureAgent;
 import com.codereview.agent.core.agent.impl.LogicAgent;
 import com.codereview.agent.core.agent.impl.PerformanceAgent;
 import com.codereview.agent.core.agent.impl.SecurityAgent;
 import com.codereview.agent.core.agent.impl.StyleAgent;
-import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
 import com.codereview.kit.obs.AggregateTracer;
@@ -545,6 +545,13 @@ public class ReviewAgentConfig {
                                          ArchitectureAgent architectureAgent,
                                          LlmClient llmClient,
                                          org.springframework.core.env.Environment env) {
+        // diff 注入预算（<0 关闭截断，保持历史全量行为）：大 PR 防 prompt 顶爆
+        int diffBudget = env.getProperty("review.prompt.diff-char-budget", Integer.class, -1);
+        for (ReviewAgent a : List.of(securityAgent, logicAgent, performanceAgent, styleAgent, architectureAgent)) {
+            if (a instanceof AbstractReviewAgent base) {
+                base.setDiffCharBudget(diffBudget);
+            }
+        }
         List<ReviewAgent> agents = List.of(securityAgent, logicAgent, performanceAgent, styleAgent, architectureAgent);
         // 工具增强织入（可选）：enabled 时每个内置 Agent 外包 ToolEquippedAgent（思考→调工具→观察→推理）
         if (Boolean.parseBoolean(env.getProperty("review.tools.agent-loop.enabled", "false"))

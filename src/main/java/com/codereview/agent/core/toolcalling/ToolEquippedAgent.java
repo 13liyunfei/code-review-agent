@@ -34,6 +34,10 @@ public class ToolEquippedAgent implements ReviewAgent {
 
     @Override public AgentType getType() { return delegate.getType(); }
 
+    @Override public boolean supports(List<CodeDiff> diffs, ReviewContext ctx) {
+        return delegate.supports(diffs, ctx);
+    }
+
     @Override public List<Finding> review(List<CodeDiff> diffs, ReviewContext ctx) {
         List<Finding> merged = new ArrayList<>(delegate.review(diffs, ctx));
         try {

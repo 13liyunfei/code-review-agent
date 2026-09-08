@@ -123,6 +123,10 @@ review:
   agent:
     # Coordinator 整体审查超时（毫秒），默认 5 分钟
     timeout-ms: ${REVIEW_AGENT_TIMEOUT_MS:300000}
+  # diff 注入提示词的字符预算（<0 = 不截断，全量塞入；建议大 PR 场景开启，防 prompt 顶爆上下文）
+  # 开启后超预算的 diff 按文件均摊截断，并在片段末尾标注截断统计，让模型知道 diff 不完整
+  prompt:
+    diff-char-budget: ${REVIEW_DIFF_CHAR_BUDGET:-1}
   # 数据目录（集群改造后仅剩两个用途）：① review.tools.agent-loop.enabled=true 时作为
   # FileReadTool 的默认读取根；② 兼容历史配置读取。断点/经验/校准/反馈/审查历史/轨迹/
   # 团队配置/知识元数据已全部迁移到 PostgreSQL（pgvector.enabled=true 时），多实例零本地状态。

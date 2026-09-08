@@ -88,6 +88,8 @@ public class GitLabApiClient {
             // 提取 MR 元数据
             String title = root.path("title").asText("(无标题)");
             String author = root.path("author").path("name").asText("unknown");
+            // MR 头提交 SHA（幂等判重 / 断点续跑键的组成部分，须与 webhook 幂等键同源）
+            String sha = root.path("sha").asText("");
             String sourceBranch = root.path("source_branch").asText("");
             String targetBranch = root.path("target_branch").asText("main");
 
@@ -103,10 +105,10 @@ public class GitLabApiClient {
                 }
             }
 
-            log.info("[GitLab API] MR !{} 共 {} 个文件变更（title=\"{}\", {} → {}）",
-                    mrIid, diffs.size(), title, sourceBranch, targetBranch);
+            log.info("[GitLab API] MR !{} 共 {} 个文件变更（title=\"{}\", sha={}, {} → {}）",
+                    mrIid, diffs.size(), title, sha, sourceBranch, targetBranch);
 
-            return new MrChanges(title, author, sourceBranch, targetBranch, diffs);
+            return new MrChanges(title, author, sha, sourceBranch, targetBranch, diffs);
 
         } catch (Exception e) {
             log.error("[GitLab API] 获取 MR 变更异常 projectId={} mrIid={}：{}",
@@ -219,6 +221,7 @@ public class GitLabApiClient {
      *
      * @param title        MR 标题
      * @param author       MR 作者名称
+     * @param sha          MR 头提交 SHA（幂等判重 / 断点续跑键组成部分；GitLab /changes 响应的顶层 sha 字段）
      * @param sourceBranch 源分支
      * @param targetBranch 目标分支
      * @param diffs        各文件变更列表（已转为 {@link CodeDiff}）
@@ -226,6 +229,7 @@ public class GitLabApiClient {
     public record MrChanges(
             String title,
             String author,
+            String sha,
             String sourceBranch,
             String targetBranch,
             List<CodeDiff> diffs) {

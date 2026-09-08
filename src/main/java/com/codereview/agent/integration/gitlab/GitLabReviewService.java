@@ -1,6 +1,8 @@
 package com.codereview.agent.integration.gitlab;
 
 import com.codereview.agent.core.coordinator.Coordinator;
+import com.codereview.agent.core.history.ReviewHistoryEntry;
+import com.codereview.agent.core.history.ReviewHistoryStore;
 import com.codereview.agent.core.model.PullRequest;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.tenant.TeamResolver;
@@ -8,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * GitLab MR 审查编排服务。
@@ -16,6 +19,7 @@ import java.util.List;
  * <pre>
  *   Webhook 触发
  *     → GitLabApiClient.fetchMrChanges（拉取 MR diff）
+ *     → 幂等判重（同一 MR + 同一 head SHA 已有完成历史则跳过重复投递）
  *     → 转 PullRequest 模型（按 group/project 解析团队，实现租户隔离）
  *     → Coordinator.review（5 Agent 并行审查 + 聚合仲裁）
  *     → GitLabApiClient.postMrNote（回写审查报告到 MR 评论）
@@ -31,6 +35,8 @@ public class GitLabReviewService {
     private final GitLabApiClient gitLabClient;
     private final Coordinator coordinator;
     private final TeamResolver teamResolver;
+    /** 审查历史存储（可空：为 null 时跳过幂等判重——单测/纯内存场景可关）。 */
+    private final ReviewHistoryStore historyStore;
 
     /**
      * 构造审查编排服务。
@@ -41,9 +47,20 @@ public class GitLabReviewService {
      */
     public GitLabReviewService(GitLabApiClient gitLabClient, Coordinator coordinator,
                               TeamResolver teamResolver) {
+        this(gitLabClient, coordinator, teamResolver, null);
+    }
+
+    /**
+     * 全量构造（含幂等判重存储）。
+     *
+     * @param historyStore 审查历史存储（用于 webhook 重复投递判重；可空）
+     */
+    public GitLabReviewService(GitLabApiClient gitLabClient, Coordinator coordinator,
+                              TeamResolver teamResolver, ReviewHistoryStore historyStore) {
         this.gitLabClient = gitLabClient;
         this.coordinator = coordinator;
         this.teamResolver = teamResolver;
+        this.historyStore = historyStore;
     }
 
     /**
@@ -71,15 +88,30 @@ public class GitLabReviewService {
         String teamId = teamResolver.resolve(owner, repo, teamOverride);
         log.info("[GitLab审查] 开始处理 MR !{}（projectId={}, repo={}，团队={}）", mrIid, projectId, projectPath, teamId);
 
-        // 1. 从 GitLab 拉取 MR 变更
+        // 1. 从 GitLab 拉取 MR 变更（响应自带头提交 SHA，幂等键据此派生）
         GitLabApiClient.MrChanges mr = gitLabClient.fetchMrChanges(projectId, mrIid);
         if (mr == null || mr.diffs().isEmpty()) {
             log.warn("[GitLab审查] MR !{} 无法获取变更或变更为空，跳过", mrIid);
             postSkipNote(projectId, mrIid, "无法获取 MR 变更内容（可能无文件变更或权限不足）。");
             return;
         }
+        String headSha = (mr.sha() == null || mr.sha().isBlank()) ? mr.sourceBranch() : mr.sha();
 
-        // 2. 转为内部 PullRequest 模型（携带团队标识）
+        // 1.1 webhook 幂等判重：同一 MR + 同一 head SHA 已有完成的审查历史则跳过，
+        //     避免 GitLab 重复投递 / 手动重推导致重复审查（幂等键与 Coordinator 断点键同源）。
+        //     GitLab webhook 载荷不贯穿 head SHA，故判重放在拉取之后（多一次轻量 fetch，远便宜于重复审查）。
+        if (historyStore != null && headSha != null && !headSha.isBlank()) {
+            String historyKey = PullRequest.resumeKey(projectPath, mrIid, headSha);
+            Optional<ReviewHistoryEntry> last = historyStore.getLatest(teamId, projectPath + "#" + mrIid);
+            if (last.isPresent() && historyKey.equals(last.get().runId())) {
+                log.info("[GitLab审查] 幂等命中：MR !{}（{}）head={} 已完成审查（runId={}），跳过重复投递",
+                        mrIid, projectPath, headSha, historyKey);
+                return;
+            }
+        }
+
+        // 2. 转为内部 PullRequest 模型（携带团队标识 + head SHA：
+        //    影响面分析据此拉取「与本次 diff 同一时刻」的完整文件内容；断点/历史键与 Gitea 同源）
         PullRequest pr = new PullRequest(
                 mrIid,
                 projectPath,
@@ -87,7 +119,8 @@ public class GitLabReviewService {
                 mr.author(),
                 mr.targetBranch(),
                 teamId,
-                mr.diffs()
+                mr.diffs(),
+                headSha
         );
 
         // 3. 多 Agent 协同审查

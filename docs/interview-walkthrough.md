@@ -22,7 +22,7 @@
 | 单 Agent 超时 | 300,000 ms，**逐 Future 独立限时，已生效**（见 7.3） | `CompletableFutureCoordinator.java:76,375-405` |
 | LLM 框架 | LangChain4j 1.19.0 | `pom.xml:35` |
 | 自建基座 | agent-kit 0.1.1（`com.codereview.kit`） | `pom.xml` |
-| 测试 | 162 例 / 37 个测试类（其中 21 例为 P0 修复新增） | — |
+| 测试 | **296 例**（281 基线 + 15 例本轮治理新增；含 P0 修复 21 例） | — |
 
 **架构选型一句话总结**：**请求-响应模型 + 星型并行 + 全量汇聚**，不是事件流、不是流水线、不是 DAG。这个选择决定了后面所有的设计（为什么用 CompletableFuture 而不是 MQ，为什么要仲裁，为什么超时这么难做对）。
 
@@ -77,7 +77,7 @@ flowchart TD
 3. `CompletableFuture.runAsync(TraceContext.wrap(...), webhookExecutor)` 异步化 `:139-141`
 4. **立即返回 `{status:accepted}`** `:143-147` —— 避免 Webhook 平台超时重推
 
-> ⚠️ **幂等缺失**：全仓无 delivery-id / 已处理事件记录，重复 push 会重复审查。面试问到「如何保证不重复审查」时，这是可以大方承认并给方案的缺口。
+> ✅ **幂等已落地（2026-09-08）**：`GiteaReviewService` / `GitLabReviewService` 注入 `ReviewHistoryStore`，审查前按 **PR/MR 身份（仓库 + 编号 + head SHA）** 派生幂等键（与 Coordinator 断点键同源，`PullRequest.resumeKey`，`PullRequest.java:90-97`），命中已完成历史即跳过 —— 重复 push / webhook 重推不再重复审查。Gitea 在拉取前判重（webhook 自带 headSha，零成本）；GitLab 载荷不贯穿 headSha，判重在拉取后（响应自带头提交 SHA，多一次轻量 fetch 远便宜于重复审查）。键含 head SHA ⇒ 新 commit 自动重开审查而非沿用旧结果。测试锁定：`GiteaReviewIdempotencyTest`（5 例）+ `GitLabReviewIdempotencyTest`（3 例）。
 
 ### 1.2 回写：为什么只能走「创建评审」一次提交
 
@@ -107,9 +107,10 @@ sequenceDiagram
     participant AG as ReportGenerator
     participant TR as TrajectoryRecorder
 
-    WH->>WH: TraceContext.ensure() → runId ≡ traceId (:223)
+    WH->>WH: runId = resumeKey(repo,prNum,headSha) → TraceContext.set(:302-303)
     WH->>WH: 恢复断点 resumedResults (:244-263)
     WH->>WH: 展开租户自定义 Agent (:296-323)
+    WH->>WH: supports() 内容准入：纯文档 PR 剔除语义 Agent (:405-425)
     WH->>WH: planningSupport（默认关闭，:331-338）
     WH->>EX: supplyAsync(TraceContext.wrap(...)) (:345)
     Note over EX: traceId 跨线程传播
@@ -125,14 +126,19 @@ sequenceDiagram
     WH->>WH: VetoPolicy → Profile过滤 → 复检 → 落盘 (:456-474)
 ```
 
-### 2.1 Agent 子集选择：**没有过滤**
+### 2.1 Agent 子集选择：**supports() 内容准入（2026-09-08 已落地）**
 
-`ReviewAgent` 接口只有两个方法（`ReviewAgent.java:23,32`），**没有 `supports()`**。所以：
+`ReviewAgent` 接口新增 default `supports(List<CodeDiff>, ReviewContext)`（恒 true，向后兼容，`ReviewAgent.java:34-50`）。语义型 Agent（Logic/Perf/Style/Arch）覆写为 `CodeDiff.containsCodeFile(diffs)`（`CodeDiff.java:49-56`：language 非 unknown 即代码内容；xml/sql 视为代码——SQL 注入/慢查询语义审查仍有价值）。调度前 Coordinator 统一过滤（`CompletableFutureCoordinator.java:405-425`），被剔除的 Agent 记 `agent.skipped-by-supports` 轨迹事件，**不产生降级语义**（只是省 token）。
 
-- 全集直接上：`pendingAgents = agents`（`:244`）
-- 仅三种变动：断点续跑剔除已完成 `:251-253` / 按 teamId 展开自定义 Agent `:296-323` / planning 路径整体替代 `:331-338`
+路由语义：
 
-**这里是面试官最爱追问的地方**：「小 PR 也要跑 5 个 Agent 吗？大 PR 会不会 token 爆炸？」—— 诚实答案是「会，这是当前设计的缺口」，然后给出方案（见 9.1）。
+- **Security 恒跑**（不覆写 supports）—— 注入防护对任意内容（文档里的恶意指令）都有价值
+- **语义型 Agent 跳过纯文档 PR** —— README / CI yaml / 资源文件无代码可审，省 4 次 LLM 调用
+- 自定义 Agent 默认参与（接口默认 true）
+
+测试锁定：`CoordinatorSupportsRoutingTest`（3 例）——纯文档 PR 下 Logic/Style 零调用而 Security 跑 1 次；含代码 PR 全部参与。
+
+> 面试官若追问「小 PR 也要跑 5 个 Agent 吗」——现在可以答：纯文档 PR 只跑 Security；含代码 PR 仍 5 个全跑（语义维度不可省，token 侧由 §4.4 的 diff 预算兜底）。
 
 ### 2.2 内置 Agent 的装配：配置声明式，顺序硬编码
 
@@ -140,13 +146,13 @@ sequenceDiagram
 
 这个细节很有价值：说明「扩展新 Agent 必须改配置类」，与「租户自定义 Agent 动态 new」形成对比（见 6.1）。
 
-### 2.3 断点续跑：机制是真的，触发条件很窄
+### 2.3 断点续跑：**runId 已改为 PR 身份派生，真实重放可命中（修复）**
 
-- 每完成一个 Agent 即 `saveCheckpoint`（`:384`，实现 `:501-524`）
-- `FileResumeStore` 用 tmp + `ATOMIC_MOVE` 落盘（`FileResumeStore.java:57-60`）
-- **但 `runId ≡ traceId`**（`:223`），而 traceId 每次 webhook 新建（`GiteaWebhookController.java:82`）
+- 每完成一个 Agent 即 `saveCheckpoint`（`:384`，实现 `:619-642`）
+- 断点存储 tmp + `ATOMIC_MOVE` 落盘（PG 化后 `ResumeStore` 落 `resume_state` 表，主键 run_id）
+- **关键修复**：runId 不再取随机 traceId，而是 `PullRequest.resumeKey(repo, prNum, headSha)` 稳定派生（`CompletableFutureCoordinator.java:302`，公共方法 `PullRequest.java:90-97`），webhook 重放 / 崩溃重试算出同一个键 → 命中上次断点续跑；键含 head SHA → 换新 commit 自动重开而非续跑旧半成品
 
-→ 结论：**真实 webhook 重放不会命中同一断点，只有同 traceId 重跑才会续跑**。机制完整，生产价值有限。
+→ 结论：**断点续跑在生产真实生效**（此前 runId≡每次新建的 traceId，同 PR 重试永远命中不了断点 —— 典型「feature 只在测试里跑过、线上是死代码」）。幂等键与历史/断点键同源，三处（断点 / 历史判重 / webhook 判重）不再各算各的。
 
 ---
 
@@ -208,20 +214,15 @@ flowchart TD
 | RAG 检索 | 团队规范 + 上传文档片段 | `CompletableFutureCoordinator.java:271` |
 | 合并装填 | 统一进 `ReviewContext` | `CompletableFutureCoordinator.java:287-289` |
 
-### 4.2 静态分析：不依赖 JavaParser
+### 4.2 静态分析：JavaParser 精确调用图 + tree-sitter 多语言兜底 + SCA 接 OSV
 
-**pom 里没有 javaparser**。`AstAnalyzer` 是手写词法扫描 + 括号栈：
+主链路的上下文注入来自 `core/analysis/` 三件套：
 
-- 正则提方法签名 `AstAnalyzer.java:41-48`
-- `stripNoise` 剔除注释与字符串 `:242`
-- 括号栈还原类/方法块 `:101-129`
-- 产出 `MethodInfo(name, startLine, endLine, length, branches, maxNesting)` `:26`
+- **Java 跨文件影响面（JavaParser）**：按 PR 的 head SHA 拉源码物化临时索引（`ImpactIndexBuilder`/`RepoIndex`），做**一跳 + 同包**的精确调用图（变更方法 → 谁在调它），回答「这个改动影响了哪些上游」；CROSS_FILE 模式。
+- **其余语言（tree-sitter）**：真实 native 解析器（bonede 0.25.3，py/js/ts/go 等），FILE_LOCAL 模式做文件内调用识别 —— 不做符号级跨文件（成本权衡）。
+- **SCA 依赖漏洞（OSV）**：`OsvVulnSource` 走真实 OSV 批量查询（生产同源），失败降级内置 `BuiltinVulnSource` 样本规则（`ScaSourceConfig` 可切换）——**不再是当年「本地硬编码 8 条 CVE」的形态**。
 
-`AdvancedAnalyzer` 阈值：长方法 60 行 / 圈复杂度 10 / 嵌套深度 5（`:30,32,34`）。
-
-`CallGraphAnalyzer`：**单文件、方法级**，BFS 求传递闭包且**无深度限制**（`:40-57`），跨文件未实现（类注释自陈 `:21-22`）。
-
-`ScaScanner`：**本地硬编码 8 条 CVE 规则**（`:55-72`），非 NVD/OSV，源码注释自己写了「生产应接 OSV/NVD」。
+> 这也是「分析器再准，不接生产路径就是死代码」的案例：影响面索引的接线点在 `CompletableFutureCoordinator.buildImpactSummary`（`:265-289`），验收看日志锚点 `[ImpactIndex] ... 索引完成`。早期手写词法扫描的 `AstAnalyzer` 已随静态分析演进被替代，面试不必再讲。
 
 ### 4.3 RAG：混合检索 + RRF 融合
 
@@ -242,9 +243,11 @@ flowchart LR
 - **pgvector 未用官方模块**：`pom.xml:109-111` 主动排除 `langchain4j-pgvector`，SQL 全手写，`@PostConstruct` 幂等建表（`PgVectorMemoryStore.java:186-199`）。
 - **Rerank**：`ApiReranker` 走 Cohere/Jina，异常降级 `HeuristicReranker`（0.7×词重叠 + 0.2×元数据 + 0.1×长度）。
 
-### 4.4 上下文裁剪：**主链路没有**
+### 4.4 上下文裁剪：**diff 字符预算已落地（2026-09-08）**
 
-`AbstractReviewAgent.formatDiffs:149-155` **无截断、无文件数上限、无 token 上限**。唯一的 6000 字符截断在 `ToolEquippedAgent.java:44`，但该增强 `review.tools.agent-loop.enabled=false` 默认关闭（`ReviewAgentConfig.java:413`）。
+`AbstractReviewAgent` 新增 `volatile int diffCharBudget`（默认 **-1 = 不截断**，向后兼容，`:68`），`formatDiffs` 超预算时按**文件均摊截断**（`:175-227`）：每个文件保留头部 patch 直到其均摊额度（下限 200 字符），末尾统一追加截断统计标注 —— 模型能看出「改了哪些文件、每个文件开头长什么样」，且明确知道 diff 不完整（不会把截断误判成「没有更多变更」）。配置入口 `review.prompt.diff-char-budget`（`application.yml:129`，环境变量 `REVIEW_DIFF_CHAR_BUDGET`），由 `ReviewAgentConfig` 注入 5 个内置 Agent（`:549`）。测试锁定：`DiffCharBudgetTest`（4 例）——预算关/足/超三态 + 多文件均摊不偏向列表头部。
+
+> 设计取舍：宁可「每个文件都看个头」，也不让 diff 列表头部的文件独占预算。RAG 侧另有独立裁剪（召回 10 → 重排 5 → 阈值 0.3）。
 
 ---
 
@@ -336,15 +339,15 @@ flowchart TD
 
 配置（`application.yml:45-61`）：`hy3` → `deepseek-v4-flash` → `glm-5.2`，timeout 60s，`quota-per-minute:200`。
 
-**缺陷清单**（P0-2 已修复，其余仍在；L3 问答用）：
+**缺陷治理清单**（全数闭环，L3 问答用；P0-2 修复见 Q13）：
 
 | 缺陷 | 位置 | 状态与说明 |
 |---|---|---|
-| **无熔断半开** | `ModelGateway.java:88` | 仍在：`p.available()` 是**装配期静态布尔**，不因运行期失败翻转；恢复只靠 60s 窗口自然重置 |
+| **无熔断半开** | `ModelGateway.java` | ✅ **已修复**：每供应商包 `CircuitBreakerProvider` **三态机（CLOSED/OPEN/HALF_OPEN）**，连续失败达阈值 OPEN，期间该供应商快速失败；HALF_OPEN 放行探测请求，成功即 CLOSED —— 恢复不再依赖 60s 配额窗口自然重置。路由自动跳过 OPEN 供应商（`ModelGateway` 列表遍历对熔断态跳过）。默认开启 |
 | **静默返回空串** | `ModelGateway.java`（修复前 `:81`） | ✅ **已修复（P0-2）**：全供应商失败即抛 `ModelUnavailableException`（`ModelGateway.java:101-106`），由协调器标 `degraded` 进报告。**2026-09-03 起 Mock 兜底彻底移除**——不再注入 mock 供应商、无兜底分支，未配 Key 直接启动失败（`ReviewAgentConfig.java:122`）。**静默失败比报错更危险**——上层会把空串解析成「无发现」 |
-| **配额计数竞态** | `ModelGateway.java:180-189` | 仍在：`quotaExceeded` 在 `synchronized` 内，`incQuota` 在锁外，窗口重置与自增存在竞态 |
+| **配额计数竞态** | `ModelGateway.java`（修复前 `:180-189`） | ✅ **已修复（2026-09-08）**：`quotaExceeded` 与 `incQuota` 原先分处锁内外，窗口翻转与自增在不同临界区 —— 翻转瞬间旧计数清零，该窗口实际调用被低估而**超发**。现在两者共用 `refreshWindow`，统一在 `synchronized(qs)` 锁内做「窗口翻转 + 自增」（`ModelGateway.java:258-283`） |
 
-**重试的真实来源**：网关自身**不重试**（`attempt` 计的是供应商序号，不是重试次数）。重试在 LangChain4j 层 —— builder 未设 `maxRetries`（`ReviewAgentConfig.java:239-247`），取 `OpenAiChatModel` 默认值 **2**。
+**重试的真实来源（网关自身已内置）**：网关带 **退避重试** —— `RetryClassifier` 判临时错误（429/503/超时等），按 `BackoffPolicy`（200ms / ×2 / 2s 上限）在同一供应商上重试至 `maxAttempts`，超过才换下一家；永久错误立即切。LangChain4j 层 builder 未设 `maxRetries` 取默认 2 只是**最后一道**，不是重试主来源（`ReviewAgentConfig.java:239-247`）。
 
 ### 7.2 Agent 级容错：部分失败可用（P0-1 修复后）
 
@@ -403,8 +406,8 @@ for (CompletableFuture<AgentResult> future : futures) {
 
 ```mermaid
 flowchart LR
-    E[Webhook 入口] -->|TraceContext.ensure| T[traceId = UUID前12位]
-    T -->|runId ≡ traceId| CO[Coordinator]
+    E[Webhook 入口] -->|TraceContext.ensure| T[traceId = PR 身份派生 runId]
+    T -->|runId = resumeKey repo#prNum@headSha| CO[Coordinator]
     CO -->|TraceContext.wrap| TH1[Agent 线程 1]
     CO -->|TraceContext.wrap| TH2[Agent 线程 2]
     CO -->|TraceContext.wrap| THN[Agent 线程 N]
@@ -412,20 +415,21 @@ flowchart LR
     TH2 --> SP
     THN --> SP
     SP --> AT[AggregateTracer 按操作聚合]
-    T --> JL[轨迹 JSONL]
+    AT --> EP[GET /api/admin/llm/trace]
+    T --> JL[轨迹 PG/JSONL]
 ```
 
 **三个关键设计**
 
-1. **traceId 即 runId**（`CompletableFutureCoordinator.java:223`）—— 一次审查一个 id，轨迹文件、日志、span 三者对齐，排查时不用做映射。
+1. **runId 由 PR 身份派生，traceId 与它同值**（`CompletableFutureCoordinator.java:302-303`）—— 一次审查一个 id，轨迹、日志、span 三者对齐；且同 PR 崩溃重试算同一 id（断点可命中，见 2.3）。**注意语义变化**：traceId 不再是每次请求随机的 UUID，而是稳定派生值 —— 可复现、可续跑、可判重，代价是并发同 PR 重放共享同一 id（由 webhook 幂等判重兜底，见 1.1）。
 2. **`TraceContext.wrap` 用「恢复快照」而不是 `MDC.clear()`**（`TraceContext.java:101-130`，注释 `:95-99` 解释了原因）：ForkJoinPool 可能就地执行任务，直接 clear 会把调用线程的 traceId 一起清掉。
 3. **观测是旁路，绝不能断主链路**（`LoggingChatModelListener.java` 全文 try-catch 包住 span 记录）。
 
 **span 字段**（`LoggingChatModelListener.java:140-148`）：`llm.chat` + traceId + model + durationMs（纳秒单调时钟）+ input/output token + error + `messages`/`outputChars`。
 
-**轨迹落盘**：`<data-dir>/<teamId>/trajectories/<runId>.jsonl`，事件源不可变（`ReviewEventLog.java:43-50` RCU + `AtomicReference`）。
+**指标端点已暴露（2026-09-08）**：`LlmHealthController` 增加 `GET /api/admin/llm/trace`（`:103-113`）——注入 agent-kit `AggregateTracer`，返回 `snapshot()`（总次数/错误/输入输出 token/耗时/估算成本）+ `byOperation()` 按操作细分。此前这些指标只被监听器写入、无任何端点消费（注释自承「死数据」），现在喂数方（`LoggingChatModelListener`）与读数方（`/trace`）闭环。
 
-> ⚠️ `AggregateTracer` 的指标**没有任何端点暴露**（`ReviewAgentConfig.java:133` 注释自承「需要对外暴露时注入本 bean 读」）—— 数据是死的。健康检查有（`/health`、`/actuator/health`，`HealthController.java:24`），但**没有 LLM 指标**。
+**轨迹落盘**：`<data-dir>/<teamId>/trajectories/<runId>.jsonl`（事件源不可变，`ReviewEventLog.java:43-50` RCU + `AtomicReference`）；PG 化后轨迹入 `trajectory_store` 表。
 
 ---
 
@@ -448,13 +452,13 @@ flowchart LR
 ### L2 · 深挖（权衡与细节）
 
 **Q5：Agent 数量会随 PR 大小变化吗？**
-> 不会。`ReviewAgent` 接口没有 `supports()`，全集直接上。这是已知缺口，方案是加 `supports(ReviewContext)` 谓词做按语言/规模/敏感文件路由（见 9.1）。
+> 会做**内容相关性准入**（2026-09-08 落地）：`ReviewAgent.supports()` 默认恒 true，语义型 Agent（Logic/Perf/Style/Arch）覆写为 `CodeDiff.containsCodeFile` —— 纯文档/配置 PR（README、CI yaml、资源文件）直接剔除 4 个语义 Agent，只留 Security（注入防护对任意内容都有价值）。含代码 PR 仍 5 个全跑：语义维度不可省，token 侧由 diff 预算（Q6）兜底。调度前过滤不产生降级语义（`CompletableFutureCoordinator.java:405-425`）。
 
 **Q6：prompt 里塞多少上下文？超长怎么办？**
-> 当前**主链路没有 token 预算**（`formatDiffs:149-155` 无截断）。RAG 侧有裁剪（召回 10 → 重排 5 → 阈值 0.3），但 diff 原文是全量塞。可讲的改进：按 diff 行数分档，超阈值时优先保留「被改方法的完整实现 + 调用链一跳」而不是堆砌文件。
+> diff 原文有**字符预算**（2026-09-08 落地）：`AbstractReviewAgent.diffCharBudget` 默认 -1 不截断，配置 `review.prompt.diff-char-budget` 开启后，`formatDiffs` 按文件均摊截断（每文件保留头部到均摊额度，下限 200 字符），末尾标注「X 个文件完整 / Y 个文件截断，请基于片段审查」—— 模型知道 diff 不完整，不会把截断误判成没有变更。RAG 侧另有裁剪（召回 10 → 重排 5 → 阈值 0.3）。**可继续讲的演进**：按 diff 行数分档，超阈值时优先保留「被改方法的完整实现 + 调用链一跳」而不是堆砌文件（Q6 的 diff 预算解决总量问题，行号/结构优先级是下一层优化）。
 
 **Q7：断点续跑在什么情况下真正生效？**
-> 机制完整（每个 Agent 完成即存 checkpoint，tmp + ATOMIC_MOVE），但 `runId ≡ traceId` 而 traceId 每次 webhook 新建，**真实重放不会命中**。要让它有用，得把 runId 改成 `(repo, prNum, headSha)` 的稳定派生值。
+> 现在**每次真实重放都生效**：runId 已从随机 traceId 改为 `(repo, prNum, headSha)` 稳定派生（`PullRequest.resumeKey`，`PullRequest.java:90-97`），崩溃后同 PR 重试、webhook 重复投递都算同一个键 → 命中上次落盘的 checkpoint（已完成 Agent 不重跑，只补未完成的）。键含 head SHA：换了新 commit 会重开审查而不是续跑旧半成品。这也让 webhook 幂等判重与断点键同源——三处（断点 / 历史判重 / webhook 判重）一套键，不会各算各的漂移。
 
 **Q8：ChatMemory 用在哪？会不会串 PR？**
 > `AiServices` + `MessageWindowChatMemory(10)`，memoryId = `Agent类型-PR号`（`AbstractReviewAgent.java:247-249`），**按 Agent + PR 隔离**。且是纯进程内、不落库 —— 重启即失，单个 PR 内多轮才有意义。
@@ -463,12 +467,14 @@ flowchart LR
 > 三层次：系统指令硬编码不可覆盖（自定义 Agent 只能填内容槽）、写库前预检、数据区标注。主链路只有 `SecurityAgent` 一处**阻断**（命中直接 return），自定义 Agent 路径是**标注不拦截**。领域适配上有个具体权衡：基座把 `override` 判为 LOW，但 Java `@Override` 满地都是，所以只拦 HIGH。
 
 **Q10：embedding 维度不匹配会怎样？**
-> 真实模型 1024 维，但默认 profile 配的是 256（`application.yml:75`），只有 dev profile 覆盖成 1024。不匹配时 `PgVectorMemoryStore.migrate:204-222` 会**备份旧表并重建向量列** —— 属于启动即毁数据的坑，必须靠 profile 管理对齐。
+> 已根治（2026-09）：yml 默认即 **1024 维**（真实模型 `kinfra-text-embedding-0.6b`），dev/test/生产同源，注释显式禁止各自覆盖；pgvector 向量列维度与配置统一为 1024。不匹配的历史教训：`PgVectorMemoryStore.migrate` 曾会**备份旧表并重建向量列**——启动即毁数据级别，所以这类「默认值必须与真实模型一致」的配置用 fail-fast 注释 + profile 统一锁死，而不是靠 profile 碰巧对齐。无 Key 降级 `SimpleHashEmbeddingClient`（256 维）仅离线兜底，不与 PG 混用。
 
 ### L3 · 压力（缺陷与改进）
 
 **Q11：这个系统最大的技术债是什么？**
 > 三块 P0 硬伤（超时挂错位置 / 空串静默降级 / 校准空转）已全部修掉，见 Q12/Q13/Q14——每个都留下可复现的测试。**历史债 2026-09-08 已全仓清理**：① `core/mq/` 664 行完整 MQ 子系统（含 ack/nack/死信/重投）从未接线、`AgentWorker` 全仓库没被 `new` 过；② `core/tool/` 的 `ToolDefinition` 9 个「纸面工具」只有声明没有实现（实际工具执行走新一代 `core/tools/ToolGate`）；③ `TeamMailbox`、`ReviewReplay`、`ReflectionAgent` 是 `@Component` 孤儿。以上整包删除 + 新增 `DeadCodeGuardTest` 死代码门禁（main 中生产零引用且非框架回调的类型直接让 CI 失败），防止再犯——面试可讲：**清理本身是一次"顺着引用面找病根"的审计，病根是 DemoRunner/测试给死代码提供了合法引用，编译不告警、IDE 不标灰**。
+>
+> **同一轮还有「自查文档 → 逐条核实现状 → 全量落地」的审计**：拿面试手册里标注「仍在」的缺陷清单逐条对代码，区分「文档滞后」（其实早修了）与「真缺陷」（当场修）——真缺陷修掉 6 项：配额计数竞态（锁外自增 → 统一锁内翻转+自增）、`supports()` 内容准入、diff 字符预算、`AggregateTracer` 指标端点、Gitea+GitLab webhook 幂等判重。修完全部用测试锁定（本轮新增 15 例）。面试可以讲：**文档里「缺陷已修」的标注会滞后于代码，反向审计（拿声明找证据）才能发现哪些是真缺口、哪些只是没同步**——修文档滞后项本身也是价值。
 
 **Q12：`orTimeout` 真的生效吗？—— 已修复，这是我最想讲的一个故事**
 > **发现**：它原来挂在 `allOf` 返回的聚合 future 上，只产生一条 warn，不会完成或取消任何单个 future，后面 `join()` 仍然无限阻塞；`advancedFuture` 完全没进超时体系。
@@ -493,15 +499,28 @@ flowchart LR
 
 ### 9.1 改进优先级（如果面试官问「你会先改什么」）
 
+> 原表里 P0~P2 的每一项都已在 2026-09 前/中闭环。面试时可先给结论「这张表已经清空」，再展示**清空过程**——它本身就是一轮「文档声明 vs 代码现状」的对账审计。
+
 | 优先级 | 改动 | 理由 |
 |---|---|---|
 | ~~P0~~ | ~~修 `orTimeout` 与空串静默降级~~ | ✅ **已完成（2026-09）**：逐 Future 限时 + `ModelUnavailableException` + 降级进报告，21 例测试锁定（见 7.2/7.3/Q12/Q13/Q14） |
-| P0 | 对齐 embedding 维度默认值 | 启动即毁数据 |
-| P1 | Agent 加 `supports()` 谓词 | 成本与延迟，直接影响可用性 |
-| P1 | diff token 预算裁剪 | 大 PR 场景下 prompt 超限 |
-| P2 | runId 改为 `(repo, prNum, headSha)` 派生 | 让断点续跑真正可用 |
-| P2 | 暴露 `AggregateTracer` 指标端点 | 现在指标是死数据 |
+| ~~P0~~ | ~~对齐 embedding 维度默认值~~ | ✅ **已完成**：yml 默认统一 1024 + 注释禁止覆盖（启动即毁数据的坑已关） |
+| ~~P1~~ | ~~Agent 加 `supports()` 谓词~~ | ✅ **已完成（2026-09-08）**：纯文档 PR 剔除语义 Agent，Security 恒跑（见 2.1/Q5） |
+| ~~P1~~ | ~~diff token 预算裁剪~~ | ✅ **已完成（2026-09-08）**：文件均摊截断 + 截断标注（见 4.4/Q6） |
+| ~~P2~~ | ~~runId 改为 `(repo, prNum, headSha)` 派生~~ | ✅ **已完成**：断点续跑 / 历史判重 / webhook 判重三处同源（见 2.3/Q7） |
+| ~~P2~~ | ~~暴露 `AggregateTracer` 指标端点~~ | ✅ **已完成（2026-09-08）**：`GET /api/admin/llm/trace`（见 8） |
+| ~~P2~~ | ~~webhook 幂等判重~~ | ✅ **已完成（2026-09-08）**：Gitea 拉取前 / GitLab 拉取后，键同源（见 1.1） |
+| ~~P2~~ | ~~配额计数竞态~~ | ✅ **已完成（2026-09-08）**：窗口翻转与自增统一进锁（见 7.1） |
 | ~~P3~~ | ~~清理死代码（`core/mq/`、`core/tool/ToolDefinition`、`TeamMailbox`）~~ | ✅ **已完成（2026-09-08）**：整包删除 + `DeadCodeGuardTest` 门禁防复发 |
+
+**仍开放（诚实的边界，面试可主动讲）**：
+
+| 待办 | 说明 |
+|---|---|
+| 模型配额按租户隔离 | `ModelGateway` 配额是**进程级全局**，多租户共享 200 次/分——压测下租户 A 可能挤掉租户 B（见 6.2） |
+| `CompletableFuture.cancel(true)` 不中断已开始的 Agent 线程 | Java 限制：真实阻塞 LLM 调用无法被打断，超时只是「不再等它」（见 7.3 诚实边界） |
+| 幂等判重的失效窗口 | 判重基于「已完成历史」：审查中崩溃且未落历史 → 重投会重跑；但断点续跑同键兜底，只会续跑不会整轮重来 |
+| diff 预算的下一层优化 | 现为字符级文件均摊；可演进为按「被改方法的完整实现 + 调用链一跳」的结构优先级裁剪 |
 
 ---
 
@@ -566,4 +585,31 @@ ls $SRC/../test/java/com/codereview/agent/core/coordinator/impl/CoordinatorTimeo
 ls $SRC/../test/java/com/codereview/agent/core/llm/ModelGatewayDegradationTest.java
 ls $SRC/../test/java/com/codereview/agent/core/calibration/CalibrationFeedbackLoopTest.java
 ls $SRC/../test/java/com/codereview/agent/core/report/ReportDegradationTest.java
+
+# 2026-09-08 第二轮治理（自查手册 → 逐条核实 → 全量落地）
+# ① supports() 内容准入：语义型 Agent 覆写 + Coordinator 调度前过滤
+grep -n "default boolean supports" $SRC/core/agent/ReviewAgent.java
+grep -n "containsCodeFile" $SRC/core/agent/impl/LogicAgent.java $SRC/core/agent/impl/StyleAgent.java
+grep -n "skipped-by-supports" $SRC/core/coordinator/impl/CompletableFutureCoordinator.java
+
+# ② diff 字符预算：默认 -1 不截断，超限按文件均摊截断 + 标注
+grep -n "diffCharBudget" $SRC/core/agent/AbstractReviewAgent.java | head -3
+grep -n "diff-char-budget" src/main/resources/application.yml
+grep -n "diffCharBudget" $SRC/config/ReviewAgentConfig.java
+
+# ③ AggregateTracer 指标端点：数据不再是死数据
+grep -n "@GetMapping(\"/trace\")" $SRC/core/admin/LlmHealthController.java
+
+# ④ webhook 幂等判重：Gitea 拉取前 / GitLab 拉取后，键 = PullRequest.resumeKey
+grep -n "幂等命中" $SRC/integration/gitea/GiteaReviewService.java $SRC/integration/gitlab/GitLabReviewService.java
+grep -n "resumeKey" $SRC/core/model/PullRequest.java | head -3
+
+# ⑤ 配额竞态修复：窗口翻转 + 自增同一把锁
+grep -n "refreshWindow" $SRC/core/llm/ModelGateway.java
+
+# 本轮新增测试类
+ls $SRC/../test/java/com/codereview/agent/core/coordinator/impl/CoordinatorSupportsRoutingTest.java
+ls $SRC/../test/java/com/codereview/agent/core/agent/DiffCharBudgetTest.java
+ls $SRC/../test/java/com/codereview/agent/integration/gitea/GiteaReviewIdempotencyTest.java
+ls $SRC/../test/java/com/codereview/agent/integration/gitlab/GitLabReviewIdempotencyTest.java
 ```

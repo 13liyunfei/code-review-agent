@@ -90,6 +90,7 @@ public class GiteaConfig {
                                                  TeamResolver teamResolver,
                                                  LlmClient llmClient,
                                                  com.codereview.agent.core.memory.ExperienceStore experienceStore,
+                                                 com.codereview.agent.core.history.ReviewHistoryStore historyStore,
                                                  org.springframework.core.env.Environment env) {
         // 可选增强（默认关闭）：经验反思沉淀 + LLM 应用评估
         var reflection = Boolean.parseBoolean(env.getProperty("review.reflection.enabled", "false"))
@@ -99,7 +100,7 @@ public class GiteaConfig {
                 ? new com.codereview.kit.eval.LlmJudge(llmClient)
                 : null;
         return new GiteaReviewService(giteaApiClient, coordinator, autoFixEngine, workflowEngine, teamResolver,
-                reflection, judge);
+                reflection, judge, historyStore);
     }
 
     /**

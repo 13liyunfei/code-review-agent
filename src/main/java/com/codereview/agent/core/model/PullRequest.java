@@ -69,4 +69,35 @@ public record PullRequest(
         int i = repo.indexOf('/');
         return i >= 0 && i < repo.length() - 1 ? repo.substring(i + 1) : repo;
     }
+
+    /**
+     * 断点/历史幂等键：由 PR 身份（仓库 + 编号 + head SHA）稳定派生。
+     *
+     * <p>同 PR 的多次审查（含崩溃后重试、webhook 重复投递）算出同一个键，才能命中
+     * 上次落盘的断点 / 已完成的历史，避免重复审查。含 head SHA：换了新 commit 应
+     * 重开审查而非续跑/判重旧结果。headSha 缺失时回落到 {@code repo#id}。
+     *
+     * <p>该键同时被用作文件名（轨迹/断点存储），因此必须文件系统安全：
+     * repo 形如 owner/repo 含 "/"，直接使用会写出非法文件名（表现为轨迹丢失 /
+     * 断点落不了盘）。历史实现把此方法放在 Coordinator 内部 private，导致
+     * webhook 服务层无法复用来做幂等判重——2026-09-08 上移为公共方法。
+     *
+     * @param repo    仓库名（owner/repo 形式）
+     * @param prId    PR 编号
+     * @param headSha head SHA（可为空 → 回落 repo#id）
+     * @return 文件系统安全的稳定键
+     */
+    public static String resumeKey(String repo, long prId, String headSha) {
+        String base = (repo == null || repo.isBlank()) ? "?" : repo;
+        String key = base + "#" + prId;
+        if (headSha != null && !headSha.isBlank()) {
+            key = key + "@" + headSha;
+        }
+        return key.replace('/', '_').replace('\\', '_');
+    }
+
+    /** 实例便捷方法：按本 PR 身份算幂等键。 */
+    public String resumeKey() {
+        return resumeKey(repo, id, headSha);
+    }
 }

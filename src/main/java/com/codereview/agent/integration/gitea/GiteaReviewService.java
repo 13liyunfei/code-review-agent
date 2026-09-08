@@ -44,6 +44,8 @@ public class GiteaReviewService {
     private final com.codereview.agent.core.memory.ReflectionService reflectionService;
     /** LLM 应用评估（可空：为 null 时跳过评估）。 */
     private final com.codereview.kit.eval.LlmJudge judge;
+    /** 审查历史存储（可空：为 null 时跳过幂等判重——单测/纯内存场景可关）。 */
+    private final com.codereview.agent.core.history.ReviewHistoryStore historyStore;
 
     /**
      * 构造审查编排服务。
@@ -57,7 +59,7 @@ public class GiteaReviewService {
     public GiteaReviewService(GiteaApiClient giteaClient, Coordinator coordinator,
                              AutoFixEngine autoFixEngine, ReviewWorkflowEngine workflowEngine,
                              TeamResolver teamResolver) {
-        this(giteaClient, coordinator, autoFixEngine, workflowEngine, teamResolver, null, null);
+        this(giteaClient, coordinator, autoFixEngine, workflowEngine, teamResolver, null, null, null);
     }
 
     /** 可选增强构造：reflectionService（经验反思）/ judge（LLM 评估）为 null 时跳过对应步骤。 */
@@ -66,6 +68,21 @@ public class GiteaReviewService {
                              TeamResolver teamResolver,
                              com.codereview.agent.core.memory.ReflectionService reflectionService,
                              com.codereview.kit.eval.LlmJudge judge) {
+        this(giteaClient, coordinator, autoFixEngine, workflowEngine, teamResolver,
+                reflectionService, judge, null);
+    }
+
+    /**
+     * 全量构造（含幂等判重存储）。
+     *
+     * @param historyStore 审查历史存储（用于 webhook 重复投递判重；可空）
+     */
+    public GiteaReviewService(GiteaApiClient giteaClient, Coordinator coordinator,
+                             AutoFixEngine autoFixEngine, ReviewWorkflowEngine workflowEngine,
+                             TeamResolver teamResolver,
+                             com.codereview.agent.core.memory.ReflectionService reflectionService,
+                             com.codereview.kit.eval.LlmJudge judge,
+                             com.codereview.agent.core.history.ReviewHistoryStore historyStore) {
         this.giteaClient = giteaClient;
         this.coordinator = coordinator;
         this.autoFixEngine = autoFixEngine;
@@ -73,6 +90,7 @@ public class GiteaReviewService {
         this.teamResolver = teamResolver;
         this.reflectionService = reflectionService;
         this.judge = judge;
+        this.historyStore = historyStore;
     }
 
     /**
@@ -103,6 +121,19 @@ public class GiteaReviewService {
         long startTotal = System.currentTimeMillis();
         String teamId = teamResolver.resolve(owner, repo, teamOverride);
         log.info("[Gitea审查] 开始处理 PR #{}（{}/{}，团队={}，traceId={}）", prNum, owner, repo, teamId, traceId);
+
+        // 0. webhook 幂等判重：同一 PR + 同一 head SHA 若已有完成的审查历史则跳过，
+        //    避免 Gitea 重复投递 / 手动重推导致重复审查（幂等键与 Coordinator 断点键同源）
+        if (historyStore != null && headSha != null && !headSha.isBlank()) {
+            String historyKey = PullRequest.resumeKey(owner + "/" + repo, prNum, headSha);
+            java.util.Optional<com.codereview.agent.core.history.ReviewHistoryEntry> last =
+                    historyStore.getLatest(teamId, (owner + "/" + repo) + "#" + prNum);
+            if (last.isPresent() && historyKey.equals(last.get().runId())) {
+                log.info("[Gitea审查] 幂等命中：PR #{}（{}/{}）head={} 已完成审查（runId={}），跳过重复投递",
+                        prNum, owner, repo, headSha, historyKey);
+                return;
+            }
+        }
 
         // 1. 从 Gitea 拉取 PR 变更
         long t0 = System.currentTimeMillis();
