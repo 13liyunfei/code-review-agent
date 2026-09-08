@@ -18,7 +18,7 @@ flowchart LR
         P3[("review_feedback<br/>抑制源")]
         P4[("trajectory_store<br/>run_id PK · events JSONB")]
         P5[("team_kv<br/>团队配置 JSONB")]
-        P6[("knowledge_meta<br/>RAG 知识元数据")]
+        P6[("knowledge_meta<br/>RAG 知识 · tsvector + 向量<br/>HNSW / ivfflat")]
         P7[("experience_entry<br/>四态 + 证据计数")]
         P8[("calibration_accuracy<br/>rule_id PK")]
     end
@@ -28,11 +28,12 @@ flowchart LR
         C1["崩溃后同 runId 续跑<br/>runId 由 PR 身份派生"]
         C2["computeVerification<br/>已解决 / 新引入"]
         C3["aggregate 阶段<br/>误报抑制"]
-        C4["ReviewReplay 回放"]
+        C4["轨迹按 runId 读取<br/>事后审计 / 排障复盘<br/>原 ReviewReplay 已随死代码清理下线"]
         C5["runSkills 规则生效<br/>跨实例 2s 收敛"]
-        C6["RagContextBuilder<br/>注入提示词"]
+        C6["RagContextBuilder 混合检索<br/>dense 0.7 + BM25 0.3 RRF<br/>阈值 abstain → 见 L2d"]
         C7["经验检索注入<br/>仅 CANDIDATE + ACTIVE"]
         C8["ConfidenceCalibration<br/>置信度校准"]
+        C9["webhook 幂等判重<br/>断点 / 历史 / webhook 键同源"]
     end
 
     W1 --> P1
@@ -54,6 +55,7 @@ flowchart LR
     P6 --> C6
     P7 --> C7
     P8 --> C8
+    P2 -.->|"resumeKey 命中即跳过重投"| C9
 
     G[("__global__ 基线<br/>团队配置叠加")] -.->|"缺失回退默认"| STORE
     F[("pgvector.enabled=false<br/>InMemory 回退 + 启动告警")] -.->|"单机 / 测试"| STORE
@@ -63,6 +65,6 @@ flowchart LR
     classDef store fill:#F3F8F4,stroke:#2c7d2c,stroke-width:1.5px,color:#1f2933;
     classDef base fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
     class IN,STORE,OUT grp;
-    class W1,W2,W3,W4,W5,W6,W7,W8,C1,C2,C3,C4,C5,C6,C7,C8 n;
+    class W1,W2,W3,W4,W5,W6,W7,W8,C1,C2,C3,C4,C5,C6,C7,C8,C9 n;
     class P1,P2,P3,P4,P5,P6,P7,P8 store;
     class G,F base;

@@ -55,6 +55,28 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
      */
     protected final StructuredChatModel structured;
 
+    /**
+     * diff 注入提示词的字符预算（&lt;0 表示不截断，与历史行为一致）。
+     *
+     * <p>大 PR 的 diff 原文可能数万甚至数十万字符，全量塞进 prompt 既浪费 token 又可能
+     * 顶爆上下文窗口。设置预算后 {@link #formatDiffs} 会对超出部分做<b>文件级均摊截断</b>
+     * （每个文件保留头部直到其均摊额度，末尾统一标注截断统计），保证模型能看到
+     * 「改了哪些文件、每个文件的开头长什么样」，而不是偏向 diff 列表头部的文件。
+     *
+     * <p>由 {@code ReviewAgentConfig} 从配置注入；默认 -1 保持向后兼容（单测直接 new 不感知）。
+     */
+    private volatile int diffCharBudget = -1;
+
+    /** 设置 diff 字符预算（&lt;0 关闭截断）。 */
+    public void setDiffCharBudget(int diffCharBudget) {
+        this.diffCharBudget = diffCharBudget;
+    }
+
+    /** 当前 diff 字符预算（&lt;0 = 不截断）。 */
+    public int diffCharBudget() {
+        return diffCharBudget;
+    }
+
     protected AbstractReviewAgent(LlmClient llmClient,
                                  PromptTemplateLoader promptLoader,
                                  SkillRegistry registry,
@@ -143,14 +165,65 @@ public abstract class AbstractReviewAgent implements ReviewAgent {
     /**
      * 将代码变更格式化为可读文本，供注入提示词。
      *
+     * <p>受 {@link #diffCharBudget} 约束：超预算时按「文件均摊」截断——先算每个文件可用的
+     * 均摊额度，再逐文件保留头部 patch 直到额度用尽；末尾统一追加截断标注，让模型明确
+     * 知道 diff 不完整（避免把截断误判为「没有更多变更」）。
+     *
      * @param diffs 代码变更列表
-     * @return 格式化文本
+     * @return 格式化文本（可能带截断标注）
      */
     protected String formatDiffs(List<CodeDiff> diffs) {
-        StringBuilder sb = new StringBuilder();
-        for (CodeDiff d : diffs) {
-            sb.append("--- ").append(d.fileName()).append(" ---\n").append(d.patch()).append('\n');
+        if (diffs == null || diffs.isEmpty()) {
+            return "";
         }
+        StringBuilder sb = new StringBuilder();
+        if (diffCharBudget < 0) {
+            for (CodeDiff d : diffs) {
+                sb.append("--- ").append(d.fileName()).append(" ---\n").append(d.patch()).append('\n');
+            }
+            return sb.toString();
+        }
+
+        // 预算模式：单文件头 "--- x ---\n" 计入预算
+        long total = diffs.stream()
+                .mapToLong(d -> ("--- " + d.fileName() + " ---\n").length() + (d.patch() == null ? 0 : d.patch().length()) + 1L)
+                .sum();
+        if (total <= diffCharBudget) {
+            for (CodeDiff d : diffs) {
+                sb.append("--- ").append(d.fileName()).append(" ---\n").append(d.patch()).append('\n');
+            }
+            return sb.toString();
+        }
+
+        long perFile = Math.max(200L, diffCharBudget / (long) diffs.size());
+        int truncatedFiles = 0;
+        long remaining = diffCharBudget;
+        for (CodeDiff d : diffs) {
+            String head = "--- " + d.fileName() + " ---\n";
+            String patch = d.patch() == null ? "" : d.patch();
+            // 每个文件最多占用 perFile；剩余额度不足时也留保底空间给下个文件的头部
+            long allowance = Math.min(perFile, remaining - head.length() - 1);
+            if (allowance < head.length()) {
+                truncatedFiles++;
+                continue;
+            }
+            if (patch.length() <= allowance) {
+                sb.append(head).append(patch).append('\n');
+                remaining -= head.length() + patch.length() + 1;
+            } else {
+                sb.append(head).append(patch, 0, (int) allowance).append('\n');
+                sb.append("  … [该文件 diff 超预算，已截断 ").append(patch.length() - allowance)
+                        .append(" 字符]\n");
+                truncatedFiles++;
+                remaining -= head.length() + allowance + 1;
+            }
+        }
+        sb.append("【diff 过大提示】原始 diff 共 ")
+                .append(diffs.size()).append(" 个文件 / ")
+                .append(total).append(" 字符，超出预算 ")
+                .append(diffCharBudget).append(" 字符；已按文件均摊截断，")
+                .append(diffs.size() - truncatedFiles).append(" 个文件完整、")
+                .append(truncatedFiles).append(" 个文件截断。请基于给出的片段审查。");
         return sb.toString();
     }
 

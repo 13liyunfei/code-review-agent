@@ -402,6 +402,28 @@ public class CompletableFutureCoordinator implements Coordinator {
             }
         }
 
+        // 内容相关性准入：语义型 Agent 对纯文档/配置 PR（无代码文件）返回 supports()=false，
+        // 在此剔除（不产生降级语义，仅减少无对象维度的 LLM token 消耗）。Security 恒跑。
+        List<ReviewAgent> routedAgents = new ArrayList<>(effectiveAgents.size());
+        List<String> skippedBySupports = new ArrayList<>();
+        for (ReviewAgent agent : effectiveAgents) {
+            if (agent.supports(diffs, enrichedCtx)) {
+                routedAgents.add(agent);
+            } else {
+                skippedBySupports.add(agent.getType().name());
+            }
+        }
+        if (!skippedBySupports.isEmpty()) {
+            effectiveAgents = routedAgents;
+            log.info("[Coordinator] 按内容准入跳过 {} 个 Agent（无代码文件可审）：{}",
+                    skippedBySupports.size(), skippedBySupports);
+            if (recorder != null) {
+                recorder.append(runId, "agent.skipped-by-supports", Map.of(
+                        "count", skippedBySupports.size(),
+                        "types", skippedBySupports));
+            }
+        }
+
         // 上一轮审查记录（用于复检验证）
         ReviewHistoryEntry previous = historyStore == null ? null
                 : historyStore.getLatest(teamId, pr.repo() + "#" + pr.id()).orElse(null);
@@ -587,13 +609,7 @@ public class CompletableFutureCoordinator implements Coordinator {
      * </ul>
      */
     private static String resumeKey(PullRequest pr) {
-        String base = (pr.repo() == null ? "?" : pr.repo()) + "#" + pr.id();
-        String head = pr.headSha();
-        String key = (head == null || head.isBlank()) ? base : base + "@" + head;
-        // runId 同时被当作文件名使用（轨迹记录器 / 断点存储），必须文件系统安全：
-        // repo 形如 owner/repo 含 "/"，直接用会写出非法文件名（对应文件/目录创建失败，
-        // 表现为「轨迹丢了」「断点落不了盘 → 续跑永远命中不了」）。
-        return key.replace('/', '_').replace('\\', '_');
+        return PullRequest.resumeKey(pr.repo(), pr.id(), pr.headSha());
     }
 
     /**

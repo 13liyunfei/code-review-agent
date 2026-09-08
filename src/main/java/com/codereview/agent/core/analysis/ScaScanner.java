@@ -4,6 +4,8 @@ import com.codereview.agent.core.model.CodeDiff;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,18 +13,29 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * SCA（软件组成分析）依赖漏洞扫描器（无外部网络依赖）。
+ * SCA（软件组成分析）依赖漏洞扫描器。
  *
- * <p>从 PR diff 中识别新增的 Maven / npm 依赖，匹配内置 CVE 样本库与许可证黑名单，
- * 生成 SBOM（CycloneDX-lite JSON）。目标契合「大厂 P1」诉求：CVE 扫描 + SBOM + 许可证合规。
+ * <p>从 PR diff 中识别新增的 Maven / npm 依赖，交给可插拔的 {@link ScaVulnSource}
+ * 查询已知漏洞，并做许可证黑名单检查、生成 SBOM（CycloneDX-lite JSON）。
  *
- * <p>说明：生产环境应对接 OSV / NVD / 私有漏洞库；此处内置少量高频 CVE 样本用于离线演示，
- * 结构（组件模型 + SBOM 输出 + 漏洞/许可结果）可直接替换为真实数据源。
+ * <p><b>数据源</b>：生产 / 开发 / 测试默认走 {@link OsvVulnSource}（OSV 真实漏洞库），
+ * 由 {@code ScaSourceConfig} 按配置装配：
+ * <ul>
+ *   <li>{@code sca.source=auto}（默认）——OSV 优先，网络不可用时降级
+ *       {@link BuiltinVulnSource} 内置样本，并在报告标注 {@code sourceUsed/degraded}；</li>
+ *   <li>{@code sca.source=osv}——强制真实 OSV，失败不降级（报告如实标注 failed）；</li>
+ *   <li>{@code sca.source=builtin}——仅离线内置样本（单测 / 纯离线环境）。</li>
+ * </ul>
+ * 内置样本<b>不是真实漏洞库</b>，任何依赖它的报告都必须被 {@code sourceUsed=builtin}
+ * 标注出来，杜绝把「样本演示」当成「真实扫描」。
+ *
+ * <p>降级/失败一律可观测：打 WARN 日志 + 报告标注，绝不在「查不了」时假装「没有」。
  */
 public final class ScaScanner {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger log = LoggerFactory.getLogger(ScaScanner.class);
 
+    private static final Pattern POM_GROUP = Pattern.compile("<groupId>([^<]+)</groupId>");
     private static final Pattern POM_ARTIFACT = Pattern.compile("<artifactId>([^<]+)</artifactId>");
     private static final Pattern POM_VERSION = Pattern.compile("<version>([^<]+)</version>");
     private static final Pattern NPM_DEP = Pattern.compile("\"([@a-zA-Z][\\w./@\\-]*)\"\\s*:\\s*\"([\\^~]?[0-9][^\"]{0,30})\"");
@@ -31,55 +44,65 @@ public final class ScaScanner {
     private static final java.util.Set<String> LICENSE_BLACKLIST = java.util.Set.of(
             "GPL-2.0", "GPL-3.0", "AGPL-3.0", "EUPL-1.2");
 
-    private ScaScanner() {
+    private final ScaVulnSource primary;
+    private final ScaVulnSource fallback;
+
+    /**
+     * @param primary  首选数据源（auto=osv）
+     * @param fallback 降级数据源（auto=builtin；强制模式传 null 表示不降级）
+     */
+    public ScaScanner(ScaVulnSource primary, ScaVulnSource fallback) {
+        this.primary = primary;
+        this.fallback = fallback;
     }
 
-    /** 被扫描出的组件。 */
-    public record Component(String ecosystem, String name, String version) {
+    /** 纯内置样本扫描器（离线兜底 / 确定性单测）。 */
+    public static ScaScanner builtinOnly() {
+        return new ScaScanner(new BuiltinVulnSource(), null);
+    }
+
+    // ===================== 组件模型 =====================
+
+    /**
+     * 被扫描出的组件。
+     *
+     * @param osvName OSV 查询用全限定名：Maven 为 {@code groupId:artifactId}（OSV 用全限定名
+     *                索引，短名查不中）；npm 与 name 相同。无法解析出 groupId 时退回短名。
+     */
+    public record Component(String ecosystem, String name, String version, String osvName) {
+        public Component(String ecosystem, String name, String version) {
+            this(ecosystem, name, version, name);
+        }
     }
 
     /** 命中漏洞。 */
     public record Vulnerability(Component component, String cve, String severity, String description) {
     }
 
-    /** SCA 报告。 */
+    /**
+     * SCA 报告。
+     *
+     * @param sourceUsed   实际使用的数据源（{@code osv} / {@code builtin} / {@code osv(failed)} / {@code none}）
+     * @param degraded     是否发生降级（OSV 不可用回退内置样本 = true；强制模式失败也置 true 并标 failed）
+     */
     public record ScaReport(List<Component> components, List<Vulnerability> vulnerabilities,
-                            List<String> licenseIssues, String sbomJson) {
+                            List<String> licenseIssues, String sbomJson,
+                            String sourceUsed, boolean degraded) {
+        public boolean isEmpty() {
+            return components.isEmpty();
+        }
     }
 
-    // 内置 CVE 样本（artifactId -> 受影响版本上限 + CVE 信息）
-    private record CveRule(String artifact, int maxMajor, int maxMinor, int maxPatch,
-                           String cve, String severity, String description) {
-    }
-
-    private static final List<CveRule> CVE_RULES = List.of(
-            new CveRule("log4j-core", 2, 14, 1, "CVE-2021-44228", "BLOCKER",
-                    "Log4j 2.x < 2.15.0 存在 JNDI 远程代码执行（Log4Shell）。"),
-            new CveRule("spring-core", 5, 3, 17, "CVE-2022-22965", "BLOCKER",
-                    "Spring Framework < 5.3.18 存在 Spring4Shell RCE。"),
-            new CveRule("spring-beans", 5, 3, 17, "CVE-2022-22965", "BLOCKER",
-                    "Spring Framework < 5.3.18 存在 Spring4Shell RCE。"),
-            new CveRule("commons-collections", 3, 2, 1, "CVE-2015-7501", "MAJOR",
-                    "Commons Collections < 3.2.2 存在反序列化 RCE。"),
-            new CveRule("jackson-databind", 2, 9, 7, "CVE-2018-7489", "MAJOR",
-                    "jackson-databind < 2.9.8 存在反序列化漏洞。"),
-            new CveRule("lodash", 4, 17, 20, "CVE-2021-23337", "MAJOR",
-                    "lodash < 4.17.21 存在命令注入/原型污染。"),
-            new CveRule("minimist", 1, 2, 5, "CVE-2021-44906", "MAJOR",
-                    "minimist < 1.2.6 存在原型污染。"),
-            new CveRule("axios", 0, 21, 0, "CVE-2020-28168", "MINOR",
-                    "axios < 0.21.1 存在 SSRF 代理绕过。")
-    );
+    // ===================== 主入口 =====================
 
     /**
-     * 扫描 diff 中的依赖变更。
+     * 扫描 diff 中的依赖变更（走配置装配的数据源链）。
      *
      * @param diffs 代码变更列表
-     * @return SCA 报告（含组件、漏洞、许可问题、SBOM）
+     * @return SCA 报告（组件、漏洞、许可问题、SBOM、实际数据源标注）
      */
-    public static ScaReport analyze(List<CodeDiff> diffs) {
+    public ScaReport analyze(List<CodeDiff> diffs) {
         List<Component> components = new ArrayList<>();
-        List<Vulnerability> vulns = new ArrayList<>();
         List<String> licenseIssues = new ArrayList<>();
 
         for (CodeDiff d : diffs) {
@@ -92,30 +115,72 @@ public final class ScaScanner {
             }
         }
 
-        for (Component c : components) {
-            for (CveRule r : CVE_RULES) {
-                if (r.artifact().equals(c.name()) && r.maxMajor() >= 0) {
-                    int[] v = parseVersion(c.version());
-                    if (v != null && withinRange(v, r)) {
-                        vulns.add(new Vulnerability(c, r.cve(), r.severity(), r.description()));
-                    }
-                }
-            }
-        }
+        VulnQueryResult vq = queryVulnerabilities(components);
+        String sbom = buildSbom(components, vq.vulnerabilities(), vq.sourceUsed());
+        return new ScaReport(components, vq.vulnerabilities(), licenseIssues,
+                sbom, vq.sourceUsed(), vq.degraded());
+    }
 
-        return new ScaReport(components, vulns, licenseIssues, buildSbom(components, vulns));
+    // ===================== 漏洞查询（带降级链） =====================
+
+    private record VulnQueryResult(List<ScaScanner.Vulnerability> vulnerabilities,
+                                   String sourceUsed, boolean degraded) {
+    }
+
+    private VulnQueryResult queryVulnerabilities(List<Component> components) {
+        if (components.isEmpty()) {
+            return new VulnQueryResult(List.of(), "none", false);
+        }
+        try {
+            List<Vulnerability> hits = primary.lookupAll(components);
+            log.info("[SCA] 数据源 {} 完成：{} 个组件，命中 {} 个漏洞",
+                    primary.id(), components.size(), hits.size());
+            return new VulnQueryResult(hits, primary.id(), false);
+        } catch (Exception e) {
+            if (fallback != null) {
+                log.warn("[SCA] 数据源 {} 查询失败（{}），降级内置样本 {}——报告已标注 degraded",
+                        primary.id(), e.getMessage(), fallback.id());
+                return new VulnQueryResult(safeLookup(fallback, components), fallback.id(), true);
+            }
+            log.warn("[SCA] 数据源 {} 查询失败且为强制模式（不降级）：{}——报告标注 sourceUsed=failed",
+                    primary.id(), e.getMessage());
+            return new VulnQueryResult(List.of(), primary.id() + "(failed)", true);
+        }
+    }
+
+    private static List<Vulnerability> safeLookup(ScaVulnSource source, List<Component> components) {
+        try {
+            return source.lookupAll(components);
+        } catch (Exception e) {
+            log.error("[SCA] 降级数据源 {} 也失败：{}", source.id(), e.getMessage());
+            return List.of();
+        }
     }
 
     // ===================== 内部提取 =====================
 
+    /**
+     * 提取 Maven 新增依赖。
+     *
+     * <p>groupId 与 artifactId 来自 diff 新增行，按行序把最近的 {@code <groupId>}
+     * 配对到后续 {@code <artifactId>}（dependency 块内 group 恒先于 artifact）。
+     * OSV 用全限定名 {@code groupId:artifactId} 索引，故 name 之外保留 osvName。
+     */
     private static void extractMaven(CodeDiff d, List<Component> out) {
-        List<String> added = addedLines(d.patch());
+        List<String> groups = new ArrayList<>();
         List<String> artifacts = new ArrayList<>();
         List<String> versions = new ArrayList<>();
-        for (String line : added) {
+        String lastGroup = null;
+        for (String line : addedLines(d.patch())) {
+            Matcher gm = POM_GROUP.matcher(line);
+            if (gm.find()) {
+                lastGroup = gm.group(1).trim();
+                continue; // groupId 先到，配给后续 artifact
+            }
             Matcher am = POM_ARTIFACT.matcher(line);
             if (am.find()) {
                 artifacts.add(am.group(1).trim());
+                groups.add(lastGroup);
             }
             Matcher vm = POM_VERSION.matcher(line);
             if (vm.find()) {
@@ -123,8 +188,11 @@ public final class ScaScanner {
             }
         }
         for (int i = 0; i < artifacts.size(); i++) {
+            String art = artifacts.get(i);
             String ver = i < versions.size() ? versions.get(i) : "unknown";
-            out.add(new Component("maven", artifacts.get(i), ver));
+            String group = groups.get(i);
+            String osvName = group == null || group.isBlank() ? art : group + ":" + art;
+            out.add(new Component("maven", art, ver, osvName));
         }
     }
 
@@ -168,51 +236,18 @@ public final class ScaScanner {
         return r;
     }
 
-    private static boolean withinRange(int[] v, CveRule r) {
-        int major = v[0], minor = v.length > 1 ? v[1] : 0, patch = v.length > 2 ? v[2] : 0;
-        if (major != r.maxMajor()) {
-            return major < r.maxMajor();
-        }
-        if (minor != r.maxMinor()) {
-            return minor < r.maxMinor();
-        }
-        return patch <= r.maxPatch();
-    }
+    // ===================== SBOM =====================
 
-    private static int[] parseVersion(String v) {
-        if (v == null) {
-            return null;
-        }
-        StringBuilder digits = new StringBuilder();
-        List<Integer> parts = new ArrayList<>();
-        for (char c : v.toCharArray()) {
-            if (Character.isDigit(c)) {
-                digits.append(c);
-            } else if (c == '.') {
-                if (digits.length() > 0) {
-                    parts.add(Integer.parseInt(digits.toString()));
-                    digits.setLength(0);
-                }
-            } else {
-                break; // 遇到非数字非点（如 -RC1）停止
-            }
-        }
-        if (digits.length() > 0) {
-            parts.add(Integer.parseInt(digits.toString()));
-        }
-        if (parts.isEmpty()) {
-            return null;
-        }
-        return parts.stream().mapToInt(Integer::intValue).toArray();
-    }
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** 生成 CycloneDX-lite SBOM JSON。 */
-    private static String buildSbom(List<Component> components, List<Vulnerability> vulns) {
+    /** 生成 CycloneDX-lite SBOM JSON（带 scanSource 标注，便于事后追溯数据来源）。 */
+    private static String buildSbom(List<Component> components, List<Vulnerability> vulns, String sourceUsed) {
         try {
             ObjectNode root = MAPPER.createObjectNode();
             root.put("bomFormat", "CycloneDX");
             root.put("specVersion", "1.5");
             root.put("generatedBy", "code-review-agent-sca");
+            root.put("scanSource", sourceUsed);
             ArrayNode comps = root.putArray("components");
             for (Component c : components) {
                 ObjectNode cn = comps.addObject();

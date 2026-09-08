@@ -257,19 +257,29 @@ public class ModelGateway implements LlmClient {
 
     private boolean quotaExceeded(String name) {
         QuotaState qs = quotas.computeIfAbsent(name, k -> new QuotaState());
-        long now = Instant.now().getEpochSecond();
         synchronized (qs) {
-            if (now - qs.windowStart > WINDOW_SECONDS) {
-                qs.count.set(0);
-                qs.windowStart = now;
-            }
+            refreshWindow(qs);
             return qs.count.get() >= maxPerWindow;
         }
     }
 
     private void incQuota(String name) {
         QuotaState qs = quotas.computeIfAbsent(name, k -> new QuotaState());
-        qs.count.incrementAndGet();
+        // 必须在同一把锁内做「窗口翻转 + 自增」：若只自增不翻转，会与 quotaExceeded 的
+        // 窗口重置竞争——旧窗口的计数在翻转瞬间被清零，导致该窗口实际调用数被低估而超发。
+        synchronized (qs) {
+            refreshWindow(qs);
+            qs.count.incrementAndGet();
+        }
+    }
+
+    /** 窗口翻转（须在持有 {@code qs} 锁时调用）：窗口过期则清零计数并推进窗口起点。 */
+    private static void refreshWindow(QuotaState qs) {
+        long now = Instant.now().getEpochSecond();
+        if (now - qs.windowStart > WINDOW_SECONDS) {
+            qs.count.set(0);
+            qs.windowStart = now;
+        }
     }
 
     private static final class QuotaState {

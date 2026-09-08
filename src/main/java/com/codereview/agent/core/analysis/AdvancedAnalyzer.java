@@ -69,11 +69,18 @@ public class AdvancedAnalyzer {
     private final RepoSourceLocator locator;
     private final AnalysisEngines engines;
     private final IndexScope scope;
+    private final ScaScanner scaScanner;
 
-    /** 生产装配：注入源码定位器，开启「完整源码」模式。 */
+    /** 生产装配：注入源码定位器（完整源码模式）+ SCA 扫描器（OSV 真实数据源链）。 */
     @Autowired
+    public AdvancedAnalyzer(RepoSourceLocator locator, ScaScanner scaScanner) {
+        this(locator, scaScanner == null ? ScaScanner.builtinOnly() : scaScanner,
+                AnalysisEngines.defaults(), IndexScope.DEFAULT);
+    }
+
+    /** 测试/无 SCA 装配场景：内置样本扫描器（离线确定性，避免测试依赖网络）。 */
     public AdvancedAnalyzer(RepoSourceLocator locator) {
-        this(locator, AnalysisEngines.defaults(), IndexScope.DEFAULT);
+        this(locator, ScaScanner.builtinOnly());
     }
 
     /** 便于测试（无定位器 → 回落 diff 片段模式）。 */
@@ -81,8 +88,10 @@ public class AdvancedAnalyzer {
         this(null);
     }
 
-    private AdvancedAnalyzer(RepoSourceLocator locator, AnalysisEngines engines, IndexScope scope) {
+    private AdvancedAnalyzer(RepoSourceLocator locator, ScaScanner scaScanner,
+                             AnalysisEngines engines, IndexScope scope) {
         this.locator = locator;
+        this.scaScanner = scaScanner;
         this.engines = engines == null ? AnalysisEngines.defaults() : engines;
         this.scope = scope == null ? IndexScope.DEFAULT : scope;
     }
@@ -149,8 +158,8 @@ public class AdvancedAnalyzer {
             }
         }
 
-        // 2. SCA 依赖扫描
-        ScaScanner.ScaReport sca = ScaScanner.analyze(diffs);
+        // 2. SCA 依赖扫描（数据源链由配置装配：默认 OSV 真实库，失败降级内置）
+        ScaScanner.ScaReport sca = scaScanner.analyze(diffs);
         for (ScaScanner.Vulnerability v : sca.vulnerabilities()) {
             security.add(new Finding(AgentType.SECURITY, v.component().name() + "@" + v.component().version(),
                     0, 0, toSeverity(v.severity()), "security", "SCA-" + v.cve(),

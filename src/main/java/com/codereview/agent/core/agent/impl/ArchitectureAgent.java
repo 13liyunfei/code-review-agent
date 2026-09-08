@@ -38,6 +38,12 @@ public class ArchitectureAgent extends AbstractReviewAgent implements ReviewAgen
     }
 
     @Override
+    public boolean supports(List<CodeDiff> diffs, ReviewContext ctx) {
+        // 纯文档/配置文件 PR 无代码可审架构语义，跳过以节省 LLM token
+        return CodeDiff.containsCodeFile(diffs);
+    }
+
+    @Override
     public List<Finding> review(List<CodeDiff> diffs, ReviewContext ctx) {
         List<Finding> findings = new ArrayList<>();
 

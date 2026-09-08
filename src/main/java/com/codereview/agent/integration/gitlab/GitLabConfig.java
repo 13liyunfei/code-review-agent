@@ -51,11 +51,14 @@ public class GitLabConfig {
      *
      * @param gitLabApiClient GitLab API 客户端
      * @param coordinator     多 Agent 协同审查协调者
+     * @param teamResolver    团队解析器
+     * @param historyStore    审查历史存储（webhook 重复投递幂等判重用）
      */
     @Bean
     public GitLabReviewService gitLabReviewService(GitLabApiClient gitLabApiClient,
                                                    Coordinator coordinator,
-                                                   TeamResolver teamResolver) {
-        return new GitLabReviewService(gitLabApiClient, coordinator, teamResolver);
+                                                   TeamResolver teamResolver,
+                                                   com.codereview.agent.core.history.ReviewHistoryStore historyStore) {
+        return new GitLabReviewService(gitLabApiClient, coordinator, teamResolver, historyStore);
     }
 }

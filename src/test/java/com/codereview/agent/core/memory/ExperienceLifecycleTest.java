@@ -141,7 +141,7 @@ class ExperienceLifecycleTest {
     @Test
     void activeExperienceIsRankedAboveCandidateForSameQuery() {
         // ExperienceStore.top：检索注入时 ACTIVE 优先于 CANDIDATE
-        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());
+        ExperienceStore store = new ExperienceStore(new InMemoryExperienceLibrary());
         store.add(TEAM, "LOGIC-1 sql 拼接 常见", "方式A");          // CANDIDATE（1 次）
         for (int i = 0; i < 3; i++) {
             store.add(TEAM, "LOGIC-2 sql 拼接 高频", "方式B");       // 复现 3 次 → ACTIVE

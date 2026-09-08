@@ -2,6 +2,7 @@ package com.codereview.agent.core.rag;
 
 import com.codereview.agent.core.memory.MemoryEntry;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -19,8 +20,8 @@ import java.util.Map;
  *   <li>生产实现（{@code PgKnowledgeStore}）与记忆实现（{@code PgVectorMemoryStore}）
  *       <b>物理共享同一张 {@code memory_store} 表</b>（按 {@code agent_type} 区分读写视角），
  *       但<b>逻辑上互为独立接口</b>，各自只暴露自己该暴露的能力，符合接口隔离原则；</li>
- *   <li>经验类（{@code ExperienceStore} / {@code ReflectionAgent}）继续使用 {@code MemoryStore}，
- *       二者在调用方分层，互不串扰。</li>
+ *   <li>经验类（{@code ExperienceStore}，已收敛为独立条目通道 {@code ExperienceLibrary}，
+ *       不再写入向量记忆）与知识检索在调用方分层，互不串扰。</li>
  * </ul>
  *
  * <p>写入通道：本接口不定义通用 {@code save}，{@code saveKnowledge} 内部通过结构感知切分
@@ -49,6 +50,21 @@ public interface KnowledgeStore {
      * @return 命中条目（携带 similarity 元数据）
      */
     List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal);
+
+    /**
+     * RAG 语义检索 + freshness 过滤（知识时效，业界「新鲜度优先」实践）。
+     *
+     * <p>默认实现忽略 {@code maxAge} 委托 {@link #searchKnowledge(String, int, String, boolean)}
+     * （保证存量实现与测试桩无需改动即可编译）；生产实现（{@code Pg}/{@code InMemory}）
+     * 覆写本方法在检索侧按 {@code created_at} 过滤——超过 {@code maxAge} 未入库的陈旧
+     * 知识不参与召回，避免「过期的历史 PR 复盘 / 旧版规范」污染当前审查上下文。
+     *
+     * @param maxAge 最大年龄；null 或 <=0 表示不过滤（全量召回）
+     */
+    default List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,
+                                              boolean includeGlobal, Duration maxAge) {
+        return searchKnowledge(query, topK, teamId, includeGlobal);
+    }
 
     /**
      * 按团队 + 元数据键值删除知识条目（团队隔离版本）。

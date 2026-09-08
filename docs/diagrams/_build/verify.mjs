@@ -25,6 +25,7 @@ const candidates = [
   process.env.PUPPETEER_MODULE_PATH,
   path.resolve('node_modules/puppeteer'),
   '/tmp/mmdc/node_modules/puppeteer',
+  path.join(process.env.HOME || '~', 'node_modules/puppeteer'),
 ].filter(Boolean);
 let puppeteer = null;
 for (const c of candidates) {

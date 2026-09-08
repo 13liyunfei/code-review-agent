@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -70,30 +69,14 @@ public class HeuristicReranker implements Reranker {
     }
 
     /**
-     * 简易分词：按非字母数字（含中文）粗切；对每段在保留原始大小写的前提下做
-     * camelCase / snake_case 子词拆分（再统一小写），使代码审查场景下的
-     * {@code getUserById} 与 {@code user_service} / {@code getuserbyid} 能共享子词
-     * （get/user/by/id），提升标识符召回。
+     * 简易分词：非字母数字（含中文）粗切 → <b>中文 bigram</b> + camelCase / snake_case
+     * 子词拆分（再统一小写），使代码审查场景下的 {@code getUserById} 与 {@code user_service} /
+     * {@code getuserbyid} 能共享子词（get/user/by/id），提升标识符召回；
+     * 中文则不再整段成词（否则 Jaccard 重叠对中文恒为 0，启发式重排全程空转）。
      */
     public static Set<String> tokenize(String text) {
-        if (text == null || text.isBlank()) {
-            return Set.of();
-        }
-        Set<String> out = new java.util.HashSet<>();
-        // 先按非字母数字（含中文）粗切（保留原始大小写，供 camelCase 拆分）
-        for (String raw : text.split("[^a-zA-Z0-9\\u4e00-\\u9fa5]+")) {
-            if (raw.isEmpty()) {
-                continue;
-            }
-            // 在原始大小写下按 camelCase 边界 / snake_case 下划线拆子词，再转小写
-            for (String sub : raw.split("(?<!^)(?=[A-Z])|_+")) {
-                String lower = sub.toLowerCase(Locale.ROOT);
-                if (lower.length() >= 2) {
-                    out.add(lower);
-                }
-            }
-        }
-        return out;
+        // 统一委托 TextTokenizer（中文 bigram + 标识符子词），与 PG 全文检索 / 内存 BM25 同口径。
+        return TextTokenizer.tokenize(text);
     }
 
     private record Scored(MemoryEntry entry, double score) {

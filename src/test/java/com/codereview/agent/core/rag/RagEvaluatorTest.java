@@ -93,6 +93,35 @@ class RagEvaluatorTest {
         RagEvaluator.RagMetrics m = eval.evaluate(passed, gt);
         assertEquals(0.5, m.precision(), 1e-6);
         assertEquals(0.5, m.recall(), 1e-6);
+        // golden 排序指标：首个相关块在 rank 1 → firstHitRank=1, MRR=1
+        assertEquals(1, m.firstHitRank());
+        assertEquals(1.0, m.mrr(), 1e-6);
+        assertTrue(m.hitAtK(1), "相关块位于首位应命中 hit@1");
+        assertTrue(m.hitAtK(5), "相关块位于首位必命中 hit@5");
+    }
+
+    @Test
+    void evaluateComputesMrrWhenRelevantNotFirst() {
+        RagEvaluator eval = new RagEvaluator(0.0, true);
+        // 相关块（id=3）排第 3 → firstHitRank=3, MRR=1/3；hit@2 不命中、hit@5 命中
+        List<MemoryEntry> passed = List.of(withSim(1, 0.9), withSim(2, 0.8), withSim(3, 0.7), withSim(4, 0.6));
+        Set<String> gt = Set.of("3", "9");
+        RagEvaluator.RagMetrics m = eval.evaluate(passed, gt);
+        assertEquals(3, m.firstHitRank());
+        assertEquals(1.0 / 3.0, m.mrr(), 1e-6);
+        assertFalse(m.hitAtK(2), "相关块不在前 2 → hit@2 不命中");
+        assertTrue(m.hitAtK(5), "相关块在前 5 → hit@5 命中");
+    }
+
+    @Test
+    void evaluateMrrZeroWhenNoGroundTruthHit() {
+        RagEvaluator eval = new RagEvaluator(0.0, true);
+        List<MemoryEntry> passed = List.of(withSim(1, 0.9), withSim(2, 0.8));
+        Set<String> gt = Set.of("99");
+        RagEvaluator.RagMetrics m = eval.evaluate(passed, gt);
+        assertEquals(0, m.firstHitRank(), "无命中时 firstHitRank=0");
+        assertEquals(0.0, m.mrr(), 1e-6);
+        assertFalse(m.hitAtK(5), "无命中时 hit@k 恒不命中");
     }
 
     @Test

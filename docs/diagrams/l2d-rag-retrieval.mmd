@@ -1,0 +1,34 @@
+flowchart TD
+    D0["CodeDiff 列表"] --> Q1["① 查询提取 DiffQueryExtractor<br/>提炼文件 / 类 / 方法 / 符号"]
+
+    Q1 --> Q2{"② 查询改写<br/>rewrite.enabled?"}
+    Q2 -->|"开"| Q2a["LlmQueryRewriter<br/>代码形态 → 规范术语"]
+    Q2 -->|"关 / 失败 / 空"| Q2b["IdentityQueryRewriter<br/>恒等返回，绝不劣化"]
+    Q2a --> Q3
+    Q2b --> Q3
+
+    Q3["③ 混合检索<br/>团队内容 + __global__ 基线"]
+    Q3 --> R1["稠密路 · pgvector 余弦 · 权重 0.7"]
+    Q3 --> R2["稀疏路 · tsvector BM25 · 权重 0.3"]
+    AGE["freshness max-age-days<br/>按 created_at 过滤陈旧知识"] -.-> Q3
+
+    R1 --> F1["RRF 融合 1 除以 60+rank<br/>候选窗 retrieve-k 默认 50"]
+    R2 --> F1
+    F1 --> F2["similarity 恒为真实余弦<br/>rrfScore 只排序，不进阈值"]
+
+    F2 --> T{"④ 阈值闸门<br/>min-similarity 0.3"}
+    T -->|"全部低于"| T1["知识分区 abstain<br/>宁可不注入，不拿噪声凑数"]
+    T -->|"有放行"| NB(["转入精排与注入 → 见 L2e"])
+
+    classDef start fill:#2c7d2c,stroke:#2c7d2c,stroke-width:2px,color:#fff;
+    classDef endn fill:#1f2933,stroke:#1f2933,stroke-width:2px,color:#fff;
+    classDef proc fill:#FFFFFF,stroke:#2c7d2c,stroke-width:1px,color:#1f2933;
+    classDef dec fill:#FFF7ED,stroke:#b45309,stroke-width:1px,color:#7c3d0b;
+    classDef short fill:#FEF2F2,stroke:#b91c1c,stroke-width:1px,color:#991b1b;
+    classDef enh fill:#EEF2FF,stroke:#1d4ed8,stroke-width:1px,color:#1e3a8a;
+    class D0 start;
+    class NB endn;
+    class Q1,Q3,R1,R2,F1,F2 proc;
+    class Q2,T dec;
+    class T1 short;
+    class Q2a,Q2b,AGE enh;

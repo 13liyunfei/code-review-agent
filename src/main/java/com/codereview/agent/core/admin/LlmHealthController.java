@@ -4,6 +4,8 @@ import com.codereview.agent.core.llm.LlmGatewaySnapshot;
 import com.codereview.agent.core.llm.ModelGateway;
 import com.codereview.agent.core.llm.TokenUsageRecord;
 import com.codereview.agent.core.llm.TokenUsageRecorder;
+import com.codereview.kit.obs.AggregateTracer;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,7 +22,9 @@ import java.util.Map;
  *   <li>{@code GET /api/admin/llm/health}：每个供应商的熔断状态 + 累计失败数 +
  *       距允许试探剩余毫秒；适合 k8s readinessProbe（所有供应商 OPEN 即 DOWN）；</li>
  *   <li>{@code GET /api/admin/llm/stats}：累计彻底失败次数 + 供应商列表；</li>
- *   <li>{@code GET /api/admin/llm/usage}：最近 N 次 token 用量明细 + 按供应商聚合。</li>
+ *   <li>{@code GET /api/admin/llm/usage}：最近 N 次 token 用量明细 + 按供应商聚合；</li>
+ *   <li>{@code GET /api/admin/llm/trace}：LLM 调用聚合指标（次数/错误/耗时/估算成本，按操作细分）——
+ *       由 agent-kit {@link AggregateTracer} 提供，喂数方是 {@code LoggingChatModelListener}。</li>
  * </ul>
  *
  * <p><b>鉴权</b>：与现有 {@code /api/admin/**} 一致——由 {@code review.api.auth-token}
@@ -32,10 +36,14 @@ public class LlmHealthController {
 
     private final ModelGateway gateway;
     private final TokenUsageRecorder usageRecorder;
+    /** LLM 调用聚合器（监听器喂 span）；可能未装配（为 null 时 /trace 返回空指标）。 */
+    private final AggregateTracer llmTracer;
 
-    public LlmHealthController(ModelGateway gateway, TokenUsageRecorder usageRecorder) {
+    public LlmHealthController(ModelGateway gateway, TokenUsageRecorder usageRecorder,
+                               @Autowired(required = false) AggregateTracer llmTracer) {
         this.gateway = gateway;
         this.usageRecorder = usageRecorder;
+        this.llmTracer = llmTracer;
     }
 
     /** 全链路快照（供 k8s readinessProbe / Prometheus exporter 消费）。 */
@@ -83,5 +91,23 @@ public class LlmHealthController {
                 "limit", safeLimit,
                 "records", recent,
                 "byProvider", usageRecorder == null ? List.of() : usageRecorder.aggregatesSnapshot());
+    }
+
+    /**
+     * LLM 调用聚合指标（agent-kit {@link AggregateTracer}）：总次数/错误/输入输出 token/
+     * 平均耗时/估算成本 + 按操作（agent 类型）细分。喂数方为 {@code LoggingChatModelListener}。
+     *
+     * <p>2026-09-08 落地：此前该聚合器只在内存累计、无任何端点可读（文档 8 节标注的
+     * 「指标是死的」），现经本端点暴露，可对接 Prometheus exporter / 告警。
+     */
+    @GetMapping("/trace")
+    public Map<String, Object> trace() {
+        if (llmTracer == null) {
+            return Map.of("status", "unavailable", "reason", "AggregateTracer 未装配");
+        }
+        return Map.of(
+                "status", "UP",
+                "total", llmTracer.snapshot(),
+                "byOperation", llmTracer.byOperation());
     }
 }

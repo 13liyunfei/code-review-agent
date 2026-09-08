@@ -1,21 +1,23 @@
 flowchart TD
     I["TraceContext 兜底 traceId"] --> J["TeamResolver 解析 teamId<br/>可被 X-Team-Id 覆盖"]
-    J --> K["fetchPrChanges<br/>拉取 PR diff 与元信息"]
+    J --> JD{"幂等判重<br/>同 resumeKey 已完成?"}
+    JD -->|"命中"| JD1["跳过本次审查"]
+    JD -->|"未命中"| K["fetchPrChanges 拉取 diff 与元信息"]
     K --> L{"diffs 为空<br/>或拉取失败?"}
-    L -->|"是"| L1["postSkipNote<br/>说明跳过原因"]
-    L -->|"否"| M["构造 PullRequest 模型<br/>携带 teamId 做租户隔离<br/>透传 headSha 供影响面索引与续跑键"]
+    L -->|"是"| L1["postSkipNote 说明跳过原因"]
+    L -->|"否"| M["构造 PullRequest 模型<br/>teamId 隔离 + headSha"]
     M --> N["Coordinator.review<br/>多 Agent 并行审查 → 见 L2"]
 
     N --> O{"审查抛异常?"}
-    O -->|"是"| O1["postSkipNote<br/>引擎异常说明"]
+    O -->|"是"| O1["postSkipNote 引擎异常说明"]
     O -->|"否"| P["AutoFix 生成修复建议 Markdown"]
     P --> Q["WorkflowEngine.handle<br/>工单 / 提交状态 → 见 L5"]
-    Q --> R["buildReviewComment<br/>报告 + 修复 + 工作流"]
-    R --> S["postPrComment<br/>回写 PR 顶层评论"]
+    Q --> R["buildReviewComment 报告+修复+工作流"]
+    R --> S["postPrComment 回写顶层评论"]
 
     S --> T["AutoFix 生成结构化修复项"]
-    T --> U["过滤可锚定项<br/>包装为 suggestion 代码块"]
-    U --> V["postReviewComments<br/>一次性提交 comments 数组"]
+    T --> U["过滤可锚定项 → suggestion 块"]
+    U --> V["postReviewComments 一次性提交"]
 
     V --> W["可选：反思沉淀 / LlmJudge 评估"]
     W --> X["记录总耗时与分步耗时"]
@@ -31,5 +33,5 @@ flowchart TD
     class I start;
     class Z endn;
     class I,J,K,M,N,P,Q,R,S,T,U,V,W,X proc;
-    class L,O dec;
-    class L1,O1 fail;
+    class L,O,JD dec;
+    class L1,O1,JD1 fail;

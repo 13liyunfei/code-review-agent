@@ -9,7 +9,6 @@ import com.codereview.agent.core.llm.LlmClient;
 import com.codereview.agent.core.memory.ExperienceStore;
 import com.codereview.agent.core.memory.MemoryStore;
 import com.codereview.agent.core.memory.RagContextBuilder;
-import com.codereview.agent.core.memory.ReflectionAgent;
 import com.codereview.agent.core.memory.ReviewFeedback;
 import com.codereview.agent.core.model.AgentType;
 import com.codereview.agent.core.model.CodeDiff;
@@ -17,14 +16,10 @@ import com.codereview.agent.core.model.Finding;
 import com.codereview.agent.core.model.PullRequest;
 import com.codereview.agent.core.model.ReviewReport;
 import com.codereview.agent.core.model.Severity;
-import com.codereview.agent.core.mq.MessageQueue;
-import com.codereview.agent.core.mq.QueueNames;
-import com.codereview.agent.core.mq.ReliableDelivery;
 import com.codereview.agent.core.security.AnomalyDetector;
 import com.codereview.agent.core.security.KeywordInjectionDetector;
 import com.codereview.agent.core.security.PromptHardening;
 import com.codereview.agent.core.security.SemanticInjectionDetector;
-import com.codereview.agent.core.tool.ToolRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -63,19 +58,14 @@ public class DemoRunner implements CommandLineRunner {
     private final RagContextBuilder ragContextBuilder;
     private final ExperienceStore experienceStore;
     private final MemoryStore memoryStore;
-    private final MessageQueue messageQueue;
-    private final ReflectionAgent reflectionAgent;
     private final PromptHardening promptHardening;
     private final AnomalyDetector anomalyDetector;
-    private final ToolRouter toolRouter;
 
     public DemoRunner(Coordinator coordinator, FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
                       LlmClient llmClient, EmbeddingClient embeddingClient,
                       RagContextBuilder ragContextBuilder, ExperienceStore experienceStore,
-                      MemoryStore memoryStore, MessageQueue messageQueue,
-                      ReflectionAgent reflectionAgent,
-                      PromptHardening promptHardening, AnomalyDetector anomalyDetector,
-                      ToolRouter toolRouter) {
+                      MemoryStore memoryStore,
+                      PromptHardening promptHardening, AnomalyDetector anomalyDetector) {
         this.coordinator = coordinator;
         this.feedbackStore = feedbackStore;
         this.historyStore = historyStore;
@@ -84,11 +74,8 @@ public class DemoRunner implements CommandLineRunner {
         this.ragContextBuilder = ragContextBuilder;
         this.experienceStore = experienceStore;
         this.memoryStore = memoryStore;
-        this.messageQueue = messageQueue;
-        this.reflectionAgent = reflectionAgent;
         this.promptHardening = promptHardening;
         this.anomalyDetector = anomalyDetector;
-        this.toolRouter = toolRouter;
     }
 
     @Override
@@ -101,15 +88,10 @@ public class DemoRunner implements CommandLineRunner {
                 memoryStore.getClass().getSimpleName(),
                 memoryStore instanceof com.codereview.agent.core.memory.PgVectorMemoryStore
                         ? "PostgreSQL + pgvector" : "内存（不持久化）");
-        log.info("当前消息队列：{}（{}）",
-                messageQueue.getClass().getSimpleName(),
-                messageQueue instanceof com.codereview.agent.core.mq.RedisMessageQueue
-                        ? "Redis" : "内存（单机）");
 
         demoMultiAgentReview();
         demoInjectionDefense();
         demoRagAndMemory();
-        demoMessageQueue();
         demoDegradationChain();
         demoFeedbackLoop();
         demoRecheck();
@@ -201,7 +183,7 @@ public class DemoRunner implements CommandLineRunner {
         return new PullRequest(id, "demo/recheck", "fix: 支付服务安全优化", "@bob", "main", DEMO_TEAM, List.of(diff));
     }
 
-    // ===================== 6. 误报反馈闭环（Human-in-the-loop） =====================
+    // ===================== 5. 误报反馈闭环（Human-in-the-loop） =====================
 
     private void demoFeedbackLoop() {
         log.info("\n########## 6. 误报反馈闭环（标记误报 → 二次审查自动抑制） ##########");
@@ -224,7 +206,7 @@ public class DemoRunner implements CommandLineRunner {
         }
     }
 
-    // ===================== 7. 修复后复检（增量对比） =====================
+    // ===================== 6. 修复后复检（增量对比） =====================
 
     private void demoRecheck() {
         log.info("\n########## 7. 修复后复检（与上次审查对比已解决/未解决） ##########");
@@ -255,10 +237,6 @@ public class DemoRunner implements CommandLineRunner {
         System.out.println("  [Layer1] 语义检测:   " + semantic.detect(malicious));
         System.out.println("  [Layer1] 异常检测:   " + anomalyDetector.detect(malicious));
         System.out.println("  [Layer4] 输出校验:   " + promptHardening.validateOutput("正常输出"));
-
-        // 工具路由白名单演示：避免 LLM 越权调用
-        String toolPrompt = "请检查该代码是否存在 SQL 注入与密钥泄露";
-        System.out.println("  [工具路由] 意图匹配工具: " + toolRouter.selectTools(toolPrompt));
     }
 
     // ===================== 3. RAG 与长期记忆 =====================
@@ -277,44 +255,13 @@ public class DemoRunner implements CommandLineRunner {
         String rag = ragContextBuilder.buildContext(DEMO_TEAM, "SECURITY", List.of(diff));
         System.out.println("【RAG 相关历史知识】\n" + (rag.isBlank() ? "(空)" : rag));
 
-        // 反思：将开发者反馈沉淀为长期经验（仅对当前团队可见）
-        List<ReviewFeedback> feedbacks = List.of(
-                new ReviewFeedback("SEC-001", "SECURITY", true, "MyBatis XML 中误报率高"),
-                new ReviewFeedback("LOGIC-001", "LOGIC", false, "确为有效问题"));
-        reflectionAgent.reflect(DEMO_TEAM, feedbacks).forEach(memoryStore::save);
-
-        String exp = experienceStore.getRelevantExperiences(DEMO_TEAM, "SECURITY",
+        // 检索长期经验（反思沉淀的「问题模式 → 建议」由 ReflectionService 在审查完成后写入）
+        String exp = experienceStore.getRelevantExperiences(DEMO_TEAM,
                 "SELECT * FROM users 是否安全");
         System.out.println("\n【长期经验参考】\n" + (exp.isBlank() ? "(空)" : exp));
     }
 
-    // ===================== 4. 消息队列（Redis / 内存） =====================
-
-    private void demoMessageQueue() {
-        log.info("\n########## 4. 消息队列（{}） ##########",
-                messageQueue.getClass().getSimpleName());
-
-        String queue = QueueNames.agentQueue("LOGIC");
-        String testMsg = "{\"action\":\"REVIEW\",\"prId\":999,\"agentType\":\"LOGIC\"}";
-
-        // 发布
-        messageQueue.publish(queue, testMsg);
-        System.out.println("发布消息 → " + queue + ": " + testMsg);
-        System.out.println("队列积压: " + messageQueue.size(queue));
-
-        // 可靠消费（带 ack）
-        ReliableDelivery delivery = messageQueue.blockingPopReliable(queue, 3);
-        if (delivery != null) {
-            System.out.println("可靠消费消息 ← " + queue + ": " + delivery.payload()
-                    + "（deliveryId=" + delivery.id() + ", attempts=" + delivery.attempts() + "）");
-            messageQueue.ack(queue, delivery.id());
-        } else {
-            System.out.println("消费超时（队列为空）");
-        }
-        System.out.println("队列积压: " + messageQueue.size(queue));
-    }
-
-    // ===================== 5. 4 级降级链 =====================
+    // ===================== 4. 4 级降级链 =====================
 
     private void demoDegradationChain() {
         log.info("\n########## 5. 4 级降级链（Agent → 编排 → 规则 → 人工） ##########");

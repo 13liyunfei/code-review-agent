@@ -1,12 +1,12 @@
 package com.codereview.agent.config;
 
+import com.codereview.agent.core.agent.AbstractReviewAgent;
 import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.agent.impl.ArchitectureAgent;
 import com.codereview.agent.core.agent.impl.LogicAgent;
 import com.codereview.agent.core.agent.impl.PerformanceAgent;
 import com.codereview.agent.core.agent.impl.SecurityAgent;
 import com.codereview.agent.core.agent.impl.StyleAgent;
-import com.codereview.agent.core.agent.ReviewAgent;
 import com.codereview.agent.core.admin.CustomAgentStore;
 import com.codereview.agent.core.analysis.AdvancedAnalyzer;
 import com.codereview.kit.obs.AggregateTracer;
@@ -60,8 +60,6 @@ import com.codereview.agent.core.tokenfactory.TokenFactoryProperties;
 import com.codereview.agent.core.tokenfactory.TokenFactoryUsageReporter;
 import com.codereview.agent.core.tokenfactory.UsageReporter;
 import com.codereview.agent.core.tokenfactory.UsageReportingProvider;
-import com.codereview.agent.core.tool.ToolDefinition;
-import com.codereview.agent.core.tool.ToolRouter;
 import com.codereview.agent.core.http.EgressHttpClientFactory;
 import com.codereview.agent.core.http.EgressProperties;
 import com.codereview.agent.tenant.TeamProperties;
@@ -76,6 +74,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -275,8 +274,8 @@ public class ReviewAgentConfig {
     public EmbeddingClient embeddingClient(@Value("${review.llm.embedding.enabled:true}") boolean enabled,
                                            @Value("${review.llm.embedding.base-url:}") String baseUrl,
                                            @Value("${review.llm.embedding.api-key:}") String apiKey,
-                                           @Value("${review.llm.embedding.model:kinfra-text-embedding-4b}") String model,
-                                           @Value("${review.llm.embedding.dim:2560}") int dim,
+                                           @Value("${review.llm.embedding.model:kinfra-text-embedding-0.6b}") String model,
+                                           @Value("${review.llm.embedding.dim:1024}") int dim,
                                            TokenHubProperties tokenHub,
                                            EgressProperties egress) {
         if (enabled) {
@@ -323,14 +322,31 @@ public class ReviewAgentConfig {
 
     /**
      * RAG 评估与阈值过滤组件（选择性回答 abstain + 可观测）。
-     * {@code review.rag.min-similarity} 默认 0.0（不拦截，向后兼容）；调高可抑制噪声块。
+     * {@code review.rag.min-similarity} 默认 0.3（与 application.yml 一致）。
+     * 注意：默认值必须与 yml 对齐——若代码默认 0.0 而 yml 配 0.3，一旦在缺 yml 的环境
+     * （裸装配 / 新环境）启动，闸门会静默失效，与「生产配置」表现不一致。
      */
     @Bean
     public com.codereview.agent.core.rag.RagEvaluator ragEvaluator(
-            @Value("${review.rag.min-similarity:0.0}") double minSimilarity,
-            @Value("${review.rag.eval-enabled:false}") boolean evalEnabled) {
+            @Value("${review.rag.min-similarity:0.3}") double minSimilarity,
+            @Value("${review.rag.eval-enabled:true}") boolean evalEnabled) {
         log.info("已装配 RagEvaluator（minSimilarity={}, evalEnabled={}）", minSimilarity, evalEnabled);
         return new com.codereview.agent.core.rag.RagEvaluator(minSimilarity, evalEnabled);
+    }
+
+    /**
+     * RAG 检索查询改写器（业界 query rewrite，弥合代码 diff ↔ 规范文档语义鸿沟）。
+     *
+     * <p>{@code review.rag.query-rewrite.enabled=true} 时装配 {@link LlmQueryRewriter}
+     * （复用统一模型网关，失败/超时自动降级恒等改写，绝不劣化检索）；
+     * 默认关闭 → 容器无此 bean → {@code RagContextBuilder} 使用恒等改写（离线可用）。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "review.rag.query-rewrite.enabled", havingValue = "true")
+    public com.codereview.agent.core.rag.ReviewQueryRewriter reviewQueryRewriter(
+            LlmClient llmClient) {
+        log.info("已启用 RAG 查询改写（LLM 驱动，失败自动降级恒等）");
+        return new com.codereview.agent.core.rag.LlmQueryRewriter(llmClient);
     }
 
     /**
@@ -492,12 +508,6 @@ public class ReviewAgentConfig {
         return new CustomAgentStore(teamConfigStore, new ContentInjectionDetector(embeddingClient));
     }
 
-    /** 工具定义（供 ToolRouter 注册与白名单路由）。 */
-    @Bean
-    public List<ToolDefinition> tools() {
-        return ToolRouter.defaultTools();
-    }
-
     @Bean
     public SecurityAgent securityAgent(LlmClient llmClient,
                                       PromptTemplateLoader promptLoader,
@@ -553,6 +563,13 @@ public class ReviewAgentConfig {
                                          ArchitectureAgent architectureAgent,
                                          LlmClient llmClient,
                                          org.springframework.core.env.Environment env) {
+        // diff 注入预算（<0 关闭截断，保持历史全量行为）：大 PR 防 prompt 顶爆
+        int diffBudget = env.getProperty("review.prompt.diff-char-budget", Integer.class, -1);
+        for (ReviewAgent a : List.of(securityAgent, logicAgent, performanceAgent, styleAgent, architectureAgent)) {
+            if (a instanceof AbstractReviewAgent base) {
+                base.setDiffCharBudget(diffBudget);
+            }
+        }
         List<ReviewAgent> agents = List.of(securityAgent, logicAgent, performanceAgent, styleAgent, architectureAgent);
         // 工具增强织入（可选）：enabled 时每个内置 Agent 外包 ToolEquippedAgent（思考→调工具→观察→推理）
         if (Boolean.parseBoolean(env.getProperty("review.tools.agent-loop.enabled", "false"))
@@ -598,12 +615,13 @@ public class ReviewAgentConfig {
     }
 
     /**
-     * 经验库门面（反思沉淀 + 检索注入）：向量通道（{@link MemoryStore}）与条目通道
-     * （{@link ExperienceLibrary}，生产 PG）合一；供反思服务 / 反馈证据登记使用。
+     * 经验库门面（反思沉淀 + 检索注入）：生产为 PostgreSQL 条目通道
+     * （{@link ExperienceLibrary}，PG 关闭时 InMemory 回退）；供反思服务沉淀 /
+     * 反馈证据登记 / RAG 上下文检索注入使用。
      */
     @Bean
-    public ExperienceStore experienceStore(MemoryStore memoryStore, ExperienceLibrary experienceLibrary) {
-        return new ExperienceStore(memoryStore, experienceLibrary);
+    public ExperienceStore experienceStore(ExperienceLibrary experienceLibrary) {
+        return new ExperienceStore(experienceLibrary);
     }
 
     /**

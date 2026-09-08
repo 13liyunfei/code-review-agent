@@ -70,17 +70,29 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
 
     @Override
     public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal) {
-        return hybridSearch(query, topK, teamId, includeGlobal);
+        return hybridSearch(query, topK, teamId, includeGlobal, null);
+    }
+
+    @Override
+    public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,
+                                             boolean includeGlobal, java.time.Duration maxAge) {
+        return hybridSearch(query, topK, teamId, includeGlobal, maxAge);
     }
 
     /**
      * 混合检索：BM25 + 稠密向量，RRF 融合。
      */
-    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId, boolean includeGlobal) {
+    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId,
+                                           boolean includeGlobal, java.time.Duration maxAge) {
         String t = Teams.sanitize(teamId);
+        java.time.Instant cutoff = (maxAge == null || maxAge.isNegative() || maxAge.isZero())
+                ? null : java.time.Instant.now().minus(maxAge);
         List<MemoryEntry> pool = store.values().stream()
                 .filter(e -> "RAG".equals(e.agentType()))
                 .filter(e -> {
+                    if (cutoff != null && e.createdAt() != null && e.createdAt().isBefore(cutoff)) {
+                        return false; // freshness：超过 maxAge 的陈旧知识不参与召回
+                    }
                     boolean teamMatch = t.equals(e.teamId());
                     boolean globalMatch = includeGlobal && Teams.GLOBAL.equals(e.teamId());
                     return teamMatch || globalMatch;
@@ -122,12 +134,15 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
                 .collect(Collectors.toList());
 
         // similarity 元数据统一为「真实语义相似度」（余弦），与 PgKnowledgeStore 口径一致，
-        // 供 RagEvaluator 阈值过滤跨后端可比。RRF 融合分仅用于排序，不写入 similarity。
+        // 供 RagEvaluator 阈值过滤跨后端可比。RRF 融合分仅用于排序，另存 rrfScore 不参与闸门。
+        double maxRrf = fused.isEmpty() ? 1.0 : rrf.getOrDefault(fused.get(0).id(), 0.0);
         List<MemoryEntry> result = new ArrayList<>();
         for (MemoryEntry e : fused) {
             double sim = dense.getOrDefault(e.id(), 0.0);
+            double rrfNorm = maxRrf > 0 ? rrf.getOrDefault(e.id(), 0.0) / maxRrf : 0.0;
             Map<String, String> m = new HashMap<>(e.metadata() == null ? Map.of() : e.metadata());
             m.put("similarity", String.format("%.4f", sim));
+            m.put("rrfScore", String.format("%.4f", rrfNorm));
             result.add(new MemoryEntry(e.id(), e.agentType(), e.teamId(), e.content(),
                     Map.copyOf(m), e.level(), e.createdAt(), e.embedding()));
         }
@@ -174,5 +189,19 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {
     public void deleteByMetadata(String teamId, String key, String value) {
         String t = Teams.sanitize(teamId);
         store.values().removeIf(e -> t.equals(e.teamId()) && value.equals(e.metadata().get(key)));
+    }
+
+    /**
+     * 直接注入一条已构造条目（同包测试用：可指定 createdAt 验证 freshness 过滤）。
+     * 未携带向量时自动补算，保证后续检索可用；search 侧按写入语义同步分词索引由内存检索即时计算。
+     */
+    void putDirect(MemoryEntry entry) {
+        MemoryEntry e = entry;
+        if (e.embedding() == null || e.embedding().length == 0) {
+            float[] emb = embeddingClient.embed(e.content());
+            e = new MemoryEntry(e.id(), e.agentType(), e.teamId(), e.content(),
+                    e.metadata(), e.level(), e.createdAt(), emb);
+        }
+        store.put(e.id() == null ? idGen.getAndIncrement() : e.id(), e);
     }
 }

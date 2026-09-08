@@ -7,6 +7,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,11 +46,45 @@ class StructuredChunkerTest {
         // 每个 chunk 的 section 元数据对应其所属标题
         assertEquals("第一章 安全规范", chunks.get(0).metadata().get("section"));
         assertEquals("第二章 性能规范", chunks.get(1).metadata().get("section"));
-        // 层级上下文：parentSection 与 section 一致
-        assertEquals(chunks.get(0).metadata().get("section"),
-                chunks.get(0).metadata().get("parentSection"));
+        // 真层级：一级标题没有父章节 → (root)（旧实现把 parentSection 直接写成 section，是假层级）
+        assertEquals("(root)", chunks.get(0).metadata().get("parentSection"),
+                "一级章节的父章节应为 (root)，而非自身");
+        // 标题链：headingPath 记录完整层级路径
+        assertEquals("第一章 安全规范", chunks.get(0).metadata().get("headingPath"));
+        // 标题进正文：嵌入侧不丢章节语义、注入侧 LLM 看得到归属
+        assertTrue(chunks.get(0).text().startsWith("【第一章 安全规范】"),
+                "章节标题链应作为正文前缀进入 chunk，而非只进 metadata");
         // 基础元数据被合并进每个 chunk
         assertEquals("handbook", chunks.get(0).metadata().get("source"));
+    }
+
+    @Test
+    void nestedHeadingsProduceRealParentSectionAndExcerpt() {
+        String doc = """
+                # 第一章 安全规范
+                本章适用于所有后端服务。
+                ## 1.1 认证与密码
+                第一条：禁止明文存储密码。
+                ## 1.2 注入防护
+                第二条：禁止字符串拼接 SQL。
+                """;
+        List<StructuredChunker.Chunk> chunks = chunker.chunk(doc, Map.of("source", "handbook"));
+        // 父章节（第一章）+ 两个子章节
+        assertTrue(chunks.size() >= 3, "应有父章节块与两个子章节块，实际 " + chunks.size());
+
+        StructuredChunker.Chunk child = chunks.stream()
+                .filter(c -> "1.1 认证与密码".equals(c.metadata().get("section")))
+                .findFirst().orElseThrow();
+        // 真父子：子章节的 parentSection 是「第一章 安全规范」，不是自己
+        assertEquals("第一章 安全规范", child.metadata().get("parentSection"));
+        assertEquals("第一章 安全规范 > 1.1 认证与密码", child.metadata().get("headingPath"));
+        assertTrue(child.text().startsWith("【第一章 安全规范 > 1.1 认证与密码】"));
+
+        // small-to-big：父章节摘要回填，供注入阶段把叶子块放回父章节语境
+        String excerpt = child.metadata().get("parentExcerpt");
+        assertNotNull(excerpt, "子章节块应携带父章节摘要（parentExcerpt）");
+        assertTrue(excerpt.contains("本章适用于所有后端服务"),
+                "父章节摘要应来自父章节正文，实际：" + excerpt);
     }
 
     @Test

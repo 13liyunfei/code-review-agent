@@ -103,16 +103,9 @@ pgvector:
   # PgVectorMemoryStore 启动检测到配置维度与存量列不一致会「备份旧表后重建向量列」（存量向量作废），
   # 因此维度口径在 dev/prod 必须一致，禁止各自覆盖。
   vector-dim: ${PGVECTOR_VECTOR_DIM:1024}
-
-# ===== Redis 配置 =====
-# enabled=true 时使用 Redis 作为消息队列；false 回退到内存
-redis:
-  enabled: true
-  host: ${REDIS_HOST:localhost}
-  port: ${REDIS_PORT:6379}
-  password: ${REDIS_PASSWORD:}
-  connect-timeout-ms: ${REDIS_CONNECT_TIMEOUT_MS:2000}
-  so-timeout-ms: ${REDIS_SO_TIMEOUT_MS:30000}
+  # ANN 向量索引类型：hnsw（默认，pgvector≥0.5 推荐，召回精度/构建速度优于 ivfflat）| ivfflat（老版本兼容）。
+  # 存量 ivfflat 库会自动迁移重建为 hnsw；hnsw 创建失败（pgvector < 0.5）自动回退 ivfflat。
+  index-type: ${PGVECTOR_INDEX_TYPE:hnsw}
 
 # ===== 审查调度配置 =====
 review:
@@ -133,6 +126,10 @@ review:
   agent:
     # Coordinator 整体审查超时（毫秒），默认 5 分钟
     timeout-ms: ${REVIEW_AGENT_TIMEOUT_MS:300000}
+  # diff 注入提示词的字符预算（<0 = 不截断，全量塞入；建议大 PR 场景开启，防 prompt 顶爆上下文）
+  # 开启后超预算的 diff 按文件均摊截断，并在片段末尾标注截断统计，让模型知道 diff 不完整
+  prompt:
+    diff-char-budget: ${REVIEW_DIFF_CHAR_BUDGET:-1}
   # 数据目录（集群改造后仅剩两个用途）：① review.tools.agent-loop.enabled=true 时作为
   # FileReadTool 的默认读取根；② 兼容历史配置读取。断点/经验/校准/反馈/审查历史/轨迹/
   # 团队配置/知识元数据已全部迁移到 PostgreSQL（pgvector.enabled=true 时），多实例零本地状态。
@@ -169,8 +166,9 @@ review:
   # enabled=true 时，RAG/语义注入检测的嵌入计算切换为 LangChain4j OpenAiEmbeddingModel
   # （OpenAI 兼容协议，复用上方 tokenhub.api-key / base-url）。
   # 已实测 TokenHub 可用嵌入模型：kinfra-text-embedding-0.6b(1024维) / kinfra-text-embedding-4b(2560维)。
-  # 默认用 0.6b：pgvector ivfflat 索引上限 2000 维，4b 无法建索引；
-  # 切换模型时需同步把 pgvector.vector-dim 改为对应维度（存量表会自动迁移重建向量列）。
+  # 默认用 0.6b：成本/延迟优先（hnsw 无 ivfflat 的 2000 维上限，4b=2560 维亦可建 hnsw 索引，
+  # 但向量更大、内存与算力开销成倍增长）。切换模型时需同步把 pgvector.vector-dim 改为对应
+  # 维度（存量表会自动迁移重建向量列）。
   llm:
     gateway:
       # 熔断器：连续失败 N 次 → OPEN 30s；OPEN 期间快速失败，避免对已知不健康供应商继续浪费 RTT。
@@ -212,6 +210,25 @@ review:
       api-key: ${RERANK_API_KEY:}
       model: ${RERANK_MODEL:rerank-english-v3.0}
       timeout-ms: 5000
+    # MMR 多样性挑选：重排后按「相关性 − 冗余度」挑 Top-N，避免注入块被同章节碎片占满。
+    mmr:
+      enabled: ${RAG_MMR_ENABLED:true}
+    # small-to-big：为命中的叶子块回填父章节上下文（StructuredChunker 写入的 parentExcerpt）。
+    parent-context:
+      enabled: ${RAG_PARENT_CONTEXT_ENABLED:true}
+    # 检索候选窗（初检召回数，重排前）：业界混合检索先召回 Top-50~200 再精排 Top-N。
+    # 默认 50（比旧值 10 提升召回上限，配合阈值过滤+重排保证注入质量不降）。
+    retrieve-k: ${RAG_RETRIEVE_K:50}
+    # 精排后最终注入 Top-N（LLM 上下文有限且对噪声敏感，业界精排输出 Top-5 左右）。
+    inject-top-n: ${RAG_INJECT_TOP_N:5}
+    # freshness：知识块最大入库年龄（天），超过该年龄的陈旧知识不参与召回
+    # （如过期的历史 PR 复盘 / 旧版规范）。0 = 不过滤（默认，向后兼容）。
+    max-age-days: ${RAG_MAX_AGE_DAYS:0}
+    # 查询改写（query rewrite）：把「代码 diff 形态」的原始查询改写为「规范术语形态」，
+    # 弥合代码 ↔ 规范文档的语义鸿沟，提升召回命中率。
+    # 默认关闭（恒等改写，零依赖）；开启后由大模型改写，失败自动降级恒等，绝不劣化检索。
+    query-rewrite:
+      enabled: ${RAG_QUERY_REWRITE_ENABLED:false}
     # 相似度阈值：低于此值的候选块不注入 prompt（选择性回答 abstain，抑制噪声）。
     # 0.0 表示不拦截；真实向量下建议 0.2~0.4（已设为 0.3 启用 abstain）。
     min-similarity: ${RAG_MIN_SIMILARITY:0.3}
@@ -221,7 +238,7 @@ review:
 
   # ===== 受控出口（Egress）配置 =====
   # 大厂「显式出口管控」实践：每个外部 SaaS 依赖（LLM / Rerank）各自声明出口方式，
-  # 互不干扰，也绝不劫持内部服务（PostgreSQL / Redis / Gitea 始终直连，与本段无关）。
+  # 互不干扰，也绝不劫持内部服务（PostgreSQL / Gitea 始终直连，与本段无关）。
   # 取代原先脆弱的全局 bypass-system-proxy 布尔。
   #
   # 三种模式（EgressMode）：
@@ -266,4 +283,16 @@ spring:
 
 # ===== 健康检查端点 =====
 # 零依赖实现：GET /health 与 /actuator/health 返回 200(UP)/503(DOWN)，
-# 供容器编排（k8s/Docker）做存活/就绪探针。状态聚合 PG(pgvector) 与 Redis 连通性。
+# 供容器编排（k8s/Docker）做存活/就绪探针。状态聚合 PG(pgvector) 连通性。
+
+# ===== SCA 漏洞扫描数据源 =====
+# source: auto=OSV 真实库优先、失败降级内置样本（推荐）；osv=强制真实（失败不降级，报告标注 failed）；builtin=仅内置样本
+# OSV 为 Google 托管，本机经 Clash 等代理才可达——proxy-host/port 配好后仅 SCA 出站走代理，
+# 不影响 tokenhub/内网直连。部署环境能直连 OSV 时留空即直连。
+sca:
+  source: auto
+  osv:
+    proxy-host: ""
+    proxy-port: 0
+    timeout-ms: 5000
+

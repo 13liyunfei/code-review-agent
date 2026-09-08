@@ -1,5 +1,7 @@
 package com.codereview.agent.core.model;
 
+import java.util.List;
+
 /**
  * 单文件代码变更（Diff）。
  *
@@ -27,6 +29,30 @@ public record CodeDiff(
      */
     public CodeDiff(String fileName, String patch) {
         this(fileName, patch, inferLanguage(fileName), 0, 0);
+    }
+
+    /**
+     * 判断一组 diff 中是否含有「代码文件」（相对文档/纯配置文件而言）。
+     *
+     * <p>供 {@code ReviewAgent.supports(...)} 做内容相关性准入：纯文档/配置 PR
+     * （如 README、CI yaml、资源文件——这些经 {@link #inferLanguage} 落为 "unknown"）
+     * 没有代码语义可审，语义型 Agent 可据此跳过，把 token 花在真正有对象的地方。
+     *
+     * <p>判定口径：language 属已知代码语言（非 unknown）。xml/sql/bash 等因被
+     * {@link #inferLanguage} 识别为具体语言，视为代码内容（SQL 注入/慢查询等
+     * 语义审查仍有价值）；新增语言支持时同步扩展 {@link #inferLanguage} 即可，
+     * 本方法自动生效。
+     *
+     * @param diffs 变更列表（可为空）
+     * @return true=存在至少一个代码文件
+     */
+    public static boolean containsCodeFile(List<CodeDiff> diffs) {
+        if (diffs == null) {
+            return false;
+        }
+        return diffs.stream().anyMatch(d -> d.language() != null
+                && !d.language().isBlank()
+                && !"unknown".equals(d.language()));
     }
 
     /**

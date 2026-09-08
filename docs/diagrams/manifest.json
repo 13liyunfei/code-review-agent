@@ -5,7 +5,9 @@
   "meta": [
     "入口：<code>GiteaWebhookController</code> · <code>GitLabWebhookController</code> · <code>ScheduledScanService</code> · <code>ReviewApiController</code> · <code>IdeReviewServer</code>",
     "编排：<code>GiteaReviewService</code> → <code>CompletableFutureCoordinator</code> → <code>ReportGenerator</code>",
-    "状态层：<code>PgDb</code> → PostgreSQL 8 张表（<code>pgvector.enabled</code> 开关，未启用则回退内存并告警）"
+    "状态层：<code>PgDb</code> → PostgreSQL 8 张表（<code>pgvector.enabled</code> 开关，未启用则回退内存并告警）",
+    "检索：<code>RagContextBuilder</code> 混合检索（dense 0.7 + BM25 0.3 RRF）→ 阈值闸门 abstain → MMR → small-to-big 注入",
+    "依赖安全：<code>ScaScanner</code> 双源降级链（OSV 真实库优先 → 内置样本，报告与 SBOM 带 sourceUsed / degraded）"
   ],
   "footer": "code-review-agent · 业务流程图集 · 全部节点均可在 <code>src/main/java/com/codereview/</code> 下按文件路径 grep 复现<br>\n  mermaid 源码：<code>docs/diagrams/*.mmd</code>",
   "sections": [
@@ -15,7 +17,7 @@
       "file": "l0-overview",
       "title": "系统全景",
       "sub": "五个入口 → 引擎内部六段流水线 → 平台四类回写动作。多租户以 <code>teamId</code> 贯穿全链路。",
-      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。<br><b>LLM 侧已接入公司级 Token 工厂</b>：工厂供应商与直连供应商同列候选，复用已有 failover；直连时由 <code>UsageReportingProvider</code> 把用量补报回工厂（无 usage 按字符数估算并打 estimated 标记）。<br><b>状态层已全量迁 PostgreSQL</b>：断点 / 经验 / 校准 / 反馈 / 历史 / 轨迹 / 团队配置 / 知识元数据共 8 张表，全部带 <code>team_id</code>；<code>pgvector.enabled=true</code> 时多实例读写同一份状态，<b>审查进程不再落任何本地状态文件</b>。"
+      "info": "<b>拓扑是「星型汇聚」而非流水线</b>：5 个内置 Agent 之间互不通信、无依赖，协作只发生在聚合阶段（去重 / 仲裁 / 抑制）。<br><b>LLM 侧已接入公司级 Token 工厂</b>：工厂供应商与直连供应商同列候选，复用已有 failover；直连时由 <code>UsageReportingProvider</code> 把用量补报回工厂（无 usage 按字符数估算并打 estimated 标记）。<br><b>状态层已全量迁 PostgreSQL</b>：断点 / 经验 / 校准 / 反馈 / 历史 / 轨迹 / 团队配置 / 知识元数据共 8 张表，全部带 <code>team_id</code>；<code>pgvector.enabled=true</code> 时多实例读写同一份状态，<b>审查进程不再落任何本地状态文件</b>。<br><b>知识库走混合检索</b>：<code>knowledge_meta</code> 同时持有 <code>tsvector</code>（BM25 稀疏路）与 <code>embedding</code>（稠密路），两路 RRF 融合后经阈值闸门 / 重排 / MMR 才注入提示词，细节见 L2d；入库侧见 L2f。"
     },
     {
       "id": "l1a",
@@ -57,16 +59,20 @@
         [
           "报告 Markdown 拼装",
           "<code>integration/gitea/GiteaReviewService.java:199-219</code>"
+        ],
+        [
+          "幂等判重（resumeKey 同源）",
+          "<code>integration/gitea/GiteaReviewService.java:122-135</code>；GitLab 版在拉取 MrChanges 后判重"
         ]
       ],
-      "note": "<b>Gitea 1.27 的平台限制（踩过的坑）</b><ul><li>逐条直发行内评论的接口返回 <b>405</b>，唯一入口是 <code>POST /pulls/{index}/reviews</code> + <code>comments[]</code> + <code>event:COMMENT</code> 一次性提交；</li><li>PENDING 预建方式下 <code>line</code>/<code>side</code> 会被丢弃，恒降级为文件级评论 → 可采纳修复必须写进「顶层概览 + 行内 suggestion」双通道。</li></ul>"
+      "note": "<b>Gitea 1.27 的平台限制（踩过的坑）</b><ul><li>逐条直发行内评论的接口返回 <b>405</b>，唯一入口是 <code>POST /pulls/{index}/reviews</code> + <code>comments[]</code> + <code>event:COMMENT</code> 一次性提交；</li><li>PENDING 预建方式下 <code>line</code>/<code>side</code> 会被丢弃，恒降级为文件级评论 → 可采纳修复必须写进「顶层概览 + 行内 suggestion」双通道。</li></ul><br><b>webhook 幂等判重与断点续跑共用同一个键</b>：<code>PullRequest.resumeKey(repo, prId, headSha)</code> → <code>repo#编号@headSha</code>（<code>/</code>→<code>_</code>，因它同时被当文件名用）。此前该方法藏在 Coordinator 内部 private，服务层各自手搓键，<b>三处键不同源 = 判重形同虚设</b>——2026-09-08 上移为公共静态方法。含 head SHA：换新 commit 必须重开审查，而不是拿旧结果判重命中。GitLab 载荷没有 headSha，先拉 <code>MrChanges</code> 补 sha 再判重。"
     },
     {
       "id": "l2a",
       "tag": "L2a",
       "file": "l2a-prepare-dispatch",
       "title": "协调器 · 准备与并行调度",
-      "sub": "<b>runId 由 PR 身份派生</b>（不再用随机 traceId）→ 断点续跑 → 影响面与 RAG 上下文增强 → 自定义 Agent 展开 → 规划/固定两种并行路径。",
+      "sub": "<b>runId 由 PR 身份派生</b>（不再用随机 traceId）→ 断点续跑 → 影响面与 RAG 上下文增强 → 自定义 Agent 展开 → 规划/固定两种并行路径 → <b>supports 内容准入过滤</b>。",
       "anchors": [
         [
           "runId 派生（续跑键）",
@@ -87,9 +93,17 @@
         [
           "并行 Future 创建",
           "<code>:342-359</code>"
+        ],
+        [
+          "supports 内容准入",
+          "<code>core/agent/ReviewAgent.java</code> 接口 default；<code>core/model/CodeDiff.java</code> containsCodeFile"
+        ],
+        [
+          "调度前过滤与轨迹",
+          "<code>coordinator/impl/CompletableFutureCoordinator.java</code> skipped-by-supports"
         ]
       ],
-      "note": "<b>runId 曾用随机 traceId，导致断点续跑在生产上永远不生效</b>：崩溃重试是新 HTTP 请求，拿到另一串随机 traceId，<code>resumeStore.load(runId)</code> 永远查不到断点——典型的「feature 只在测试里跑过、线上是死代码」。现在从 PR 身份派生稳定键 <code>repo#编号@headSha</code>（<code>/</code>→<code>_</code>，因 runId 同时被当作文件名）；含 head SHA 保证换新 commit 时重开审查而非续跑旧断点。"
+      "note": "<b>runId 曾用随机 traceId，导致断点续跑在生产上永远不生效</b>：崩溃重试是新 HTTP 请求，拿到另一串随机 traceId，<code>resumeStore.load(runId)</code> 永远查不到断点——典型的「feature 只在测试里跑过、线上是死代码」。现在从 PR 身份派生稳定键 <code>repo#编号@headSha</code>（<code>/</code>→<code>_</code>，因 runId 同时被当作文件名）；含 head SHA 保证换新 commit 时重开审查而非续跑旧断点。<br><b>supports 准入解决「纯文档 PR 也烧 4 份语义 LLM」</b>：README / CI yaml 经 <code>inferLanguage</code> 落为 <code>unknown</code>，Logic/Perf/Style/Arch 据此跳过（xml/sql 视为代码，仍有注入 / 慢查询语义可审），Security 恒跑。跳过时记 <code>skipped-by-supports</code> 轨迹，<b>不产生降级语义</b>——只是没有这个 Agent 的结论，不是「Agent 失败了」。<br><b>RAG 检索已加固为十步链路</b>（混合检索 + 查询改写 + 阈值 abstain + MMR + small-to-big），详见 L2d；知识入库侧见 L2f。"
     },
     {
       "id": "l2b",
@@ -149,6 +163,83 @@
       "info": "<b>改完必须验证生产日志真的出现「[RepoIndex] 索引完成」</b>。本仓库已因「分析器写得准但没接生产路径」踩过三次同类坑（AST 层恒 0、断点续跑 runId、影响面）。"
     },
     {
+      "id": "l2d",
+      "tag": "L2d",
+      "file": "l2d-rag-retrieval",
+      "title": "RAG 检索与召回",
+      "sub": "<b>提取 → 改写 → 混合检索 → 阈值闸门</b>：把 diff 变成能撞上规范库的查询，再用稠密 + 稀疏双路召回，最后决定「值不值得注入」。",
+      "info": "<b>每一步都可降级，没有任何一步会阻断审查</b>：改写失败回落恒等、稀疏路无词则整段跳过、候选全低于阈值则 abstain 不注入。<b>RAG 的失败模式是「少给点上下文」，绝不是「审查挂掉」</b>。",
+      "anchors": [
+        [
+          "查询提取",
+          "<code>core/rag/DiffQueryExtractor.java</code>"
+        ],
+        [
+          "查询改写（Identity / LLM）",
+          "<code>core/rag/{IdentityQueryRewriter,LlmQueryRewriter}.java</code>"
+        ],
+        [
+          "混合检索 + RRF（dense 0.7 / BM25 0.3）",
+          "<code>core/rag/PgKnowledgeStore.java:162-300</code>"
+        ],
+        [
+          "阈值闸门 filterByThreshold",
+          "<code>core/rag/RagEvaluator.java</code>"
+        ]
+      ],
+      "note": "<b>similarity 口径是本轮最贵的一课</b>：<code>similarity</code> 恒为<b>真实余弦</b>，RRF 归一化排名分另存 <code>rrfScore</code>，<b>绝不参与阈值判断</b>——RRF 归一化后第一名恒为 1.0、第 50 名仍有约 0.55，拿它去比 0.3 阈值等于闸门永不关闭（测试里看着「有召回」，线上全是噪声）。此外只命中稀疏路的条目必须补算余弦，否则同一结果集内语义不统一。<br><b>旧实现把 diff 原文截前 500 字符直接当查询</b>：里面塞满 <code>+/-</code>、行号与上下文噪音，截完后真正改动的方法常常根本没被包含——拿这段噪声去撞以自然语言术语为主的规范库，语义鸿沟极大。现在由 <code>DiffQueryExtractor</code> 提炼文件 / 类 / 方法 / 符号。"
+    },
+    {
+      "id": "l2e",
+      "tag": "L2e",
+      "file": "l2e-rag-rerank",
+      "title": "RAG 精排与注入",
+      "sub": "<b>重排 → MMR → 去重 → 评估 → 父章节回填 → 经验回流</b>：召回的 50 条里挑出真正值得进 prompt 的 5 条。",
+      "info": "<b>注入 Top-N 的质量比数量重要得多</b>：LLM 对噪声敏感，塞 20 条低质片段不如塞 5 条高质片段。这一段的每一步都在做减法——去重、去冗余（MMR）、去过期（freshness）。",
+      "anchors": [
+        [
+          "重排（Api / Heuristic 双实现）",
+          "<code>core/rag/{ApiReranker,HeuristicReranker}.java</code>"
+        ],
+        [
+          "MMR 挑选与 small-to-big 回填",
+          "<code>core/memory/RagContextBuilder.java:265-345</code>"
+        ],
+        [
+          "评估指标 hit@k / MRR",
+          "<code>core/rag/RagEvaluator.java</code>"
+        ],
+        [
+          "历史经验回流",
+          "<code>core/memory/RagContextBuilder.java:203-220</code>"
+        ]
+      ],
+      "note": "<b>MMR 解决的是「看似注入 5 条，实际只覆盖 1 个知识点」</b>：重排后的 Top-N 常被同一章节的相邻碎片占满（重叠切块导致内容高度雷同）。MMR 按 <code>λ·相关性 − (1−λ)·冗余度</code> 贪心挑选（λ=0.7），冗余度用 <code>TextTokenizer</code> 中文 bigram 的 Jaccard——<b>用英文空格分词算中文相似度会恒为 0，MMR 直接退化成普通排序</b>。<br><b>重排池必须开到 Top-N×3</b>：池子只有 Top-N 时 MMR 无挑选余地，等于没开。<br><b>small-to-big</b>：命中叶子块时仅凭一条孤立条款看不出归属，回填 <code>StructuredChunker</code> 写入的 <code>parentExcerpt</code>（≤300 字符，同一父摘要只追加一次），让模型看到「这一条属于哪一章」。<br><b>经验回流独立于知识 abstain</b>：知识分区全低于阈值时仍会注入【历史经验参考】，且命中即 <code>recordHit</code> 刷新遗忘时钟（spaced repetition）。"
+    },
+    {
+      "id": "l2f",
+      "tag": "L2f",
+      "file": "l2f-rag-indexing",
+      "title": "知识入库与索引（写侧）",
+      "sub": "<b>StructuredChunker 结构感知切块 → TextTokenizer 统一分词 → tsvector + embedding 双写 → HNSW 索引</b>。写侧口径错了，读侧再怎么调都救不回来。",
+      "info": "<b>PG 的 <code>simple</code> 词典不切中文</b>：无空格的中文整段会被当成一个词位（实测「禁止使用字符串拼接的sql」是<b>一个</b>词位），于是「参数绑定」查「…必须使用参数绑定…」命中 false，连 <code>PreparedStatement</code> 都命中 false——<b>稀疏路在中文规范库上等于空转</b>。",
+      "anchors": [
+        [
+          "结构感知切块（700 字符 / 15% 重叠）",
+          "<code>core/rag/StructuredChunker.java</code>"
+        ],
+        [
+          "中文 bigram + 标识符子词分词",
+          "<code>core/rag/TextTokenizer.java</code>"
+        ],
+        [
+          "双写与 HNSW / ivfflat",
+          "<code>core/rag/PgKnowledgeStore.java</code>；E2E <code>PgHnswIndexE2eTest</code>"
+        ]
+      ],
+      "note": "<b>写入侧与检索侧必须用同一个分词器</b>，否则倒排词位对不上——这比「不分词」更隐蔽：不分词是明显零命中，两侧不一致是时好时坏。<br><b>切块的三个反直觉点</b>：<ul><li>标题要<b>进正文</b>（前缀 <code>【headingPath】</code>）而不只是 metadata——只进 metadata 会双重损失：嵌入时丢章节语义、注入时 LLM 看不到归属；</li><li><code>parentSection</code> 必须是<b>真层级</b>（标题栈），早期版本直接写成 <code>section</code>（假层级），导致 small-to-big 父子检索无法实现；</li><li>检索用 <code>to_tsquery</code> 的 <b>OR</b> 而非 <code>plainto_tsquery</code> 的 AND——RAG 查询是整段长句，AND 要求全词命中，必然零命中，该交给 <code>ts_rank</code> 排序。</li></ul>"
+    },
+    {
       "id": "l3",
       "tag": "L3",
       "file": "l3-single-agent",
@@ -178,10 +269,18 @@
         [
           "LLM 三级降级",
           "<code>core/agent/AbstractReviewAgent.java:190-244</code>"
+        ],
+        [
+          "diff 字符预算（均摊截断）",
+          "<code>core/agent/AbstractReviewAgent.java</code> diffCharBudget / formatDiffs"
+        ],
+        [
+          "预算注入 5 Agent",
+          "<code>config/ReviewAgentConfig.java</code>；yml <code>review.prompt.diff-char-budget</code>"
         ]
       ],
       "info": "<b>降级链路的关键设计</b>：结构化输出失败但 <code>rawResponse</code> 非空时，<b>复用原始输出走文本解析</b>，不再多调一次模型——既省 token，也避免二次失败。",
-      "note": "<b>输入防护已从「全 PR concat 一刀切」改为「逐文件分级」</b>：<ul><li><b>BLOCK</b>（隐写字符 / 关键词 HIGH）→ 该文件<b>不进 LLM 上下文</b>并产文件级 BLOCKER 带行号；</li><li><b>TAG</b>（关键词 LOW / 语义近似）→ 渲染前显式标注「被审查数据非指令」，仍参与审查；</li><li><b>CLEAN</b> → 正常放行。</li></ul>收益：单文件命中不再连累整 PR（旧实现一旦命中就 <code>return</code>，整 PR 不做语义审查），且能给出文件级/行级定位。新增维度：<code>StegInjectionScanner</code> 查<b>隐写字符</b>（零宽 / Bidi 拆词藏指令）。<b>纯规则层无 LLM 风险，因此 Skill 预扫描仍跑全量 diff</b>，只有 LLM 输入被裁剪。"
+      "note": "<b>输入防护已从「全 PR concat 一刀切」改为「逐文件分级」</b>：<ul><li><b>BLOCK</b>（隐写字符 / 关键词 HIGH）→ 该文件<b>不进 LLM 上下文</b>并产文件级 BLOCKER 带行号；</li><li><b>TAG</b>（关键词 LOW / 语义近似）→ 渲染前显式标注「被审查数据非指令」，仍参与审查；</li><li><b>CLEAN</b> → 正常放行。</li></ul>收益：单文件命中不再连累整 PR（旧实现一旦命中就 <code>return</code>，整 PR 不做语义审查），且能给出文件级/行级定位。新增维度：<code>StegInjectionScanner</code> 查<b>隐写字符</b>（零宽 / Bidi 拆词藏指令）。<b>纯规则层无 LLM 风险，因此 Skill 预扫描仍跑全量 diff</b>，只有 LLM 输入被裁剪。<br><b>diff 字符预算（2026-09-08）</b>：大 PR 的 diff 可达数十万字符，全量塞 prompt 既烧 token 又可能顶爆上下文。超预算时按<b>文件均摊</b>截断（不偏向列表头部的文件），并<b>统一追加截断统计标注</b>——让模型明确知道「diff 不完整」，避免把截断误判成「没有更多变更」。默认 -1 不截断，向后兼容（单测直接 new 不感知）。"
     },
     {
       "id": "l4a",
@@ -261,10 +360,22 @@
         [
           "断点定时清理（每日 03:30）",
           "<code>core/resume/ResumeJanitor.java:27, 47</code>"
+        ],
+        [
+          "RAG 知识表混合检索",
+          "<code>core/rag/PgKnowledgeStore.java</code> RRF k=60 / dense 0.7"
+        ],
+        [
+          "幂等键公共方法",
+          "<code>core/model/PullRequest.java</code> resumeKey"
+        ],
+        [
+          "轨迹事件源读写",
+          "<code>core/trajectory/{TrajectoryStore,ReviewTrajectoryRecorder}.java</code>；PG 实现 <code>core/store/PgTrajectoryStore.java</code>"
         ]
       ],
       "info": "<b>跨实例收敛靠「写穿 + 短 TTL 惰性刷新」</b>：团队配置（Skill 启停 / 自定义 Agent）写穿 <code>team_kv</code> JSONB，读方带 2s 短 TTL 惰性重载——A 实例管理端变更，B 实例最迟 2s 生效，不需要消息广播。",
-      "note": "<b>为什么迁</b>：改造前 8 类状态落在 <code>data-dir/&lt;teamId&gt;/</code> 本地 JSON，A 机沉淀 B 机不可见，多实例必然分叉——<b>「经验越用越准」在集群下反而退化成「每台机器各长一套记忆」</b>。<br><b>三个设计取舍</b>：<ul><li>沿用仓库既有风格——原生 JDBC + Hikari，<b>不引 starter-jdbc</b>，避免改变运行时行为；</li><li><code>StateStoreConfig</code> 按 <code>pgvector.enabled</code> 装配双后端，未启用时回退内存并<b>启动告警</b>（单机/测试可用，集群必须开 PG）；</li><li>表结构 <code>CREATE TABLE IF NOT EXISTS</code> 幂等初始化（无 Flyway），与既有 <code>memory_store</code> 口径一致。</li></ul><b>迁移后 <code>data-dir</code> 只剩一个用途</b>：agent-loop 开启时作为 <code>FileReadTool</code> 的默认读取根。<br><b>坑</b>：Spring 的 <code>Duration</code> 绑定，不带单位的纯数字按<b>毫秒</b>算——写成 <code>ttl: 24</code> 会变成 24 毫秒、把所有断点一扫而空。"
+      "note": "<b>为什么迁</b>：改造前 8 类状态落在 <code>data-dir/&lt;teamId&gt;/</code> 本地 JSON，A 机沉淀 B 机不可见，多实例必然分叉——<b>「经验越用越准」在集群下反而退化成「每台机器各长一套记忆」</b>。<br><b>三个设计取舍</b>：<ul><li>沿用仓库既有风格——原生 JDBC + Hikari，<b>不引 starter-jdbc</b>，避免改变运行时行为；</li><li><code>StateStoreConfig</code> 按 <code>pgvector.enabled</code> 装配双后端，未启用时回退内存并<b>启动告警</b>（单机/测试可用，集群必须开 PG）；</li><li>表结构 <code>CREATE TABLE IF NOT EXISTS</code> 幂等初始化（无 Flyway），与既有 <code>memory_store</code> 口径一致。</li></ul><b>迁移后 <code>data-dir</code> 只剩一个用途</b>：agent-loop 开启时作为 <code>FileReadTool</code> 的默认读取根。<br><b>坑</b>：Spring 的 <code>Duration</code> 绑定，不带单位的纯数字按<b>毫秒</b>算——写成 <code>ttl: 24</code> 会变成 24 毫秒、把所有断点一扫而空。<br><b>2026-09-08 死代码清理后消费侧只剩 9 类</b>：<code>core/mq</code> 消息子系统 7 类、<code>core/tools/external</code> 2 类、<code>core/eval/ReviewReplay</code> 全部下线（main 零引用、仅测试在兜底），连带移除 Redis 依赖链。<code>trajectory_store</code> 因此<b>不再有自动回放器消费</b>，只按 <code>runId</code> 读事件序列做事后审计与排障；清理由 <code>DeadCodeGuardTest</code> 门禁固化，防死代码复发。"
     },
     {
       "id": "l6b",
@@ -292,17 +403,21 @@
         [
           "管理端点",
           "<code>core/memory/ExperienceAdminController.java:24-56</code>"
+        ],
+        [
+          "生产注入点（读侧闭环）",
+          "<code>core/memory/RagContextBuilder.java:203-220</code> 追加【历史经验参考】分区"
         ]
       ],
       "info": "<b>反遗忘靠 spaced repetition</b>：每次检索命中都刷新 <code>lastHitAt</code> 与 <code>hitCount</code>，被反复用到的经验永远不会进入 TTL 归档——遗忘只清理「记忆衰退」的冷门条目，常用经验不衰退。",
-      "note": "<b>阈值是 SQL 常量</b>（<code>ACTIVE_EVIDENCE = 3</code> / <code>ARCHIVE_NEGATIVE = 2</code>），升级判定在 <code>UPDATE ... SET stage = CASE WHEN ...</code> 内<b>原子完成</b>，不存在读-改-写竞态。<br><b>坑</b>：Spring <code>Duration</code> 绑定不带单位的纯数字按<b>毫秒</b>算——<code>experience-idle: 180</code> 会变成 180 毫秒，一轮清空全部经验。默认值一律写成 <code>180d</code> / <code>90d</code>。<br>维护任务<b>与断点清理 03:30、巡检 02:00 错峰</b>在 03:40 执行，异常只记 WARN 跳过本轮，不影响审查主链路。"
+      "note": "<b>阈值是 SQL 常量</b>（<code>ACTIVE_EVIDENCE = 3</code> / <code>ARCHIVE_NEGATIVE = 2</code>），升级判定在 <code>UPDATE ... SET stage = CASE WHEN ...</code> 内<b>原子完成</b>，不存在读-改-写竞态。<br><b>坑</b>：Spring <code>Duration</code> 绑定不带单位的纯数字按<b>毫秒</b>算——<code>experience-idle: 180</code> 会变成 180 毫秒，一轮清空全部经验。默认值一律写成 <code>180d</code> / <code>90d</code>。<br>维护任务<b>与断点清理 03:30、巡检 02:00 错峰</b>在 03:40 执行，异常只记 WARN 跳过本轮，不影响审查主链路。<br><b>读侧闭环是本仓库第四次同类病</b>：生命周期写得很完整，但 <code>RagContextBuilder</code> 从未拿到 <code>ExperienceStore</code>，经验只在管理端可见、审查链路里是死的——「只写不读」的 feature 在演示与单测里都看不出来，因为二者都直接调 store 而不走生产链路。2026-09-07 改构造注入，命中即 <code>recordHit</code>；同时废弃向量经验死通道（唯一写入方 <code>ReflectionAgent</code> 主链路零调用）。<b>经验分区独立于知识 abstain</b>：知识全低于阈值时仍注入经验。<b>验收必须走生产入口 + 真实探针</b>，只看单测会被 helper 悄悄满足前提。"
     },
     {
       "id": "l7",
       "tag": "L7",
       "file": "l7-capability",
       "title": "能力矩阵 · Agent / Skill / 分析引擎 / 安全检测器",
-      "sub": "执行层的完整构成：5 内置 Agent + 团队自定义 Agent + 高级静态分析（含影响面双引擎）；Skill 按 category 挂载，支持运行期启停与团队自定义规则。",
+      "sub": "执行层的完整构成：5 内置 Agent + 团队自定义 Agent + 高级静态分析（含影响面双引擎、SCA 真实漏洞库）+ RAG 检索子系统 + LLM 网关；Skill 按 category 挂载，支持运行期启停与团队自定义规则。工程侧由 <code>DeadCodeGuardTest</code> 门禁防死代码复发。",
       "anchors": [
         [
           "5 个内置 Agent",
@@ -331,9 +446,29 @@
         [
           "Skill 注册与运行期启停",
           "<code>core/skill/SkillRegistry.java:201-267</code>"
+        ],
+        [
+          "RAG 检索子系统",
+          "<code>core/rag/{DiffQueryExtractor,ReviewQueryRewriter,StructuredChunker,TextTokenizer,PgKnowledgeStore,RagEvaluator}.java</code>"
+        ],
+        [
+          "LLM 指标端点",
+          "<code>core/admin/LlmHealthController.java</code> GET /api/admin/llm/{health,stats,usage,trace}"
+        ],
+        [
+          "网关配额竞态修复",
+          "<code>core/llm/ModelGateway.java:258-283</code>"
+        ],
+        [
+          "SCA 依赖安全双源与降级链",
+          "<code>core/analysis/{ScaScanner,OsvVulnSource,BuiltinVulnSource}.java</code>；装配 <code>config/ScaSourceConfig.java</code>"
+        ],
+        [
+          "死代码门禁",
+          "<code>src/test/java/com/codereview/agent/DeadCodeGuardTest.java</code>"
         ]
       ],
-      "note": "<b>安全检测按信任边界分层，不同边界用不同强度</b>：<ul><li><b>diff 预检</b>（进 LLM 前）：关键词 + 隐写字符命中 → BLOCK 隔离；语义近似 → TAG 标注。<b>此处只隔离/标注，不硬拦截</b>——基座词表里的「越权 / admin mode / 泄露系统提示」在代码审查域是正常业务词（\"检查越权风险\"曾被直接拦掉）；</li><li><b>写库边界</b>（自定义 Agent 存库前，本仓库唯一把业务方文本提升为系统提示的位置）：才做异常填充 + 关键词 + 语义复合检测，命中即拒绝。</li></ul>中文长描述香农熵天然偏高，<b>熵检测只对纯 ASCII 生效</b>，否则误杀。"
+      "note": "<b>安全检测按信任边界分层，不同边界用不同强度</b>：<ul><li><b>diff 预检</b>（进 LLM 前）：关键词 + 隐写字符命中 → BLOCK 隔离；语义近似 → TAG 标注。<b>此处只隔离/标注，不硬拦截</b>——基座词表里的「越权 / admin mode / 泄露系统提示」在代码审查域是正常业务词（\"检查越权风险\"曾被直接拦掉）；</li><li><b>写库边界</b>（自定义 Agent 存库前，本仓库唯一把业务方文本提升为系统提示的位置）：才做异常填充 + 关键词 + 语义复合检测，命中即拒绝。</li></ul>中文长描述香农熵天然偏高，<b>熵检测只对纯 ASCII 生效</b>，否则误杀。<br><b>SCA 的「同源」原则</b>：<code>sca.source=auto</code> 时生产 / 开发 / 测试<b>一律先查 OSV 真实漏洞库</b>，只有 OSV 不可达才降级内置样本——此前内置 CVE 样本在所有环境冒充真实扫描，<b>dev 里看着有结果、线上是假数据</b>，是最难发现的一类 bug。三态语义必须分清：<code>auto</code>=OSV 失败降级内置并标 <code>degraded</code>；<code>osv</code>=强制，失败标 <code>failed</code> <b>不造假</b>；<code>builtin</code>=离线 / CI 断网。报告与 CycloneDX-lite SBOM 都带 <code>sourceUsed</code>，事后可追溯数据来源。OSV 走<b>仅本数据源</b>的 HttpClient 代理出站，不污染内网直连。<br><b>死代码门禁</b>：2026-09-08 清理掉 <code>core/mq</code>（7 类）<code>core/tools/external</code>（2 类）<code>core/eval/ReviewReplay</code> 及其 Redis 依赖链——共同点是 <b>main 生产零引用、只有测试在引用</b>。此后 <code>DeadCodeGuardTest</code> 把「main 生产零引用且非豁免」判为 CI 失败；<b>@Component 不在豁免名单</b>（孤儿 Bean 正是上次的主角）。删测试后必须 clean 再回归，否则 target 残留旧 class 让计数虚高。"
     }
   ]
 }
