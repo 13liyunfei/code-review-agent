@@ -10,11 +10,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 核心依赖健康检查：聚合 PostgreSQL(pgvector) 与 Redis 的连通性，
+ * 核心依赖健康检查：聚合 PostgreSQL(pgvector) 的连通性，
  * 供 {@code /health}（兼 {@code /actuator/health}）暴露给容器编排做存活/就绪探针。
  *
  * <p>仅当对应组件 {@code enabled=true} 时才检查；未启用则跳过该组件。
- * 使用与业务一致的轻量连接方式（DriverManager / Jedis ping），不引入额外连接池或第三方依赖。
+ * 使用与业务一致的轻量连接方式（DriverManager），不引入额外连接池或第三方依赖。
+ *
+ * <p><b>历史说明</b>：曾同时检查 Redis（消息队列时代），2026-09-08 随
+ * {@code core/mq} 死代码清理移除——Redis 已无业务消费者，不再是系统组件。
  */
 @Component
 public class CoreHealthIndicator {
@@ -26,32 +29,19 @@ public class CoreHealthIndicator {
     private final String pgUsername;
     private final String pgPassword;
 
-    private final boolean redisEnabled;
-    private final String redisHost;
-    private final int redisPort;
-    private final String redisPassword;
-
     public CoreHealthIndicator(
             @Value("${pgvector.enabled:false}") boolean pgEnabled,
             @Value("${pgvector.host:localhost}") String pgHost,
             @Value("${pgvector.port:5432}") int pgPort,
             @Value("${pgvector.database:codereview}") String pgDatabase,
             @Value("${pgvector.username:}") String pgUsername,
-            @Value("${pgvector.password:}") String pgPassword,
-            @Value("${redis.enabled:false}") boolean redisEnabled,
-            @Value("${redis.host:localhost}") String redisHost,
-            @Value("${redis.port:6379}") int redisPort,
-            @Value("${redis.password:}") String redisPassword) {
+            @Value("${pgvector.password:}") String pgPassword) {
         this.pgEnabled = pgEnabled;
         this.pgHost = pgHost;
         this.pgPort = pgPort;
         this.pgDatabase = pgDatabase;
         this.pgUsername = pgUsername;
         this.pgPassword = pgPassword;
-        this.redisEnabled = redisEnabled;
-        this.redisHost = redisHost;
-        this.redisPort = redisPort;
-        this.redisPassword = redisPassword;
     }
 
     public HealthResult check() {
@@ -66,26 +56,6 @@ public class CoreHealthIndicator {
             } catch (Exception e) {
                 healthy = false;
                 details.put("pgvector", "down: " + e.getMessage());
-            }
-        }
-        if (redisEnabled) {
-            redis.clients.jedis.Jedis jedis = null;
-            try {
-                if (redisPassword != null && !redisPassword.isBlank()) {
-                    jedis = new redis.clients.jedis.Jedis(
-                            "redis://:" + redisPassword + "@" + redisHost + ":" + redisPort);
-                } else {
-                    jedis = new redis.clients.jedis.Jedis(redisHost, redisPort);
-                }
-                jedis.ping();
-                details.put("redis", "up");
-            } catch (Exception e) {
-                healthy = false;
-                details.put("redis", "down: " + e.getMessage());
-            } finally {
-                if (jedis != null) {
-                    try { jedis.close(); } catch (Exception ignored) { }
-                }
             }
         }
         return new HealthResult(healthy ? "UP" : "DOWN", details);

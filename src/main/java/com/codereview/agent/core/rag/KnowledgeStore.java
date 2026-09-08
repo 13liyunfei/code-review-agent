@@ -19,8 +19,8 @@ import java.util.Map;
  *   <li>生产实现（{@code PgKnowledgeStore}）与记忆实现（{@code PgVectorMemoryStore}）
  *       <b>物理共享同一张 {@code memory_store} 表</b>（按 {@code agent_type} 区分读写视角），
  *       但<b>逻辑上互为独立接口</b>，各自只暴露自己该暴露的能力，符合接口隔离原则；</li>
- *   <li>经验类（{@code ExperienceStore} / {@code ReflectionAgent}）继续使用 {@code MemoryStore}，
- *       二者在调用方分层，互不串扰。</li>
+ *   <li>经验类（{@code ExperienceStore}，已收敛为独立条目通道 {@code ExperienceLibrary}，
+ *       不再写入向量记忆）与知识检索在调用方分层，互不串扰。</li>
  * </ul>
  *
  * <p>写入通道：本接口不定义通用 {@code save}，{@code saveKnowledge} 内部通过结构感知切分

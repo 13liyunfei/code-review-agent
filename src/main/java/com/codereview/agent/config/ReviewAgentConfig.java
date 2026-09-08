@@ -60,8 +60,6 @@ import com.codereview.agent.core.tokenfactory.TokenFactoryProperties;
 import com.codereview.agent.core.tokenfactory.TokenFactoryUsageReporter;
 import com.codereview.agent.core.tokenfactory.UsageReporter;
 import com.codereview.agent.core.tokenfactory.UsageReportingProvider;
-import com.codereview.agent.core.tool.ToolDefinition;
-import com.codereview.agent.core.tool.ToolRouter;
 import com.codereview.agent.core.http.EgressHttpClientFactory;
 import com.codereview.agent.core.http.EgressProperties;
 import com.codereview.agent.tenant.TeamProperties;
@@ -490,12 +488,6 @@ public class ReviewAgentConfig {
     public CustomAgentStore customAgentStore(EmbeddingClient embeddingClient,
                                             TeamConfigStore teamConfigStore) {
         return new CustomAgentStore(teamConfigStore, new ContentInjectionDetector(embeddingClient));
-    }
-
-    /** 工具定义（供 ToolRouter 注册与白名单路由）。 */
-    @Bean
-    public List<ToolDefinition> tools() {
-        return ToolRouter.defaultTools();
     }
 
     @Bean

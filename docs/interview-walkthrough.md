@@ -468,7 +468,7 @@ flowchart LR
 ### L3 · 压力（缺陷与改进）
 
 **Q11：这个系统最大的技术债是什么？**
-> 三块 P0 硬伤（超时挂错位置 / 空串静默降级 / 校准空转）已全部修掉，见 Q12/Q13/Q14——每个都留下可复现的测试。剩三类非致命债：① `core/mq/` 664 行完整 MQ 子系统（含 ack/nack/死信/重投）从未接线，`AgentWorker` 全仓库没被 `new` 过；② `core/tool/` 的 `ToolDefinition` 声明了 9 个「纸面工具」（semgrep_scan、taint_analysis 等）只有声明没有实现；③ `TeamMailbox`、`ReviewReplay`、`ReflectionAgent` 是 `@Component` 但主链路零调用。
+> 三块 P0 硬伤（超时挂错位置 / 空串静默降级 / 校准空转）已全部修掉，见 Q12/Q13/Q14——每个都留下可复现的测试。**历史债 2026-09-08 已全仓清理**：① `core/mq/` 664 行完整 MQ 子系统（含 ack/nack/死信/重投）从未接线、`AgentWorker` 全仓库没被 `new` 过；② `core/tool/` 的 `ToolDefinition` 9 个「纸面工具」只有声明没有实现（实际工具执行走新一代 `core/tools/ToolGate`）；③ `TeamMailbox`、`ReviewReplay`、`ReflectionAgent` 是 `@Component` 孤儿。以上整包删除 + 新增 `DeadCodeGuardTest` 死代码门禁（main 中生产零引用且非框架回调的类型直接让 CI 失败），防止再犯——面试可讲：**清理本身是一次"顺着引用面找病根"的审计，病根是 DemoRunner/测试给死代码提供了合法引用，编译不告警、IDE 不标灰**。
 
 **Q12：`orTimeout` 真的生效吗？—— 已修复，这是我最想讲的一个故事**
 > **发现**：它原来挂在 `allOf` 返回的聚合 future 上，只产生一条 warn，不会完成或取消任何单个 future，后面 `join()` 仍然无限阻塞；`advancedFuture` 完全没进超时体系。
@@ -501,7 +501,7 @@ flowchart LR
 | P1 | diff token 预算裁剪 | 大 PR 场景下 prompt 超限 |
 | P2 | runId 改为 `(repo, prNum, headSha)` 派生 | 让断点续跑真正可用 |
 | P2 | 暴露 `AggregateTracer` 指标端点 | 现在指标是死数据 |
-| P3 | 清理死代码（`core/mq/`、`core/tool/ToolDefinition`、`TeamMailbox`）或真接线 | 664 行死代码是负债 |
+| ~~P3~~ | ~~清理死代码（`core/mq/`、`core/tool/ToolDefinition`、`TeamMailbox`）~~ | ✅ **已完成（2026-09-08）**：整包删除 + `DeadCodeGuardTest` 门禁防复发 |
 
 ---
 
@@ -538,8 +538,9 @@ sed -n '371,430p' $SRC/core/coordinator/impl/CompletableFutureCoordinator.java
 # 三级降级
 sed -n '190,243p' $SRC/core/agent/AbstractReviewAgent.java
 
-# 死代码确认（应无生产调用）
-grep -rn "new AgentWorker" $SRC                      # 无输出
+# 死代码审计已清理（2026-09-08）：mq/tool/external/孤儿 @Component 整包删除
+ls $SRC/core/mq $SRC/core/tool 2>/dev/null                 # (无此目录 = 已删)
+grep -rn "class DeadCodeGuardTest" $SRC/../test/java/com/codereview/agent/  # 门禁在
 grep -rn "kit.graph" $SRC                            # 无输出
 
 # P0-3 修复验证：校准闭环已接线（mark 方法现在有真实调用方了）

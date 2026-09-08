@@ -104,16 +104,6 @@ pgvector:
   # 因此维度口径在 dev/prod 必须一致，禁止各自覆盖。
   vector-dim: ${PGVECTOR_VECTOR_DIM:1024}
 
-# ===== Redis 配置 =====
-# enabled=true 时使用 Redis 作为消息队列；false 回退到内存
-redis:
-  enabled: true
-  host: ${REDIS_HOST:localhost}
-  port: ${REDIS_PORT:6379}
-  password: ${REDIS_PASSWORD:}
-  connect-timeout-ms: ${REDIS_CONNECT_TIMEOUT_MS:2000}
-  so-timeout-ms: ${REDIS_SO_TIMEOUT_MS:30000}
-
 # ===== 审查调度配置 =====
 review:
   # 对外文案语言（zh=中文默认 / en=English），作用于审查报告/修复建议/质量报告等开发者可见输出
@@ -221,7 +211,7 @@ review:
 
   # ===== 受控出口（Egress）配置 =====
   # 大厂「显式出口管控」实践：每个外部 SaaS 依赖（LLM / Rerank）各自声明出口方式，
-  # 互不干扰，也绝不劫持内部服务（PostgreSQL / Redis / Gitea 始终直连，与本段无关）。
+  # 互不干扰，也绝不劫持内部服务（PostgreSQL / Gitea 始终直连，与本段无关）。
   # 取代原先脆弱的全局 bypass-system-proxy 布尔。
   #
   # 三种模式（EgressMode）：
@@ -266,7 +256,7 @@ spring:
 
 # ===== 健康检查端点 =====
 # 零依赖实现：GET /health 与 /actuator/health 返回 200(UP)/503(DOWN)，
-# 供容器编排（k8s/Docker）做存活/就绪探针。状态聚合 PG(pgvector) 与 Redis 连通性。
+# 供容器编排（k8s/Docker）做存活/就绪探针。状态聚合 PG(pgvector) 连通性。
 
 # ===== SCA 漏洞扫描数据源 =====
 # source: auto=OSV 真实库优先、失败降级内置样本（推荐）；osv=强制真实（失败不降级，报告标注 failed）；builtin=仅内置样本

@@ -19,8 +19,8 @@ import java.util.Set;
  * 调用（{@link #getRelevantExperiences} 命中即 {@code recordHit}，spaced repetition 反遗忘）。
  *
  * <p><b>历史说明</b>：早期版本还保留一条「向量通道」（{@code MemoryStore} 中
- * {@code metadata.type=experience} 的向量），但唯一写入方 {@code ReflectionAgent}
- * 未接生产主链路（主链路零调用），向量经验无生产数据源，故该通道已废弃，
+ * {@code metadata.type=experience} 的向量），但唯一写入方（反思 Agent）从未接生产
+ * 主链路，向量经验无生产数据源，故该通道已废弃（2026-09-07 清理），
  * 检索一律走条目通道。
  */
 public class ExperienceStore {

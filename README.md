@@ -457,18 +457,6 @@ When the same PR is pushed again (webhook `synchronized`), the system reads the 
 - `core/tools/`: `ToolExposure` + `ToolGate` — DEFERRED heavy tools (full compile, run tests, AutoFix write-code) are **denied by default** (fail-closed);
 - Allowed when: `review.tools.deferred-enabled=true` or the current profile is STRICT; every decision records call stats (allowed/denied counts) for audit.
 
-**5.8 Persistent mailbox delegation (aligned with dsh `agent-team` `TeamMailbox`)**
-- `core/mailbox/TeamMailbox`: `send` (persist as QUEUED first) → `poll` (DELIVERED) → `ack` (ACKED); `recoverFor` redelivers unacknowledged messages after a crash;
-- Persisted at `data-dir/<teamId>/mailbox/<to>.json` (atomic write, auto-recovered on restart) — the "at-most-once, no-loss, ordered" queue foundation for a future "lead reviewer delegates subtasks to specialist agents".
-
-**5.9 Deterministic replay evaluation (aligned with dsh `llm-replay` / codex `rollout`)**
-- `core/eval/ReviewReplay`: reads trajectory JSONL and validates event-sequence structural integrity (must start with `review.started`, end with `review.completed`, event types legal);
-- Combined with fixed fixtures it enables regression evaluation: a new reviewer version's trajectory for the same PR must stay valid and conclusions consistent — moving from "it runs" to "it's trustworthy".
-
-**5.10 External-tool SPI plug-in (aligned with codex `mcp_tool`)**
-- `core/tools/external/`: `ExternalToolProvider` (name/capabilities/invoke) + `ExternalToolRegistry` (register / route by name / fail-fast invoke);
-- Protocols like MCP are carried by Provider implementations (see the interface javadoc); the engine itself doesn't force an MCP SDK, staying offline-compilable.
-
 **Configuration summary (all optional)**
 
 | Key | Default | Description |
@@ -789,10 +777,8 @@ src/main/java/com/codereview/agent/
     │   └── impl/     # PatternSkill (generic regex skill) / CustomRuleSkill (team custom)
     ├── admin/        # console backend: skill/knowledge/custom-agent management Controllers + RAG ingestion + text extraction + DTO (CustomAgentStore/CustomAgentDef/AgentAdminController)
     ├── calibration/  # confidence calibration service (false/true positives)
-    ├── mq/           # MessageQueue interface + in-memory impl + QueueNames + AgentWorker
-    ├── tool/         # ToolDefinition / ToolRouter (intent→whitelist) / ToolCallValidator
     ├── security/     # injection defense: InjectionDetector / KeywordInjectionDetector / DiffInjectionDetector / StegInjectionScanner (zero-width+bidi) / DiffInputGuard (BLOCK/TAG grading) / SemanticInjectionDetector / ContentInjectionDetector (store boundary) / AnomalyDetector / PromptHardening
-    ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG / ExperienceStore (team-isolated file entries) / ReflectionService (post-review distillation)
+    ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / RAG / ExperienceStore (team-isolated) / ReflectionService (post-review distillation)
     ├── toolcalling/  # AgentTool / ToolRegistry / ToolCallingLoop (think→decide→call→observe→reason) + ToolEquippedAgent decorator + BuiltinTools
     ├── planning/     # TaskPlanner (LLM task decomposition) / TaskPlan (DAG validation) / DagExecutor (topo-parallel) / TaskPlanningSupport (Coordinator weaving)
     ├── rag/          # RAG retrieval overhaul: KnowledgeStore (InMemory/Pg) / StructuredChunker / Reranker (ApiReranker+HeuristicReranker) / RagEvaluator / RagContextBuilder
@@ -803,10 +789,7 @@ src/main/java/com/codereview/agent/
     ├── resume/       # ResumeState / FileResumeStore (checkpoint resume: crash → same runId re-runs only remaining agents)
     ├── profile/      # ReviewProfile (review strictness STRICT/ADVISORY/SUGGEST hot-switch)
     ├── permission/   # VetoPolicy (permission convergence: BLOCKER exempt from false-positive suppression / arbitration override)
-    ├── tools/        # ToolGate / ToolExposure (tool-exposure gating) + external/ (ExternalToolProvider SPI plug-in)
-    ├── mailbox/      # TeamMailbox (persistent mailbox: send/poll/ack/recoverFor crash redelivery)
-    ├── eval/         # ReviewReplay (deterministic trajectory replay evaluation) / LlmJudge (precision/recall/F1 + llm-as-judge)
-    ├── extension/    # ExtensionPoint (5 extension point interfaces) / ExtensionRegistry (pluggable, order + same-name override)
+    ├── tools/        # ToolGate / ToolExposure (tool-exposure gating)
     ├── enhance/      # ReviewEnhancements (aggregated entry for optional Coordinator enhancements)
     ├── report/       # ReportGenerator (dedupe/priority arbitration/suppression/tiering) + ArbitrationPolicy + QualityTrendReporter + VerificationResult
     ├── feedback/     # FeedbackStore interface + file/in-memory impls (false-positive feedback loop)
@@ -828,7 +811,6 @@ src/main/java/com/codereview/agent/
 | Standardized message protocol | `model/*` (Finding/CodeDiff/PullRequest) — ReviewMessage removed (orphan) |
 | Prompt templating | `prompt/*` + `resources/prompts/*.txt` |
 | Skill plug-in | `skill/*` (hardcoded-secret, SQL-injection detection) |
-| Tool routing (avoid wrong tool) | `tool/ToolRouter` + `ToolCallValidator` |
 | Confidence calibration (improves with use) | `calibration/ConfidenceCalibrationService` |
 | Prompt-injection defense (per trust boundary) | `security/*` — diff input: `DiffInjectionDetector`(keyword+steg) + `DiffInputGuard`(BLOCK/TAG) ; store boundary: `ContentInjectionDetector`(anomaly+keyword+semantic) ; keyword base: `KeywordInjectionDetector` + agent-kit `PromptInjectionDetector` |
 | Business-defined custom agents (parallel + injection defense + degradation) | `core/admin/CustomAgentStore` + `core/agent/DeclarativeReviewAgent` + `core/admin/AgentAdminController` |
@@ -855,14 +837,11 @@ src/main/java/com/codereview/agent/
 | AutoFix fail-closed + sandbox probe | `autofix/AutoFixSafetyPolicy` + `SandboxProbe` + `ToolGate` |
 | Permission convergence (BLOCKER exempt from suppress/override) | `permission/VetoPolicy` |
 | Tool-exposure gating (DEFERRED denied by default) | `tools/ToolGate` + `ToolExposure` + `review.tools.*` |
-| Persistent mailbox (lossless agent delegation) | `mailbox/TeamMailbox` (send/poll/ack/recoverFor) |
-| Deterministic replay evaluation (trajectory regression) | `eval/ReviewReplay` |
 | Tool calling loop (think → decide → call → observe → reason) | `toolcalling/ToolCallingLoop` + `ToolRegistry` + built-ins + `ToolEquippedAgent` (`review.tools.agent-loop.enabled`) |
 | Task decomposition & DAG execution (plan → topo-parallel) | `planning/TaskPlanner` + `TaskPlan` + `DagExecutor` + `TaskPlanningSupport` (`review.planning.enabled`) |
 | Reflection & experience base (post-review distillation) | `memory/ReflectionService` + `ExperienceStore` (`review.reflection.enabled`) |
 | LLM evaluation (precision/recall/F1 + llm-as-judge) | `eval/LlmJudge` (`review.eval.enabled`) |
 | Pluggable component mechanism (extension points) | `extension/ExtensionPoint` + `ExtensionRegistry` (5 extension point interfaces) |
-| External tool SPI (MCP-style plug-in point) | `tools/external/ExternalToolProvider` + `ExternalToolRegistry` |
 | Multi-tenant (team) isolation (global baseline + overlay) | `tenant/*` (Teams/TeamProperties/TeamResolver) + `review.teams.*` + console `X-Team-Id` + PG `team_id` |
 | Full-chain tracing (observability) | `core/trace/TraceContext` (MDC traceId cross-thread) + `core/llm/LoggingChatModelListener` (LLM boundary logs) |
 
@@ -874,7 +853,6 @@ All three infrastructure pieces ship with "production + offline" dual implementa
 | --- | --- | --- | --- |
 | LLM | — (no Mock since 2026-09-03: missing key fails fast at startup) | `ModelGateway` + `LangChain4jChatProvider` (TokenHub multi-model hy3 / deepseek-v4-flash / glm-5.2, OpenAI-compatible) + optional company-level `token-factory` gateway in front (failover to direct) | `tokenhub.api-key` required / `token-factory.enabled=true` |
 | Memory store | `InMemoryVectorStore` | `PgVectorMemoryStore` (PostgreSQL 17 + pgvector 0.8, `team_id` isolation) | `pgvector.enabled=false` → memory |
-| Message queue | `InMemoryMessageQueue` | `RedisMessageQueue` (Redis, LPUSH/BRPOP) | `redis.enabled=false` → memory |
 | Embedding | `SimpleHashEmbeddingClient` (bag-of-words hash, 256-dim) | `LangChain4jEmbeddingClient` (OpenAiEmbeddingModel, reuses TokenHub; `kinfra-text-embedding-0.6b` 1024-dim) | `review.llm.embedding.enabled=true` |
 
 ### Component installation & notes
