@@ -172,7 +172,11 @@ class RagContextBuilderHardeningTest {
                 new RagEvaluator(0.0, false), emptyExp);
         String raw = "String sql = \"select * from user where id=\" + id;";
         builder.buildContext("teamA", "SecurityAgent", List.of(diff(raw)));
-        assertTrue(store.lastQuery.contains("String sql"), "默认恒等改写应保留原始 diff 查询");
+        // 恒等改写：原样保留「提炼后的结构化查询」（查询已由 DiffQueryExtractor
+        // 从裸 patch 提炼为 文件/类/符号，不再是 diff 原文）
+        assertEquals(DiffQueryExtractor.extract(List.of(diff(raw))), store.lastQuery,
+                "默认恒等改写应原样保留提炼后的查询，不做任何改写");
+        assertTrue(store.lastQuery.contains("sql"), "结构化查询应保留关键符号");
     }
 
     @Test

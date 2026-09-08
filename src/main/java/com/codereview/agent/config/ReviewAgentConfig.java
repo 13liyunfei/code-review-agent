@@ -274,8 +274,8 @@ public class ReviewAgentConfig {
     public EmbeddingClient embeddingClient(@Value("${review.llm.embedding.enabled:true}") boolean enabled,
                                            @Value("${review.llm.embedding.base-url:}") String baseUrl,
                                            @Value("${review.llm.embedding.api-key:}") String apiKey,
-                                           @Value("${review.llm.embedding.model:kinfra-text-embedding-4b}") String model,
-                                           @Value("${review.llm.embedding.dim:2560}") int dim,
+                                           @Value("${review.llm.embedding.model:kinfra-text-embedding-0.6b}") String model,
+                                           @Value("${review.llm.embedding.dim:1024}") int dim,
                                            TokenHubProperties tokenHub,
                                            EgressProperties egress) {
         if (enabled) {
@@ -322,12 +322,14 @@ public class ReviewAgentConfig {
 
     /**
      * RAG 评估与阈值过滤组件（选择性回答 abstain + 可观测）。
-     * {@code review.rag.min-similarity} 默认 0.0（不拦截，向后兼容）；调高可抑制噪声块。
+     * {@code review.rag.min-similarity} 默认 0.3（与 application.yml 一致）。
+     * 注意：默认值必须与 yml 对齐——若代码默认 0.0 而 yml 配 0.3，一旦在缺 yml 的环境
+     * （裸装配 / 新环境）启动，闸门会静默失效，与「生产配置」表现不一致。
      */
     @Bean
     public com.codereview.agent.core.rag.RagEvaluator ragEvaluator(
-            @Value("${review.rag.min-similarity:0.0}") double minSimilarity,
-            @Value("${review.rag.eval-enabled:false}") boolean evalEnabled) {
+            @Value("${review.rag.min-similarity:0.3}") double minSimilarity,
+            @Value("${review.rag.eval-enabled:true}") boolean evalEnabled) {
         log.info("已装配 RagEvaluator（minSimilarity={}, evalEnabled={}）", minSimilarity, evalEnabled);
         return new com.codereview.agent.core.rag.RagEvaluator(minSimilarity, evalEnabled);
     }

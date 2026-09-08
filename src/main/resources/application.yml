@@ -210,6 +210,12 @@ review:
       api-key: ${RERANK_API_KEY:}
       model: ${RERANK_MODEL:rerank-english-v3.0}
       timeout-ms: 5000
+    # MMR 多样性挑选：重排后按「相关性 − 冗余度」挑 Top-N，避免注入块被同章节碎片占满。
+    mmr:
+      enabled: ${RAG_MMR_ENABLED:true}
+    # small-to-big：为命中的叶子块回填父章节上下文（StructuredChunker 写入的 parentExcerpt）。
+    parent-context:
+      enabled: ${RAG_PARENT_CONTEXT_ENABLED:true}
     # 检索候选窗（初检召回数，重排前）：业界混合检索先召回 Top-50~200 再精排 Top-N。
     # 默认 50（比旧值 10 提升召回上限，配合阈值过滤+重排保证注入质量不降）。
     retrieve-k: ${RAG_RETRIEVE_K:50}

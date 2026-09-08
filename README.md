@@ -337,9 +337,14 @@ query ─▶ hybrid retrieve (vector ∪ BM25, top-K) ─▶ Reranker (cross-enc
 ```
 
 - **`StructuredChunker`** preserves markdown structure (headings + fenced code blocks) so retrieval returns coherent, self-contained snippets instead of arbitrary character slices.
+- **`TextTokenizer`** (Chinese bigram + camelCase/snake_case subwords): PostgreSQL's `simple` dictionary **does not tokenize Chinese** — a space-free Chinese run collapses into one lexeme, so `参数绑定` or even `SQL` fails to match. Both the write side (`to_tsvector`) and the query side (`to_tsquery`) run through this tokenizer first, and a one-shot migration (`tsvector-tokenize-v1`) rebuilds legacy `search_vector` rows.
+- **`similarity` semantics**: the metadata carries the **true cosine score**, identical across the Pg and InMemory backends; the RRF fused rank is stored separately as `rrfScore` and never feeds the threshold gate (rank-1 normalizes to 1.0 and rank-50 is still ~0.55 — using it against a 0.3 cosine threshold meant the gate never closed).
+- **Structured queries** (`DiffQueryExtractor`): the query is *not* "first 500 chars of the diff" — it is distilled into `file / class / method / symbols`, falling back to raw text when a change carries no identifiers.
 - **`Reranker`** interface with two implementations: `ApiReranker` (Cohere/Jina cross-encoder) and `HeuristicReranker` (offline lexical/positional scorer). `ApiReranker` **auto-degrades to `HeuristicReranker` when the API key is absent** — the review chain never blocks on rerank.
 - **`RagEvaluator`** optionally logs precision/recall against ground-truth `expectedId` metadata, so retrieval quality can be regression-tested.
 - **`min-similarity`** (default `0.3`) drops candidates below the threshold before they reach the prompt — enabling "selective abstain" to keep irrelevant knowledge out of the context.
+- **MMR diversity** (`review.rag.mmr.enabled`, default on): after reranking, Top-N is picked by `λ·relevance − (1−λ)·redundancy` so the injected set is not five near-duplicate fragments of the same section.
+- **Small-to-big parenting** (`review.rag.parent-context.enabled`, default on): each chunk carries `headingPath` / `parentExcerpt`, and a hit leaf chunk is injected together with its parent-section context.
 
 ### Configuration (`review.rag` / `review.egress` in `application.yml`)
 

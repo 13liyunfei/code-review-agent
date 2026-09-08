@@ -351,6 +351,9 @@ primaryChatModel（取 models[0]）→ CodeReviewAiService(AiServices 结构化�
 ```
 
 - **`StructuredChunker`**：保留 Markdown 结构（标题 + 围栏代码块），让召回返回语义完整、自洽的片段，而非任意字符切片。
+- **`TextTokenizer`**（中文 bigram + camelCase/snake_case 子词，缩写词整体保留）：PostgreSQL 的 `simple` 词典**不切中文**——无空格的中文整段会变成一个词位，查「参数绑定」甚至查「SQL」都不命中，稀疏路（权重 0.3）等于空转。写入侧 `to_tsvector` 与检索侧 `to_tsquery` 都先过本分词器，存量 `search_vector` 由一次性迁移 `tsvector-tokenize-v1` 重建。
+- **`similarity` 语义**：元数据里是**真实余弦**，Pg / InMemory 口径一致；RRF 融合排名分另存 `rrfScore`，只用于排序、绝不参与阈值判断（否则第一名恒为 1.0、第 50 名仍有 ~0.55，拿它比 0.3 的余弦阈值等于闸门永远关不上）。
+- **结构化查询**（`DiffQueryExtractor`）：查询不是「diff 前 500 字符」，而是从变更中提炼的 `文件 / 类 / 方法 / 符号`；无标识符的改动退回原文截断（绝不返回空查询）。
 - **`Reranker`** 接口两种实现：`ApiReranker`（Cohere/Jina cross-encoder）与 `HeuristicReranker`（离线词法/位置打分）。**API Key 缺失时 `ApiReranker` 自动降级到 `HeuristicReranker`**——审查链路永不因重排而阻塞。
 - **`RagEvaluator`**：在携带 ground-truth `expectedId` 元数据时可选记录 precision/recall 与**排序指标（`hit@k` / `MRR`，由 `firstHitRank` 计算）**，便于检索质量做回归测试。
 - **查询改写**（`ReviewQueryRewriter`，默认 `IdentityQueryRewriter`，可选用 `LlmQueryRewriter`）：弥合「代码 diff 形态查询 ↔ 规范文档」的语义鸿沟。开启 `review.rag.query-rewrite.enabled=true` 后由大模型改写查询；任何失败/空/超长输出**回退恒等改写**——绝不劣化检索。
@@ -358,6 +361,8 @@ primaryChatModel（取 models[0]）→ CodeReviewAiService(AiServices 结构化�
 - **Freshness**（`max-age-days`，默认 `0`=不过滤）：在 SQL / 内存层按 `created_at` 截断超过 N 天的陈旧知识块，过期规范、历史 PR 复盘不再参与召回。
 - **HNSW ANN 索引**（默认 `hnsw`）：`pgvector.index-type` 作用于 `memory_store` 向量列，pgvector ≥ 0.5 下召回精度/构建速度优于 ivfflat；存量 ivfflat 索引自动迁移（DROP 重建），HNSW 创建失败自动 WARN 回退 ivfflat。
 - **`min-similarity`**（默认 `0.3`）：在候选进入 prompt 前丢弃低于阈值的片段，实现"选择性 abstain"以保持上下文干净。
+- **MMR 多样性**（`review.rag.mmr.enabled`，默认开）：重排后按 `λ·相关性 − (1−λ)·冗余度` 挑 Top-N，避免注入的 5 条其实是同一章节的相似碎片。
+- **small-to-big 父子上下文**（`review.rag.parent-context.enabled`，默认开）：chunk 携带 `headingPath` / `parentExcerpt`，命中叶子块时把父章节语境一并注入。
 
 ### 配置（`application.yml` 的 `review.rag` / `review.egress`）
 

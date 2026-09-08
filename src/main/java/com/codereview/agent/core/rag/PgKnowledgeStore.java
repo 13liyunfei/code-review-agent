@@ -57,6 +57,8 @@ public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {
 
     /** RRF 常数。 */
     private static final double RRF_K = 60.0;
+    /** 稀疏路查询参与检索的最大词数（长 diff 查询截断，防 to_tsquery 过长拖慢检索）。 */
+    private static final int SPARSE_QUERY_MAX_TERMS = 40;
     /** 向量路权重（与 BM25 之和为 1）。 */
     private final double denseWeight;
 
@@ -184,7 +186,14 @@ public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {
             freshSql = " AND created_at >= now() - (? || ' seconds')::interval";
         }
 
+        // 稀疏路查询串：中文 bigram + 标识符子词，用 OR 连接。
+        // 用 OR 而非 plainto_tsquery 的 AND：RAG 查询是整段 diff/长句，AND 要求全部词命中，
+        // 长查询几乎必然零命中（另一种形式的稀疏路失效）；OR 保证「任一关键词命中」即可召回，
+        // 由 ts_rank 负责把多词命中的文档排到前面。
+        String sparseTsQuery = TextTokenizer.toTsQueryOr(query, SPARSE_QUERY_MAX_TERMS);
+
         Map<Long, Double> denseRank = new HashMap<>();
+        Map<Long, Double> denseSim = new HashMap<>();
         Map<Long, Double> sparseRank = new HashMap<>();
         Map<Long, MemoryEntry> byId = new HashMap<>();
 
@@ -201,11 +210,11 @@ public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {
 
         String sparseSql = """
                 SELECT id, agent_type, team_id, content, metadata, level, created_at,
-                       ts_rank(search_vector, plainto_tsquery('simple', ?)) AS bm25
+                       ts_rank(search_vector, to_tsquery('simple', ?)) AS bm25
                 FROM memory_store
                 WHERE agent_type = 'RAG' AND %s %s
-                  AND search_vector @@ plainto_tsquery('simple', ?)
-                ORDER BY ts_rank(search_vector, plainto_tsquery('simple', ?)) DESC
+                  AND search_vector @@ to_tsquery('simple', ?)
+                ORDER BY ts_rank(search_vector, to_tsquery('simple', ?)) DESC
                 LIMIT ?
                 """.formatted(teamFilter, freshSql);
 
@@ -227,29 +236,33 @@ public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {
                     while (rs.next()) {
                         MemoryEntry e = mapRow(rs, rs.getDouble("sim"));
                         byId.put(e.id(), e);
+                        denseSim.put(e.id(), rs.getDouble("sim"));
                         denseRank.put(e.id(), (double) rank++);
                     }
                 }
             }
-            try (PreparedStatement ps = conn.prepareStatement(sparseSql)) {
-                int idx = 1;
-                ps.setString(idx++, query == null ? "" : query);
-                ps.setString(idx++, t);
-                if (includeGlobal) {
-                    ps.setString(idx++, Teams.GLOBAL);
-                }
-                if (!freshSql.isEmpty()) {
-                    ps.setLong(idx++, maxAge.toSeconds());
-                }
-                ps.setString(idx++, query == null ? "" : query);
-                ps.setString(idx++, query == null ? "" : query);
-                ps.setInt(idx++, widen);
-                try (ResultSet rs = ps.executeQuery()) {
-                    int rank = 0;
-                    while (rs.next()) {
-                        MemoryEntry e = mapRow(rs, rs.getDouble("bm25"));
-                        byId.putIfAbsent(e.id(), e);
-                        sparseRank.put(e.id(), (double) rank++);
+            // 稀疏路：查询为空（或分词后无词）时整段跳过——to_tsquery('simple','') 会抛语法错误
+            if (!sparseTsQuery.isBlank()) {
+                try (PreparedStatement ps = conn.prepareStatement(sparseSql)) {
+                    int idx = 1;
+                    ps.setString(idx++, sparseTsQuery);
+                    ps.setString(idx++, t);
+                    if (includeGlobal) {
+                        ps.setString(idx++, Teams.GLOBAL);
+                    }
+                    if (!freshSql.isEmpty()) {
+                        ps.setLong(idx++, maxAge.toSeconds());
+                    }
+                    ps.setString(idx++, sparseTsQuery);
+                    ps.setString(idx++, sparseTsQuery);
+                    ps.setInt(idx++, widen);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        int rank = 0;
+                        while (rs.next()) {
+                            MemoryEntry e = mapRow(rs, rs.getDouble("bm25"));
+                            byId.putIfAbsent(e.id(), e);
+                            sparseRank.put(e.id(), (double) rank++);
+                        }
                     }
                 }
             }
@@ -269,18 +282,64 @@ public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {
         fused.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
         double maxRrf = fused.isEmpty() ? 1.0 : fused.get(0).getValue();
 
+        // 仅被稀疏路命中的条目没进稠密路 widen 窗口，补算一次真实余弦：
+        // 保证 similarity 语义在 Pg / InMemory 两个后端完全一致（阈值闸门才可能生效）。
+        fillMissingDenseSim(byId.keySet(), vectorStr, denseSim);
+
         List<MemoryEntry> result = new ArrayList<>();
         for (int i = 0; i < Math.min(topK, fused.size()); i++) {
             MemoryEntry e = byId.get(fused.get(i).getKey());
             double norm = maxRrf > 0 ? fused.get(i).getValue() / maxRrf : 0.0;
             Map<String, String> m = new HashMap<>(e.metadata() == null ? Map.of() : e.metadata());
-            m.put("similarity", String.format("%.4f", norm));
+            // similarity = 真实余弦相似度（供 RagEvaluator 的 min-similarity 闸门使用，跨后端可比）；
+            // rrfScore = RRF 融合归一化排名分（仅供排序与观测，绝不参与阈值判断）。
+            // 二者必须分开：RRF 排名分第一名恒为 1.0、第 50 名仍有 ~0.55，
+            // 拿它去比 0.3 的余弦阈值等于闸门永远不关（历史上正是这个 bug 让 abstain 空转）。
+            m.put("similarity", String.format("%.4f", denseSim.getOrDefault(e.id(), 0.0)));
+            m.put("rrfScore", String.format("%.4f", norm));
             result.add(new MemoryEntry(e.id(), e.agentType(), e.teamId(), e.content(),
                     Map.copyOf(m), e.level(), e.createdAt(), e.embedding()));
         }
         log.info("[PgKnowledge] 混合检索：team={}, topK={}, 融合命中 {} 条, 耗时 {}ms",
                 t, topK, result.size(), System.currentTimeMillis() - t0);
         return result;
+    }
+
+    /**
+     * 为「仅被稀疏路命中」的条目补算真实余弦相似度。
+     *
+     * <p>稠密路只取 widen 条，稀疏路命中的长尾条目可能不在其中；若不补算，这些条目会沿用
+     * {@code mapRow} 写入的 bm25 分，导致 {@code similarity} 语义在同一结果集内都不统一。
+     * 补算成本：一条 {@code id IN (...)} 的小查询，仅在确有缺失时执行。
+     */
+    private void fillMissingDenseSim(java.util.Set<Long> ids, String vectorStr,
+                                     Map<Long, Double> denseSim) {
+        List<Long> missing = new ArrayList<>();
+        for (Long id : ids) {
+            if (!denseSim.containsKey(id)) {
+                missing.add(id);
+            }
+        }
+        if (missing.isEmpty()) {
+            return;
+        }
+        String ph = String.join(",", java.util.Collections.nCopies(missing.size(), "?"));
+        String sql = "SELECT id, 1 - (embedding <=> ?::vector) AS sim "
+                + "FROM memory_store WHERE id IN (" + ph + ")";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, vectorStr);
+            for (int i = 0; i < missing.size(); i++) {
+                ps.setLong(i + 2, missing.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    denseSim.put(rs.getLong("id"), rs.getDouble("sim"));
+                }
+            }
+        } catch (SQLException e) {
+            log.warn("[PgKnowledge] 补算稠密相似度失败（缺失条目 similarity 记为 0）: {}", e.getMessage());
+        }
     }
 
     private MemoryEntry mapRow(ResultSet rs, double score) throws SQLException {

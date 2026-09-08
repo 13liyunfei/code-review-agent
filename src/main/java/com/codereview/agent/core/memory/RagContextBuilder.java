@@ -1,12 +1,14 @@
 package com.codereview.agent.core.memory;
 
 import com.codereview.agent.core.model.CodeDiff;
+import com.codereview.agent.core.rag.DiffQueryExtractor;
 import com.codereview.agent.core.rag.HeuristicReranker;
 import com.codereview.agent.core.rag.IdentityQueryRewriter;
 import com.codereview.agent.core.rag.KnowledgeStore;
 import com.codereview.agent.core.rag.RagEvaluator;
 import com.codereview.agent.core.rag.Reranker;
 import com.codereview.agent.core.rag.ReviewQueryRewriter;
+import com.codereview.agent.core.rag.TextTokenizer;
 import com.codereview.agent.tenant.Teams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +67,16 @@ public class RagContextBuilder {
     /** freshness：知识块最大入库年龄（天），0 = 不过滤。 */
     @Value("${review.rag.max-age-days:0}")
     private long maxAgeDays = 0;
+    /** MMR 多样性挑选（重排后按「相关性 - 冗余度」挑 Top-N），避免 Top-N 被同章节碎片占满。 */
+    @Value("${review.rag.mmr.enabled:true}")
+    private boolean mmrEnabled = true;
+    /** small-to-big：为命中的叶子块回填父章节上下文（StructuredChunker 写入的 parentExcerpt）。 */
+    @Value("${review.rag.parent-context.enabled:true}")
+    private boolean parentContextEnabled = true;
+    /** MMR 相关性权重（1-λ 为冗余惩罚权重），业界常用 0.7。 */
+    private static final double MMR_LAMBDA = 0.7;
+    /** 父章节上下文注入的最大字符数。 */
+    private static final int PARENT_CONTEXT_MAX = 300;
     /** 查询改写器（默认恒等；由容器按配置注入 LLM 实现，无 Spring 时测试可 new 后覆写）。 */
     private ReviewQueryRewriter queryRewriter = new IdentityQueryRewriter();
 
@@ -109,6 +121,18 @@ public class RagContextBuilder {
         return this;
     }
 
+    /** 测试 / 工具用：是否启用 MMR 多样性挑选。 */
+    public RagContextBuilder withMmr(boolean enabled) {
+        this.mmrEnabled = enabled;
+        return this;
+    }
+
+    /** 测试 / 工具用：是否回填父章节上下文（small-to-big）。 */
+    public RagContextBuilder withParentContext(boolean enabled) {
+        this.parentContextEnabled = enabled;
+        return this;
+    }
+
     /**
      * 为指定团队 / Agent 构建 RAG 增强上下文。
      *
@@ -138,20 +162,23 @@ public class RagContextBuilder {
             log.info("[RAG] 无相关知识（候选 {} 条均低于阈值或为空），知识分区 abstain, 耗时 {}ms",
                     candidates.size(), System.currentTimeMillis() - t0);
         } else {
-            // 4. Cross-Encoder 重排 → Top-N
-            List<MemoryEntry> reranked = reranker.rerank(query, passed, injectTopN);
-            // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）
-            List<MemoryEntry> deduped = dedupeByContent(reranked);
-            if (deduped.size() < reranked.size()) {
+            // 4. Cross-Encoder 重排：开 MMR 时给更大的候选池，否则 MMR 没有挑选余地
+            int rerankPool = mmrEnabled
+                    ? Math.min(passed.size(), Math.max(injectTopN * 3, injectTopN))
+                    : injectTopN;
+            List<MemoryEntry> reranked = reranker.rerank(query, passed, rerankPool);
+            // 5. MMR 多样性挑选（相关性 − 冗余度）：避免 Top-N 被同章节高度相似的碎片占满
+            List<MemoryEntry> picked = (mmrEnabled && reranked.size() > injectTopN)
+                    ? mmrSelect(reranked, query, injectTopN) : reranked;
+            // 6. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）
+            List<MemoryEntry> deduped = dedupeByContent(picked);
+            if (deduped.size() < picked.size()) {
                 log.info("[RAG] 去重：注入前剔除 {} 个重复块（重叠切块导致），{} → {}",
-                        reranked.size() - deduped.size(), reranked.size(), deduped.size());
+                        picked.size() - deduped.size(), picked.size(), deduped.size());
             }
-            // 6. 评估指标 + 格式化
+            // 7. 评估指标 + 格式化（含 small-to-big 父章节上下文回填）
             RagEvaluator.RagMetrics metrics = evaluator.evaluate(deduped, null);
-            for (MemoryEntry e : deduped) {
-                sb.append("- [").append(e.metadata().getOrDefault("source", "knowledge"))
-                        .append("] ").append(e.content()).append('\n');
-            }
+            appendKnowledgeBlocks(sb, deduped);
             log.info("[RAG] 上下文构建：team={}, agent={}, 查询={}字符, 候选 {} → 放行 {} → 注入 Top-{} (maxSim={}), 耗时 {}ms",
                     Teams.sanitize(teamId), agentType, query.length(), candidates.size(),
                     passed.size(), deduped.size(),
@@ -215,15 +242,105 @@ public class RagContextBuilder {
     }
 
     /**
-     * 从代码变更中提取检索查询（取补丁前若干字符）。
+     * 从代码变更中提炼检索查询（<b>结构化</b>：文件 / 类 / 方法 / 符号）。
+     *
+     * <p>旧实现直接把 diff 拼起来取前 500 字符——里面塞满 {@code +/-}、行号与上下文噪音，
+     * 拿这段噪声去撞以自然语言术语为主的规范库，语义鸿沟极大，而且截断后真正改动的方法
+     * 常常根本没被包含。现委托 {@link DiffQueryExtractor} 提炼成贴近知识库措辞的查询。
      */
     private String extractQueryFromDiffs(List<CodeDiff> diffs) {
-        if (diffs == null || diffs.isEmpty()) {
-            return "";
+        return DiffQueryExtractor.extract(diffs);
+    }
+
+    /**
+     * MMR（Maximal Marginal Relevance）挑选：
+     * {@code argmax( λ·relevance(块, 查询) − (1−λ)·max redundancy(块, 已选集合) )}。
+     *
+     * <p>解决的问题：重排后的 Top-N 经常被同一章节的相邻碎片占满（内容高度雷同），
+     * 看似注入了 5 条，实际只覆盖 1 个知识点。MMR 在「相关」与「信息量新增」之间取平衡。
+     *
+     * <p>文本相似度用 {@link TextTokenizer}（中文 bigram + 标识符子词）的 Jaccard——
+     * 与启发式重排同口径，中文场景下才不会恒为 0。
+     */
+    private List<MemoryEntry> mmrSelect(List<MemoryEntry> candidates, String query, int topN) {
+        java.util.Set<String> qTokens = TextTokenizer.tokenize(query);
+        // 候选词集预计算一次：MMR 是 O(topN × 候选) 的贪心，
+        // 若每轮外层都重新分词，长内容会被重复解析 topN 次（纯浪费且随块长放大）。
+        List<java.util.Set<String>> candTokens = new java.util.ArrayList<>(candidates.size());
+        for (MemoryEntry c : candidates) {
+            candTokens.add(TextTokenizer.tokenize(c.content()));
         }
-        String joined = diffs.stream()
-                .map(CodeDiff::patch)
-                .reduce("", String::concat);
-        return joined.length() > 500 ? joined.substring(0, 500) : joined;
+        List<MemoryEntry> selected = new java.util.ArrayList<>();
+        List<java.util.Set<String>> selectedTokens = new java.util.ArrayList<>();
+        // rest 存候选下标而非对象：①可直接复用预计算的词集；②避免按对象 remove（
+        // MemoryEntry 是 record，同内容条目 equals 相同，按对象删会误删/删错）。
+        List<Integer> rest = new java.util.ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            rest.add(i);
+        }
+
+        while (selected.size() < topN && !rest.isEmpty()) {
+            int bestPos = 0;
+            int bestIdx = rest.get(0);
+            double bestScore = Double.NEGATIVE_INFINITY;
+            for (int p = 0; p < rest.size(); p++) {
+                java.util.Set<String> cTokens = candTokens.get(rest.get(p));
+                double rel = jaccard(qTokens, cTokens);
+                double redundancy = 0.0;
+                for (java.util.Set<String> s : selectedTokens) {
+                    redundancy = Math.max(redundancy, jaccard(s, cTokens));
+                }
+                double mmr = MMR_LAMBDA * rel - (1 - MMR_LAMBDA) * redundancy;
+                if (mmr > bestScore) {
+                    bestScore = mmr;
+                    bestIdx = rest.get(p);
+                    bestPos = p;
+                }
+            }
+            selected.add(candidates.get(bestIdx));
+            selectedTokens.add(candTokens.get(bestIdx));
+            rest.remove(bestPos);
+        }
+        return selected;
+    }
+
+    private static double jaccard(java.util.Set<String> a, java.util.Set<String> b) {
+        if (a.isEmpty() || b.isEmpty()) {
+            return 0.0;
+        }
+        java.util.Set<String> inter = new java.util.HashSet<>(a);
+        inter.retainAll(b);
+        java.util.Set<String> union = new java.util.HashSet<>(a);
+        union.addAll(b);
+        return union.isEmpty() ? 0.0 : (double) inter.size() / union.size();
+    }
+
+    /**
+     * 格式化知识块（含 <b>small-to-big</b> 父章节上下文回填）。
+     *
+     * <p>命中叶子块时，仅凭一条孤立条款往往看不出它属于哪一章的什么约定；
+     * 此处把 {@code StructuredChunker} 写入的 {@code parentExcerpt} 附在块后，
+     * 同一父摘要只追加一次（多个兄弟块共享同一父章节）。
+     */
+    private void appendKnowledgeBlocks(StringBuilder sb, List<MemoryEntry> blocks) {
+        java.util.Set<String> appendedParents = new java.util.HashSet<>();
+        for (MemoryEntry e : blocks) {
+            java.util.Map<String, String> meta =
+                    e.metadata() == null ? java.util.Map.of() : e.metadata();
+            sb.append("- [").append(meta.getOrDefault("source", "knowledge"))
+                    .append("] ").append(e.content()).append('\n');
+            if (!parentContextEnabled) {
+                continue;
+            }
+            String parent = meta.get("parentExcerpt");
+            if (parent == null || parent.isBlank()) {
+                continue;
+            }
+            String excerpt = parent.length() > PARENT_CONTEXT_MAX
+                    ? parent.substring(0, PARENT_CONTEXT_MAX) : parent;
+            if (appendedParents.add(excerpt)) {
+                sb.append("    ↳ 所属章节上下文：").append(excerpt.replace('\n', ' ')).append('\n');
+            }
+        }
     }
 }

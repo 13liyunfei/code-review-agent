@@ -1,6 +1,7 @@
 package com.codereview.agent.core.memory;
 
 import com.codereview.agent.core.llm.EmbeddingClient;
+import com.codereview.agent.core.rag.TextTokenizer;
 import com.codereview.agent.tenant.Teams;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,6 +60,9 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
     private final int vectorDim;
     /** ANN 索引类型：hnsw（默认，pgvector≥0.5）或 ivfflat（老版本兼容回退）。 */
     private final String indexType;
+
+    /** 存量 search_vector 单次迁移的行上限（超量直接跳过，避免大表把启动拖死）。 */
+    private static final int MAX_MIGRATE_ROWS = 100_000;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -148,7 +152,10 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_memory_agent ON memory_store (agent_type)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_memory_team ON memory_store (team_id)");
 
-            // 全文检索向量列（BM25 / 混合检索用）：simple 词典保证中文按字符切分可用
+            // 全文检索向量列（BM25 / 混合检索用）。
+            // 注意：PG 的 simple 词典**不做中文分词**——无空格的中文整段会被当成一个词位
+            // （实测「禁止使用字符串拼接的sql」是一个词位，查「参数绑定」、甚至查「SQL」都不命中），
+            // 因此写入侧与检索侧都先经 TextTokenizer（中文 bigram + 标识符子词）预处理。
             if (!columnExists(conn, "search_vector")) {
                 stmt.execute("ALTER TABLE memory_store ADD COLUMN search_vector tsvector");
                 log.info("[PgVector] 迁移：已补充 search_vector 列（混合检索 BM25 用）");
@@ -157,6 +164,8 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
                     CREATE INDEX IF NOT EXISTS idx_memory_tsv
                     ON memory_store USING gin (search_vector)
                     """);
+            // 存量行一次性重建：历史数据是按「未分词原文」建的 tsvector，中文查询命中不了
+            migrateTsvectorTokens(conn);
 
             log.info("[PgVector] 表与索引就绪（vector({}), {} 索引, gin(tsvector)）",
                     vectorDim, indexType);
@@ -224,6 +233,69 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
         } catch (SQLException e) {
             log.warn("[PgVector] 查询现有向量索引类型失败（按不存在处理）: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 存量 {@code search_vector} 一次性重建：历史行是按「未分词原文」建的 tsvector，
+     * 中文查询命中不了（simple 词典不做中文分词）。幂等——由 {@code rag_schema_migration}
+     * 表记录已执行的一次性迁移，重复启动不会重跑。
+     *
+     * <p>失败只 WARN 不阻断启动：迁移失败仅影响中文 BM25 召回质量，不应让引擎起不来。
+     */
+    private void migrateTsvectorTokens(Connection conn) {
+        final String name = "tsvector-tokenize-v1";
+        try (Statement s = conn.createStatement()) {
+            s.execute("""
+                    CREATE TABLE IF NOT EXISTS rag_schema_migration (
+                        name varchar(128) PRIMARY KEY,
+                        applied_at timestamptz NOT NULL DEFAULT now()
+                    )
+                    """);
+            try (PreparedStatement chk = conn.prepareStatement(
+                    "SELECT 1 FROM rag_schema_migration WHERE name = ?")) {
+                chk.setString(1, name);
+                try (ResultSet rs = chk.executeQuery()) {
+                    if (rs.next()) {
+                        return;
+                    }
+                }
+            }
+
+            List<Long> ids = new ArrayList<>();
+            List<String> contents = new ArrayList<>();
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT id, content FROM memory_store")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        ids.add(rs.getLong(1));
+                        contents.add(rs.getString(2));
+                    }
+                }
+            }
+            if (ids.size() > MAX_MIGRATE_ROWS) {
+                log.warn("[PgVector] 存量 {} 行超过单次迁移上限 {}，跳过（请手工分批重建 search_vector）",
+                        ids.size(), MAX_MIGRATE_ROWS);
+                return;
+            }
+            try (PreparedStatement up = conn.prepareStatement(
+                    "UPDATE memory_store SET search_vector = to_tsvector('simple', ?) WHERE id = ?")) {
+                for (int i = 0; i < ids.size(); i++) {
+                    up.setString(1, TextTokenizer.toTokenString(contents.get(i)));
+                    up.setLong(2, ids.get(i));
+                    up.addBatch();
+                }
+                up.executeBatch();
+            }
+            try (PreparedStatement mk = conn.prepareStatement(
+                    "INSERT INTO rag_schema_migration (name) VALUES (?) ON CONFLICT DO NOTHING")) {
+                mk.setString(1, name);
+                mk.executeUpdate();
+            }
+            log.info("[PgVector] 迁移：已按分词器重建 {} 行的 search_vector（中文/标识符 BM25 生效）", ids.size());
+        } catch (SQLException e) {
+            log.warn("[PgVector] search_vector 分词迁移失败（不影响启动，中文 BM25 可能仍不命中）：{}",
+                    e.getMessage());
         }
     }
 
@@ -355,7 +427,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {
             ps.setString(5, entry.level().name());
             ps.setObject(6, java.sql.Timestamp.from(createdAt));
             ps.setString(7, vectorStr);
-            ps.setString(8, entry.content());
+            ps.setString(8, TextTokenizer.toTokenString(entry.content()));
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
