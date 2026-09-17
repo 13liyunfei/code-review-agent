@@ -1,11 +1,13 @@
 import { defineConfig } from 'vitepress'
+import bookSidebar from './book-sidebar.mjs'
 
 const enNav = [
   { text: 'Guide', link: '/guide/' },
   { text: 'Built on agent-kit', link: '/guide/agentkit' },
   { text: 'Architecture', link: '/architecture' },
   { text: 'Console', link: '/guide/console' },
-  { text: 'Build', link: '/build' }
+  { text: 'Build', link: '/build' },
+  { text: 'Book (中文)', link: '/zh/book/' }
 ]
 
 const zhNav = [
@@ -13,7 +15,8 @@ const zhNav = [
   { text: '基于 agent-kit', link: '/zh/guide/agentkit' },
   { text: '架构', link: '/zh/architecture' },
   { text: '控制台', link: '/zh/guide/console' },
-  { text: '构建', link: '/zh/build' }
+  { text: '构建', link: '/zh/build' },
+  { text: 'Java Agent 开发实战', link: '/zh/book/' }
 ]
 
 const enSidebar = [
@@ -43,6 +46,10 @@ const enSidebar = [
       { text: 'Observability & security', link: '/guide/observability' },
       { text: 'Management console', link: '/guide/console' }
     ]
+  },
+  {
+    text: 'Book (Java Agent, 中文)',
+    items: bookSidebar
   }
 ]
 
@@ -73,6 +80,10 @@ const zhSidebar = [
       { text: '可观测与安全', link: '/zh/guide/observability' },
       { text: '管理控制台', link: '/zh/guide/console' }
     ]
+  },
+  {
+    text: 'Java Agent 开发实战（专栏）',
+    items: bookSidebar
   }
 ]
 

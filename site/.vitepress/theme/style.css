@@ -1,0 +1,19 @@
+/* Book diagram styling: center and constrain rendered mermaid SVGs */
+.mermaid-svg,
+.arch-svg {
+  display: block;
+  margin: 1.5rem auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+/* Let large architecture / flow diagrams breathe on wide screens */
+.mermaid-svg {
+  background: var(--vp-c-bg-soft, #f6f6f7);
+  padding: 0.75rem;
+}
+
+.dark .mermaid-svg {
+  background: var(--vp-c-bg-soft, #1b1b1f);
+}
