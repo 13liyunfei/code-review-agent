@@ -1,6 +1,5 @@
 # 第 14 讲 · 为什么需要多 Agent
 
-> 📌 代码锚点：`code-review-agent / core/model/AgentType.java`、`core/agent/ReviewAgent.java`、`core/coordinator/Coordinator.java`
 > 🎯 导读问题：**"你为什么用多 Agent？一个 Agent 不够吗？"**（这一问考的是判断力，不是技术）
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0069.svg" alt="🎯 导读问题："你为什么用多 Agent？一个 Agent 不够吗？"（这一问考的是判断力，不是技术）" />

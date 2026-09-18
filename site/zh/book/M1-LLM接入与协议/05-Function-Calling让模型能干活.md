@@ -1,6 +1,5 @@
 # 第 05 讲 · Function Calling：让模型能干活
 
-> 📌 代码锚点：`agent-kit / toolcalling/AgentTool.java`、`ToolRegistry.java`、`ToolCallingLoop.java`、`NativeToolCallingLoop.java`、`GuardedTool.java`、`BuiltinTools.java`；`code-review-agent / core/toolcalling/ToolEquippedAgent.java`、`core/tools/ToolGate.java`
 > 🎯 相关面试考点：**"你的 Agent 是真在用工具，还是只在 prompt 里假装有工具？"**
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0014.svg" alt="🎯 相关面试考点："你的 Agent 是真在用工具，还是只在 prompt 里假装有工具？"" />

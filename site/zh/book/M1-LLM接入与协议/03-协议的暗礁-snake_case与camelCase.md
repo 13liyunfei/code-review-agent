@@ -1,6 +1,5 @@
 # 第 03 讲 · 协议的暗礁：snake_case 与 camelCase
 
-> 📌 代码锚点：`token-factory / token-factory-client / Json.java`、`dto/ChatCompletionRequest.java`、`dto/UsageReportRequest.java`、`TokenFactoryClient.java`
 > 🎯 导读问题：**"你怎么保证接口契约不被静默破坏？"**
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0025.svg" alt="🎯 导读问题："你怎么保证接口契约不被静默破坏？"" />

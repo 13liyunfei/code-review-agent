@@ -1,6 +1,5 @@
 # 第 08 讲 · Agent 的本质：一个带工具的循环
 
-> 📌 代码锚点：`agent-kit / agent/Agent.java`、`AgentContext.java`、`AgentOutput.java`、`AgentRuntime.java`、`AgentRunResult.java`、`SupervisorAgent.java`
 > 🎯 导读问题：**"你说的 Agent，和 ChatBot 的区别是什么？"**
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0101.svg" alt="🎯 导读问题："你说的 Agent，和 ChatBot 的区别是什么？"" />

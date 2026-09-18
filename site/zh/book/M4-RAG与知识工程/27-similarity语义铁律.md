@@ -1,6 +1,5 @@
 # 第 27 讲 · similarity 语义铁律：为什么我的 0.3 阈值等于没配
 
-> 📌 代码锚点：`code-review-agent / core/rag/PgKnowledgeStore.java`（融合段与 `fillMissingDenseSim`）、`core/rag/InMemoryKnowledgeStore.java`、`core/rag/RagEvaluator.java`
 > 🎯 导读问题：**"你怎么防止不相关的知识被塞进上下文？"** ——这一讲教你怎么让"闸门"真的关上。
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0037.svg" alt="🎯 导读问题："你怎么防止不相关的知识被塞进上下文？" ——这一讲教你怎么让"闸门"真的关上。" />

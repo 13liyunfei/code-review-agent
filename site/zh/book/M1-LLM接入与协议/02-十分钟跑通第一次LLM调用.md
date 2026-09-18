@@ -1,6 +1,5 @@
 # 第 02 讲 · 十分钟跑通第一次 LLM 调用
 
-> 📌 代码锚点：`token-factory / token-factory-client`
 > 本讲是全书**唯一**一讲"以跑通为目标"的课。先拿到正反馈，再谈架构。
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0024.svg" alt="本讲是全书唯一一讲"以跑通为目标"的课。先拿到正反馈，再谈架构。" />

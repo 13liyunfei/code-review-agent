@@ -1,6 +1,5 @@
 # 第 07 讲 · 模型路由与降级：多通道 failover
 
-> 📌 代码锚点：`code-review-agent / core/llm/RouteStrategy.java`、`PriorityRouteStrategy.java`、`ModelGateway.java`、`ModelUnavailableException.java`、`CircuitBreakerProvider.java`、`config/ReviewAgentConfig.java`
 > 🎯 导读问题：**"多模型/多通道怎么选？全都挂了怎么办？"**
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0018.svg" alt="🎯 导读问题："多模型/多通道怎么选？全都挂了怎么办？"" />

@@ -1,6 +1,5 @@
 # 第 16 讲 · Agent 抽象：状态、生命周期与"谁来决定下一步"
 
-> 📌 代码锚点：`code-review-agent / core/agent/{ReviewAgent,AbstractReviewAgent,DeclarativeReviewAgent}.java`、`core/agent/impl/*.java`、`config/ReviewAgentConfig.java`、`core/model/ReviewContext.java`、`core/toolcalling/ToolEquippedAgent.java`；`agent-kit / agent/*.java`
 > 🎯 导读问题：**"你的 Agent 接口为什么只有四个方法？"**（这一问考的是接口设计的分寸感）
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0086.svg" alt="🎯 导读问题："你的 Agent 接口为什么只有四个方法？"（这一问考的是接口设计的分寸感）" />
