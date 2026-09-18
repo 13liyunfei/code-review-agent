@@ -1,6 +1,5 @@
 # 第 45 讲 · 工具机制：让 Agent 的手伸出去而不伸过头
 
-> 📌 本讲代码锚点：`agent-kit/src/main/java/com/codereview/kit/toolcalling/ToolCallingLoop.java`（工具调用决策循环）、`kit/tool/GuardedTool.java`（带护栏的工具包装）、`kit/tool/BuiltinTools.java`、`kit/mcp/McpClient.java` / `McpToolAdapter.java` / `HttpMcpClient.java`（MCP 接入）、`code-review-agent/src/main/java/com/codereview/agent/core/toolcalling/ToolEquippedAgent.java`（可选工具装饰器）
 > 🎯 导读问题：**"Agent 怎么调用你的工具？"** ——只答"模型返回 function_name,我查表调用"是及格;能答出"**工具调用是一个带护栏的循环:声明 → 校验 → 调用 → 降级**,每个工具都有能力边界和失败兜底"才算真的做过。
 
 > **为什么归 Harness 工程**：工具是 Agent 的"手"——它能碰到的每一样东西都是能力。**Harness 的三个字,在工具机制上就是:让手伸得出去(能接各种工具),又伸不过头(每个工具能干什么、干砸了怎么办都明确)。**

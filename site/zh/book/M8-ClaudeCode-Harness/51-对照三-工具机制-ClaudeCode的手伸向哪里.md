@@ -1,6 +1,5 @@
 # 第 51 讲 · 工具机制对照：Claude Code 让模型的"手"伸向哪里
 
-> 📌 本讲代码锚点：`agent-kit/src/main/java/com/codereview/kit/toolcalling/ToolRegistry.java`（工具注册表）、`agent-kit/com/codereview/kit/planning/TaskPlanner.java`（规划）、`code-review-agent/.../core/agent/DeclarativeReviewAgent.java`（声明式工具 Agent）、`code-review-agent/.../core/planning/TaskPlanningSupport.java`
 > 🎯 导读问题：**"Claude Code 的工具范围和我们的 Agent 有什么本质差别？"** ——能答出"差别不在『会不会调工具』，而在**『工具的边界由谁划、伸向什么对象』**：我们让工具伸向 API/库，是**受控的、可审计的**；Claude Code 让工具伸向真终端，是**外放的、但同样不越界**。**工具机制的灵魂是『边界』，不是『能力清单』。"**
 
 > **模块八 · 进入方式**：本讲对照第三道机制——**工具**。第 45 讲的工具系统让 Agent 的手（工具）伸出去干活。Claude Code 是"终端里的 Agent"，它的工具天然要碰真文件系统、真命令——这是工具机制的极端形态。我们看它的**公开工具清单与授权模式**，然后对照你的 `ToolRegistry` 那个"声明 + 能力 + 边界"的骨架。

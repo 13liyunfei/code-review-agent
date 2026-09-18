@@ -1,6 +1,5 @@
 # 第 30 讲 · LLM 网关设计：三模块分层与"能被人引进去"的边界
 
-> 📌 本讲代码锚点：`token-factory / pom.xml`（模块划分）、`token-factory-core/pom.xml`、`token-factory-client/pom.xml`、`token-factory-server/pom.xml`（依赖对比）、`server/config/GatewayConfig.java`（唯一装配点）、`server/config/WebConfig.java`、`server/api/ChatController.java`
 > 🎯 导读问题：**"你怎么设计一个给全公司用的 LLM 网关？"** ——90% 的人会答"加鉴权、加限流、加缓存"，但真正决定这个网关能不能落地的，是**依赖方向**。
 
 > **视角切换声明**：模块一里我们是**调用方**——怎么把一个 LLM 调对、调稳。从这一讲开始我们是**平台方**——怎么把它做成给整个团队用的基础设施。同一套 `token-factory`，两个视角。第 02–07 讲里你看到的 `TokenFactoryClient` 是它的**外表**；这一讲拆它的**骨架**。

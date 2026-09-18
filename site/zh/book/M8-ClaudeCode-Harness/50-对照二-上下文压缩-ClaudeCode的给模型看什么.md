@@ -1,6 +1,5 @@
 # 第 50 讲 · 上下文压缩对照：Claude Code 的"给模型看什么"
 
-> 📌 本讲代码锚点：`code-review-agent/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java`（上下文三级收窄 + 末尾追加【历史经验参考】）、`core/rag/StructuredChunker.java`（结构感知切块）、`core/rag/TextTokenizer.java`（中文 bigram 分词）、`core/rag/KnowledgeStore.java`（检索契约）、`agent-kit/src/main/java/com/codereview/kit/rag/RagPipeline.java`（混合检索编排）
 > 🎯 导读问题：**"Claude Code 多轮长会话，上下文怎么处理？"** ——能答出"它不是无限塞，而是**分级收紧 + 分层**：最新的全量、中间的压缩、老的在会话记录里可回查"，就算读懂了。**本讲的判据是：上下文管理的胜负手不在『挤进多少』，而在『选定哪些不重要』——压缩策略必须可判定，不能是碰运气。**
 
 > **模块八 · 进入方式**：这是对照六讲的第二讲。第 44 讲把上下文压缩在 `RagContextBuilder` 里读完了一遍——检索 7 步 + 三级收窄 + 末尾追加。这一讲用 Claude Code 当第二参照物：一个**长会话终端 Agent**，怎么在窗口有限的现实里决定"给模型看什么、留什么、丢什么"。我们只看它的**公开行为**，机制锚点仍落在你能指着行的自家仓库。

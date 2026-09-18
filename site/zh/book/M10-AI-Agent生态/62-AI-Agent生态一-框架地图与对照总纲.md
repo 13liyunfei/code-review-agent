@@ -1,6 +1,5 @@
 # 第 62 讲 · 框架总纲：从"你的 Agent"到"框架里的 Agent"
 
-> 📌 本讲代码锚点：`agent-kit/src/main/java/com/codereview/kit/agent/`（Agent 抽象与输出）、`kit/planning/TaskPlanner.java`（规划）、`kit/toolcalling/ToolRegistry.java`（工具）、`code-review-agent/.../core/coordinator/impl/CompletableFutureCoordinator.java`（并行编排）。**你已经亲手建了一个 Agent——这一讲教你用『框架地图』的眼光，看懂 LangChain/LangGraph/DeepAgents 这些主流框架里，同一套东西长什么样。**
 > 🎯 导读问题：**"LangChain、LangGraph、DeepAgents 分别是什么？跟你自己写的 Agent 比？"** ——能答出"它们不是魔法，是把『模型调用 + 工具 + 记忆 + 编排』打包成框架；LangChain 偏链、LangGraph 偏图、DeepAgents 偏多 Agent，而你在 `agent-kit` + `code-review-agent` 里建的是『针对审查场景自己编排的同类东西』"——就把"看过框架"与"真做过"的距离收在同一个尺度里。**本讲判据：看任何 Agent 框架，先问『它把六大 Harness 机制堵成了什么』，而不是被它的 marketing 带走。**
 > 🎯 进阶追问（面向系统架构师）：**"框架的『抽象』到底替我省了什么、又偷走了什么？"** ——能答出"它在入口处省掉的是『我不重写通用编排』，但代价是『隐式魔法』——链/图的跳转逻辑、记忆的存取、工具的绑定都藏在框架内部，出了错你排查的不是自己的代码而是框架；所以选框架的第一原则是**抽象不能吞掉你能 debug 的可见性**"——就能把"用不用框架"从口味问题变成工程判断。
 

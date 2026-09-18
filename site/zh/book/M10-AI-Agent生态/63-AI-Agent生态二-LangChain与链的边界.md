@@ -1,6 +1,5 @@
 # 第 63 讲 · LangChain 与"链"的边界
 
-> 📌 本讲代码锚点：`agent-kit/.../core/reader/`、`com/codereview/kit/planning/TaskPlanner.java`（步骤化规划）、`code-review-agent/java`（一条固定管线的审查流程）。**LangChain 把 Agent 循环打包成『链』——你用 `agent-kit` + code-review-agent 建的那条『取→析→审→报』管线，正是同一类思维。本节读清链模型的代价与边界。**
 > 🎯 导读问题：**"LangChain 的 Chain 有什么好处和坑？"** ——能答出"好是**把固定流程做成可复用、每步单独改**；坑是**默认『链』不擅长有分支回退的循环**，你想要的 Plan→Execute→Observe 往往需要显式做闭环，否则就退化成顺序调用"——就既懂它又知道它缺什么。**本讲判据：链适合『固定管线』，不适合『要回看、要试错』的 Agent 核心循环。**
 > 🎯 进阶追问（面向 harness 工程专家）：**"LangChain 的 AgentExecutor 循环骨子里是哪个算法？它的『记忆』有哪几种省 token 的策略？"** ——能答出"AgentExecutor 跑的是 **ReAct** 循环：Thought→Action→Action Input→Observation 反复，直到模型说 Finished；记忆有从『无限累加'的 Buffer 到『窗口截断'的 Windowed，再到『自动摘要'的 Summary / SummaryBuffer，后者把长对话**压成摘要再拼最近几轮**——这四档记忆策略，就是第 44 讲上下文压缩在框架里的现成实现"——就把字符串级认识升到了机制级。
 

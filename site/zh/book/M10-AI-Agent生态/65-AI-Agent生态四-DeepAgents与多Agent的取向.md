@@ -1,6 +1,5 @@
 # 第 65 讲 · DeepAgents 与"多 Agent"的取向
 
-> 📌 本讲代码锚点：`agent-kit/.../kit/coordinator/CompletableFutureCoordinator.java`（并行编排 + 聚合）、`kit/agent/`（Agent 抽象）、第 14–18 讲（为什么多 Agent / 拓扑 / 编排 / 仲裁）、M3 多 Agent 协作。**DeepAgents 是『把多 Agent 协作做成默认值』的框架取向：一个协调者调度多个各司其职的子 Agent。你在 `code-review-agent` 里建的星型汇聚（1 协调者 + 5 审查 Agent + 仲裁）正是这个取向的落地实例。**
 > 🎯 导读问题：**"LangGraph 和 DeepAgents（多 Agent 框架）是一回事吗？"** ——能答出"不是。**LangGraph 管的是『单次任务的编排原语』（图，可单 Agent 也可多 Agent）；DeepAgents/多 Agent 框架管的『要不要拆多个 Agent 分工、谁来调度、结果怎么聚』（多 Agent 的架构取向）**。两者是不同维度，LangGraph 可以用来实现多 Agent，但多 Agent 不等于图"——就把最容易混的一点讲清了。**本讲判据：多 Agent 不是默认选项，是一道『要不要拆、拆了怎么聚、谁来仲裁』的结构性判据（沿用第 14 讲）。**
 > 🎯 进阶追问（面向系统架构师）：**"DeepAgents 的『上下文隔离』和『结构化交接』是怎么保证多个 Agent 一起干活不互相污染、结果还能可靠汇总的？"** ——能答出"它给每个子 Agent 一张**任务卡（task card）**，只装它该看的上下文 + 工具 + 一份**约定好 schema 的交付物**；子 Agent 之间**不共享完整上下文、不直接对话**，靠**结构化对象**回传结果，必要时借**共享文件系统**当工作内存——这三角（隔离上下文 + 结构化交接 + 文件当共享态）就是多 Agent 能并行还不乱的根本"——就把"多 Agent"从"多调几个模型"讲成了"一套隔离与通信设计"。
 

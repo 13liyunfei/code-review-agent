@@ -1,6 +1,5 @@
 # 第 24 讲 · 向量化与 pgvector：一个默认值不一致，如何作废整张表
 
-> 📌 本讲代码锚点：`code-review-agent / config/InfrastructureConfig.java`（两个 Bean、两个默认值）、`core/memory/PgVectorMemoryStore.java`（`createTable` / `migrate` / `embeddingDim` / `ensureVectorIndex`）、`core/llm/SimpleHashEmbeddingClient.java`（`DIM = 256`）、`application.yml:95-108`
 > 🎯 导读问题：**"你们的向量库怎么建的？换嵌入模型怎么办？"** ——这一讲给你一个能讲 5 分钟的事故复盘。
 > 🔬 本讲涉及的 pgvector 行为在 **PostgreSQL 17.11 + pgvector 0.8.6** 上验证。
 

@@ -1,6 +1,5 @@
 # 第 44 讲 · 上下文压缩机制：把 token 花在刀刃上
 
-> 📌 本讲代码锚点：`code-review-agent/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java`（检索链路 7 步 + 末尾追加【历史经验参考】）、`core/rag/StructuredChunker.java`（结构感知切块 700 字符/15% 重叠）、`core/rag/TextTokenizer.java`（中文 bigram + 标识符子词）、`core/rag/KnowledgeStore.java`（契约分层）、`main/java/com/codereview/agent/core/memory/MemoryEntry.java`（记忆条目）、`agent-kit/src/main/java/com/codereview/kit/rag/RagPipeline.java`（混合检索编排）
 > 🎯 导读问题：**"你的 Agent 上下文为什么不够用？"** ——只答"上下文窗口就那么大,超了截断"是及格;能答出"**上下文管理 = 准入 + 分层 + 投放**三件事,截断是最后的手段不是第一手段"才算真的做过 Agent 工程。
 
 > **为什么这一讲归在 Harness 工程**：模块四你已经把 RAG 做好了——切块、向量化、召回、重排。这一讲换个角度问**钱的事**：模型对上下文是**按 token 计费的**,而"给模型看什么"这件事,本质是**用最少的 token 达成最高的正确率**。**Harness 视角 = 把"上下文"当成一种稀缺的、有价的资源来管理,而不是当成一个能无限塞的口袋。**

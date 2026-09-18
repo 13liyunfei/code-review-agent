@@ -1,6 +1,5 @@
 # 第 52 讲 · 权限机制对照：Claude Code 的边界谁批准、凭什么
 
-> 📌 本讲代码锚点：`code-review-agent/.../tenant/TeamResolver.java`（团队解析 + 多租户基线叠加）、`code-review-agent/.../core/security/ContentInjectionDetector.java`（可判定守卫）、`code-review-agent/.../core/security/DiffInputGuard.java`（输入定界）、`agent-kit/src/main/java/com/codereview/kit/...`（能力边界相关）
 > 🎯 导读问题：**"Claude Code 的权限模型，和我们 Agent 的多租户授权比，强在哪弱在哪？"** ——能答出"强在把『是否可信』的判断**拆成一层层可叠加的决策**；弱在它是个人助手、没有『团队基线』这种半结构化的分层。**权限机制的真问题从来不是『能不能做』，而是『凭什么这次能做』——必须可回溯到某条规则。"**
 
 > **模块八 · 进入方式**：这是第四讲，对照第六道机制（把内存序提到此处）——**权限**。第 46 讲用 `TeamResolver` 讲多租户授权：内置基线 + 全局基线 + 团队私有叠加。Claude Code 是**个人终端权限**的极端样本——它不是团队系统，它只有"这个用户 + 这台机器"。我们看它的公开授权行为如何把"能不能"做成一层层可叠加的决策，然后对照你的基线叠加。

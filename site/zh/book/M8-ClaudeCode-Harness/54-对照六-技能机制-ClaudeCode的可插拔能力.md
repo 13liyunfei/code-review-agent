@@ -1,6 +1,5 @@
 # 第 54 讲 · 技能机制对照：Claude Code 的可插拔扩展能力
 
-> 📌 本讲代码锚点：`code-review-agent/.../core/skill/SkillRegistry.java`（技能注册/启停/净化）、`docs/interview-walkthrough.md`（技能可灰度的工程化证据）、`token-factory` / `agent-kit` 相关能力装配点
 > 🎯 导读问题：**"Claude Code 的技能/插件机制，和我们的 SkillRegistry 比，核心一致点在哪？"** ——能答出"核心一致在**『能力是名称+入口+声明的可插拔单元』，而不是写死的 if**；Claude Code 的优势在成长生态，我们的优势在『声明可用、可灰度、可校验』的工程化。真正该守住的是前者。"**
 
 > **模块八 · 进入方式**：这是最后一讲，对照第六道机制——**技能**。第 48 讲用 `SkillRegistry` 讲"把能力做成可插拔、可声明、可灰度"。Claude Code 的技能/插件机制是"终端 Agent 的开放扩展"形态：第三方可以给一个 Agent 加能力。我们看它的公开形态（技能=名称+描述+指令的声明单元），然后对照你的 `SkillRegistry` 那个"注册 + 声明 + 启停"的骨架。

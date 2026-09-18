@@ -1,6 +1,5 @@
 # 第 22 讲 · RAG 全景：向量检索只是其中一环
 
-> 📌 本讲代码锚点：`code-review-agent / core/memory/RagContextBuilder.java`（检索链路 7 步）、`core/memory/KnowledgeBaseInitializer.java`（写入链路）、`core/rag/KnowledgeStore.java`（契约分层）
 > 🎯 导读问题：**"你的 RAG 为什么效果不好？"** ——这一讲给你一张"病灶定位图"，把笼统的"效果不好"拆成可定位、可测量的 7 个环节。
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0038.svg" alt="🎯 导读问题："你的 RAG 为什么效果不好？" ——这一讲给你一张"病灶定位图"，把笼统的"效果不好"拆成可定位、可测量的 7 个环节。" />

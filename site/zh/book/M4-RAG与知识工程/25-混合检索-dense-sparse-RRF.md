@@ -1,6 +1,5 @@
 # 第 25 讲 · 混合检索：为什么"向量召回"会漏，以及 RRF 到底在奖励什么
 
-> 📌 本讲代码锚点：`code-review-agent / core/rag/PgKnowledgeStore.java`（`hybridSearch`，`:168-307`）、`core/rag/InMemoryKnowledgeStore.java`（`hybridSearch` + `bm25Scores`）、`core/rag/TextTokenizer.java`（`toTsQueryOr`）
 > 🎯 导读问题：**"为什么用混合检索？RRF 的 K 是干什么的？"** ——这一讲把"两路融合"从"配置项"讲回"数学"。
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0040.svg" alt="🎯 导读问题："为什么用混合检索？RRF 的 K 是干什么的？" ——这一讲把"两路融合"从"配置项"讲回"数学"。" />

@@ -1,6 +1,5 @@
 # 第 49 讲 · 模型调用对照：Claude Code 的"连谁"与"不连谁"
 
-> 📌 本讲代码锚点：`token-factory-core/src/main/java/io/tokenfactory/core/routing/RoutingEngine.java`（路由引擎）、`core/routing/PriorityRouteStrategy.java`、`core/circuit/CircuitBreakerRegistry.java`、`core/retry/DefaultRetryClassifier.java`、`server/upstream/TokenUsageRecorder.java`（用量上报）
 > 🎯 导读问题：**"拿 Claude Code 举例，它的模型调用机制和我们有什么一样、有什么不一样？"** ——能答出"机制在**别家也要有**、但**落点随场景变**：我们为『网关给别人调』建路由表，Claude Code 为『一个终端里的个人助手』把决策链压到最少配置、最多兜底"，就算把机制和场景分开了。**本讲要建立的判据是：机制不变，但『复杂度该放在哪一层』由产品形态决定。**
 
 > **模块八 · 进入方式**：这一讲是**对照进阶模块**——前 43–48 讲把六大机制在 `token-factory` / `code-review-agent` 里读完了一遍。这一模块换一个参照物：**Claude Code**。它是最流行的终端 Agent ，也是把"模型调用 / 上下文压缩 / 工具 / 权限 / 记忆 / 技能"六大机制**全部做进一个产品**的典型。我们不讨论它的闭源内部实现，只讨论**公开形态与公开行为**：它暴露了什么配置、在什么条件下拒绝了什么——然后用第 43–48 讲的机制框架去对答案。**对出来的每一行，你都已在自家代码里见过。**

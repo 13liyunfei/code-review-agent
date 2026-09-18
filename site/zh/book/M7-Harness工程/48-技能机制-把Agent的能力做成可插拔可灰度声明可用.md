@@ -1,6 +1,5 @@
 # 第 48 讲 · 技能机制：把 Agent 的能力做成可插拔、可灰度、声明可用
 
-> 📌 本讲代码锚点：`agent-kit/src/main/java/com/codereview/kit/extension/ExtensionPoint.java`（扩展点）、`kit/extension/ExtensionRegistry.java`（扩展注册表）、`code-review-agent/src/main/java/com/codereview/agent/core/skill/Skill.java`（技能契约）、`core/agent/DeclarativeReviewAgent.java`（声明式 Agent）、`core/admin/CustomAgentStore.java`（业务方自定义 Agent）、`config/ReviewAgentConfig.java`（能力开关：`review.planning.enabled` / `review.reflection.enabled` / `review.eval.enabled` / `review.tools.agent-loop.enabled`，默认关）
 > 🎯 导读问题：**"你的 Agent 怎么扩展？"** ——只答"做接口、加实现"是及格;能答出"**扩展要三层：能力封装（Skill）→ 能力挂载（ExtensionPoint）→ 能力灰度（Feature Flag）,并且"声明式"让非核心开发者也能写 Agent**"才算真的把它做成了"平台"而不是"自己的一亩三分地"。
 
 > **为什么归 Harness 工程**：六讲到这里收口。技能机制回答的是"**Agent 的能力怎么被包起来、怎么被打开、怎么被安全地放量**"——这是 Harness 工程里最接近"平台"的一环,也是你从一个写 Agent 的人,变成一个"让别人也能写 Agent"的人的分水岭。
