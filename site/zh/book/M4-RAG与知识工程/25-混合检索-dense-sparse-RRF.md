@@ -2,7 +2,7 @@
 
 > 🎯 导读问题：**"为什么用混合检索？RRF 的 K 是干什么的？"** ——这一讲把"两路融合"从"配置项"讲回"数学"。
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0040.svg" alt="🎯 导读问题："为什么用混合检索？RRF 的 K 是干什么的？" ——这一讲把"两路融合"从"配置项"讲回"数学"。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0040.svg" alt="🎯 导读问题：&quot;为什么用混合检索？RRF 的 K 是干什么的？&quot; ——这一讲把&quot;两路融合&quot;从&quot;配置项&quot;讲回&quot;数学&quot;。" />
 
 
 > **图 25-0**　本讲地图：混合检索的正当理由是盲区互补：稠密路漏精确术语，稀疏路漏同义不同词。分数不可加、排名才可加，RRF 用 Σw/(k+rank) 融合，k=60 压平头部，0.7 是信任比。

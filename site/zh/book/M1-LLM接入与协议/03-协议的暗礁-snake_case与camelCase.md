@@ -2,7 +2,7 @@
 
 > 🎯 导读问题：**"你怎么保证接口契约不被静默破坏？"**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0025.svg" alt="🎯 导读问题："你怎么保证接口契约不被静默破坏？"" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0025.svg" alt="🎯 导读问题：&quot;你怎么保证接口契约不被静默破坏？&quot;" />
 
 
 > **图 3-0**　本讲地图：同一个 JVM 里两套命名并存，在全局 `ObjectMapper` 上设策略会污染自有端点；判据是**让命名策略跟着「是否在模拟外部协议」走**，由每个 DTO 自己声明。

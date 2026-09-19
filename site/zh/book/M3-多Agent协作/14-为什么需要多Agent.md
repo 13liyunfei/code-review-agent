@@ -2,7 +2,7 @@
 
 > 🎯 导读问题：**"你为什么用多 Agent？一个 Agent 不够吗？"**（这一问考的是判断力，不是技术）
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0069.svg" alt="🎯 导读问题："你为什么用多 Agent？一个 Agent 不够吗？"（这一问考的是判断力，不是技术）" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0069.svg" alt="🎯 导读问题：&quot;你为什么用多 Agent？一个 Agent 不够吗？&quot;（这一问考的是判断力，不是技术）" />
 
 
 > **图 14-0**　本讲地图：多 Agent 不是默认选项，而是一道四级判据：判断标准、失败模式、真实冲突、独立观测。任一不满足就不该拆，通过后还要认下成本翻 N 倍，以及仲裁、编排、聚合三个新问题。

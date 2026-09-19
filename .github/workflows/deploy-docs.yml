@@ -35,8 +35,19 @@ jobs:
         run: npm install
         working-directory: site
 
+      # 专栏各讲的图是内联 <img>。alt 里混进一个裸双引号就会让 markdown-it
+      # 认不出 HTML 块 → 整行被转义成文本，读者看到的是源码而不是图，
+      # 而构建照样退出 0。所以构建前后各判一次，把这类静默降级拦在部署之前。
+      - name: Verify book figure tags (source)
+        run: python3 .vitepress/verify_book_figures.py --selftest && python3 .vitepress/verify_book_figures.py --md
+        working-directory: site
+
       - name: Build site
         run: npm run build
+        working-directory: site
+
+      - name: Verify book figures in build output
+        run: python3 .vitepress/verify_book_figures.py --dist .vitepress/dist
         working-directory: site
 
       - name: Setup Pages

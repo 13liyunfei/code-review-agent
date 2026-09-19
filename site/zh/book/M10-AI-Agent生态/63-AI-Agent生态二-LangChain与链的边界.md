@@ -5,7 +5,7 @@
 
 > **模块十 · 进入方式**：上一讲给了四问尺子（循环/工具/记忆/多 Agent）。这一讲用它把 LangChain 照清楚——它最典型的形态是"链（Chain）"：把一次任务切成固定顺序的步骤。它是理解后续 Graph 的基础：**先看"链"省了什么，才懂"图"补了什么。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0108.svg" alt="模块十 · 进入方式：上一讲给了四问尺子（循环/工具/记忆/多 Agent）。这一讲用它把 LangChain 照清楚——它最典型的形态是"链（Chain）"：把一次任务切成固定顺序的步骤。它是理解后续 Graph 的基础：先看"链"省了什么，才懂"图"补了什么。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0108.svg" alt="模块十 · 进入方式：上一讲给了四问尺子（循环/工具/记忆/多 Agent）。这一讲用它把 LangChain 照清楚——它最典型的形态是&quot;链（Chain）&quot;：把一次任务切成固定顺序的步骤。它是理解后续 Graph 的基础：先看&quot;链&quot;省了什么，才懂&quot;图&quot;补了什么。" />
 
 
 > **图 63-0**　本讲地图：LangChain 把 Agent 循环打包成"链"——固定顺序步骤，可复用、每步单独改，其 LCEL 用 `prompt | llm | parser` 管道把件串起来。代价是默认不擅长有分支回退的循环。你在 `agent-kit`+`code-review-agent` 里那条管线（取→析→审→报）是同一类思维，但**你自己补了闭环（第 8 讲）**。判据：链适固定管线，不适要回看的循环。
