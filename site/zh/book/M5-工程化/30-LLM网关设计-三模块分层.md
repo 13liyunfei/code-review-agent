@@ -8,7 +8,6 @@
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0109.svg" alt="---" />
 
-
 > **图 30-0**　本讲地图：分层按依赖方向切，判据是没有框架能否跑。core 只依赖 slf4j-api，client 零 Spring，Spring 只在 server 外层，装配点唯一。
 
 ## 一、痛点
@@ -151,14 +150,6 @@ token-factory-server    ← Spring Boot 壳（web + jdbc + flyway + actuator + P
 答案是一个**唯一的装配点**——`GatewayConfig`。它的类注释就是答案：
 
 <img class="mermaid-svg" src="/zh/book-assets/diag-0110.svg" alt="答案是一个唯一的装配点——`GatewayConfig`。它的类注释就是答案：" />
-
-                new DefaultRetryClassifier(properties.getMaxAttempts(), backoff),
-                breakerRegistry,
-                millis -> { /* sleep */ },
-                System::currentTimeMillis);
-    }
-}
-```
 
 **规律很清晰：所有 `new` 都发生在这一个文件里。** `core` 里的类全部是 `final class` + 构造器注入（第 34 讲会看到 `RoutingEngine` 的 7 个构造参数），它们**不知道 Spring 的存在**，是 Spring 主动来"认识"它们。
 

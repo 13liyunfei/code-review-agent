@@ -308,6 +308,10 @@ export default
         text: "65-AI-Agent生态四-DeepAgents与多Agent的取向",
         link: "/zh/book/M10-AI-Agent生态/65-AI-Agent生态四-DeepAgents与多Agent的取向"
       },
+      {
+        text: "66-AI-Agent生态五-Jev与决策层-把判断从生成里拆出来",
+        link: "/zh/book/M10-AI-Agent生态/66-AI-Agent生态五-Jev与决策层-把判断从生成里拆出来"
+      },
     ]
   },
 ]
