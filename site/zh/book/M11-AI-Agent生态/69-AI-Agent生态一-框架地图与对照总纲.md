@@ -1,18 +1,17 @@
-# 第 62 讲 · 框架总纲：从"你的 Agent"到"框架里的 Agent"
+# 第 69 讲 · 框架总纲：从"你的 Agent"到"框架里的 Agent"
 
 > 🎯 导读问题：**"LangChain、LangGraph、DeepAgents 分别是什么？跟你自己写的 Agent 比？"** ——能答出"它们不是魔法，是把『模型调用 + 工具 + 记忆 + 编排』打包成框架；LangChain 偏链、LangGraph 偏图、DeepAgents 偏多 Agent，而你在 `agent-kit` + `code-review-agent` 里建的是『针对审查场景自己编排的同类东西』"——就把"看过框架"与"真做过"的距离收在同一个尺度里。**本讲判据：看任何 Agent 框架，先问『它把六大 Harness 机制堵成了什么』，而不是被它的 marketing 带走。**
 > 🎯 进阶追问（面向系统架构师）：**"框架的『抽象』到底替我省了什么、又偷走了什么？"** ——能答出"它在入口处省掉的是『我不重写通用编排』，但代价是『隐式魔法』——链/图的跳转逻辑、记忆的存取、工具的绑定都藏在框架内部，出了错你排查的不是自己的代码而是框架；所以选框架的第一原则是**抽象不能吞掉你能 debug 的可见性**"——就能把"用不用框架"从口味问题变成工程判断。
 
-> **模块十 · 进入方式**：海报里这一块叫 **AI Agent**，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成"Python 框架教程"会跟你这套 **Java 自建系统**的专栏脱节。所以本模块用 **『框架地图 + 对照』**视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去**读懂这些框架各自的设计取向**。读完你能**不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。**
+> **模块十一 · 进入方式**：海报里这一块叫 **AI Agent**，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成"Python 框架教程"会跟你这套 **Java 自建系统**的专栏脱节。所以本模块用 **『框架地图 + 对照』**视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去**读懂这些框架各自的设计取向**。读完你能**不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0107.svg" alt="模块十 · 进入方式：海报里这一块叫 AI Agent，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成&quot;Python 框架教程&quot;会跟你这套 Java 自建系统的专栏脱节。所以本模块用『框架地图 + 对照』视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去读懂这些框架各自的设计取向。读完你能不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0132.svg" alt="模块十一 · 进入方式：海报里这一块叫 AI Agent，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成&quot;Python 框架教程&quot;会跟你这套 Java 自建系统的专栏脱节。所以本模块用 『框架地图 + 对照』视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去读懂这些框架各自的设计取向。读完你能不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。" />
 
-
-> **图 62-0**　本讲地图：Agent 框架不是魔法，是把六大 Harness 机制（模型/工具/记忆/编排…）打包成框架。你已经在 `agent-kit`+`code-review-agent` 里亲手建过针对审查场景的同类东西。看任何框架，先问"它把六大机制堵成了什么"，而不是被 marketing 带走。
+> **图 69-0**　本讲地图：Agent 框架不是魔法，是把六大 Harness 机制（模型/工具/记忆/编排…）打包成框架。你已经在 `agent-kit`+`code-review-agent` 里亲手建过针对审查场景的同类东西。看任何框架，先问"它把六大机制堵成了什么"，而不是被 marketing 带走。
 
 ## 一、痛点
 
-你读完前面 61 讲，已经**亲手建了一个 Agent**——有工具、有记忆、有多 Agent 协作、有 Harness 六大机制。这让你处在一个微妙的境地：
+你读完前面 68 讲，已经**亲手建了一个 Agent**——有工具、有记忆、有多 Agent 协作、有 Harness 六大机制。这让你处在一个微妙的境地：
 
 面对"LangChain / LangGraph / DeepAgents"这些名字，你会有两种不适：
 
@@ -28,14 +27,14 @@
 
 ### 2.1 框架到底替你打包了什么
 
-拆开任何一个 Agent 框架，你会发现它不是"新东西"，而是**把你在前 61 讲建过的机制打包**成了接口：
+拆开任何一个 Agent 框架，你会发现它不是"新东西"，而是**把你在前 68 讲建过的机制打包**成了接口：
 
 | 框架的组件（常见命名）| 对应你已建的机制 |
 |---|---|
 | LLM 调用封装 | M1 模型调用 / token-factory |
 | Tool / Function 定义 | M2 工具系统 / `ToolRegistry` |
 | Memory / 会话记忆 | M2 记忆 / 第 10、47 讲 |
-| Chain / Agent loop | Agent 循环（第 8 讲）|
+| Chain / Agent loop | Agent 循环（第 08 讲）|
 | 多 Agent 编排 | M3 多 Agent 协作 / `CompletableFutureCoordinator` |
 
 **关键认知**：你用 `agent-kit` 建的 `ToolRegistry`、`TaskPlanner`、`CompletableFutureCoordinator`，和 LangChain 的 `Tool`、`Planner`、`AgentExecutor`、LangGraph 的 `Graph/Node/Edge`，**是同一套抽象的不同命名**。你"自己写"不是"没有框架",而是**为一个具体场景手搭了轻量编排**；框架则是**可复用的通用编排**。
@@ -85,7 +84,7 @@
 
 具体问四个问题，就能快速给一个框架"定位"（无论它多花哨）：
 
-1. **循环**：它默认是"调一次"还是"闭环循环"？（对应第 8 讲）
+1. **循环**：它默认是"调一次"还是"闭环循环"？（对应第 08 讲）
 2. **工具**：工具怎么声明、怎么校验、怎么防越界？（对应第 45/51 讲）
 3. **记忆/上下文**：它怎么处理长上下文？（对应第 44/47 讲）
 4. **多 Agent**：它默认单 Agent 还是支持编排？编排是星型还是图？（对应第 15 讲）

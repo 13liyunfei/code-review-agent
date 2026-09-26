@@ -6,8 +6,7 @@
 
 ---
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0013.svg" alt="---" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0108.svg" alt="图 48-0　本讲地图：技能机制四步——封装（Skill）→ 挂载（ExtensionPoint/Registry）→ 灰度（Feature Flag，默认关）→ 声明式（配置即 Agent）。判据：接一个新的能力是&quot;加&quot;不是&quot;改&quot;主流程。" />
 
 > **图 48-0**　本讲地图：技能机制四步——封装（Skill）→ 挂载（ExtensionPoint/Registry）→ 灰度（Feature Flag，默认关）→ 声明式（配置即 Agent）。判据：接一个新的能力是"加"不是"改"主流程。
 
@@ -37,7 +36,7 @@
 | 契约字段 | 回答的问题 | 被谁消费 |
 |---|---|---|
 | 唯一标识 + 名称 | 这个能力叫什么、怎么被引用 | 注册表、配置 |
-| 能力描述 | 这个能力能干什么 | **模型**（决定它是否被选中，同第 5 讲的 `description`） |
+| 能力描述 | 这个能力能干什么 | **模型**（决定它是否被选中，同第 05 讲的 `description`） |
 | 触发/适用条件（`supports()`） | 什么场景下才该用这个能力 | 调度器（省 LLM，同第 44 讲的准入） |
 | 行为契约 | 输入什么、输出什么、边界在哪 | 调用方 |
 
@@ -132,7 +131,7 @@ review.tools.agent-loop.enabled  default false
 
 **② 技能封装的终局形态：把模型、工具、权限、终止条件打包成一个可调用的 runtime。** 看 Claude Code 的 subagent/plugin 声明（YAML frontmatter）：`name / description / model / effort / maxTurns / disallowedTools`——**一个声明文件同时指定了用哪个模型、花多少力气、最多转几圈、禁止哪些工具**。这超越了"技能 = 一段提示词"的朴素理解：**成熟的技能封装是把"模型选型 + 工具白名单 + 权限边界 + 循环终止条件 + 上下文加载时机"整体打包**。你的 CustomAgentDef 内容槽+骨架设计已经在路上，对照这个字段清单可以查缺：你的声明式 Agent 能指定 maxTurns 和 disallowedTools 吗？
 
-**③ 生态侧的对照样本**：OpenCode 读项目根的 `opencode.md`（等价于 CLAUDE.md 的开源平替）；Aider 的 **Architect mode** 把规划模型与执行模型分离——**"想"和"做"用不同模型**，这与第 49 讲 Claude Code 的主/快模型分级路由是同族思想。生态的共识正在收敛：**能力封装单元 = 声明文件 + 隔离上下文 + 受限工具集 + 明确终止条件。**
+**③ 生态侧的对照样本**：OpenCode 读项目根的 `opencode.md`（等价于 CLAUDE.md 的开源平替）；Aider 的 **Architect mode** 把规划模型与执行模型分离——**"想"和"做"用不同模型**，这与第 56 讲 Claude Code 的主/快模型分级路由是同族思想。生态的共识正在收敛：**能力封装单元 = 声明文件 + 隔离上下文 + 受限工具集 + 明确终止条件。**
 
 > **延伸阅读**
 > - Anthropic《Steering Claude Code: CLAUDE.md, Skills, Hooks, Rules, Subagents》：claude.com/blog
@@ -189,4 +188,4 @@ review.tools.agent-loop.enabled  default false
 
 **模块七 · 模块小结**：六大机制——模型调用、上下文压缩、工具、权限、记忆、技能——其实是一条线的六个切面:**把 Agent 的每一个"决定"都变成可判定、有边界、可审计、能灰度的东西。** 前 42 讲你学会"让一个系统能用",模块七你学会"让理解一个系统的方式能复用"。
 
-**下一站**：模块八用 Claude Code 这个真实的、每天都在用的 Agent 产品做对照——**同样六大机制，它是怎么做的，你又是怎么做的**，把"原理"落成"可对比的工程实践"。
+**下一站**：模块九用 Claude Code 这个真实的、每天都在用的 Agent 产品做对照——**同样六大机制，它是怎么做的，你又是怎么做的**，把"原理"落成"可对比的工程实践"。

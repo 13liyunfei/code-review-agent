@@ -2,8 +2,7 @@
 
 > 🎯 导读问题：**"你的 Agent 接口为什么只有四个方法？"**（这一问考的是接口设计的分寸感）
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0086.svg" alt="🎯 导读问题：&quot;你的 Agent 接口为什么只有四个方法？&quot;（这一问考的是接口设计的分寸感）" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0041.svg" alt="🎯 导读问题：&quot;你的 Agent 接口为什么只有四个方法？&quot;（这一问考的是接口设计的分寸感）" />
 
 > **图 16-0**　本讲地图：抽象不是三选一而是叠加：窄接口、厚抽象类、声明式三者并存。生命周期只有构造、supports、review、封装四步；memoryId 缺了团队与仓库，是契约承诺大于实现的典型。
 
@@ -435,8 +434,7 @@ private String memoryIdFor(Map<String, Object> vars) {
 
 **业务方能填什么？** 看 `CustomAgentDef`：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0087.svg" alt="业务方能填什么？ 看 `CustomAgentDef`：" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0042.svg" alt="业务方能填什么？ 看 `CustomAgentDef`：" />
 
 **三个内容槽：描述、要点、级别偏好。**
 

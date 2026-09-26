@@ -1,11 +1,11 @@
 # 第 05 讲 · Function Calling：让模型能干活
 
+
 > 🎯 相关面试考点：**"你的 Agent 是真在用工具，还是只在 prompt 里假装有工具？"**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0014.svg" alt="🎯 相关面试考点：&quot;你的 Agent 是真在用工具，还是只在 prompt 里假装有工具？&quot;" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0011.svg" alt="🎯 相关面试考点：&quot;你的 Agent 是真在用工具，还是只在 prompt 里假装有工具？&quot;" />
 
-
-> **图 5-0**　本讲地图：模型只看得到三个字符串，其中 `description` 决定它用不用这个工具；选不中工具时要把错误变成**可纠正的观察**，而不是抛异常。
+> **图 05-0**　本讲地图：模型只看得到三个字符串，其中 `description` 决定它用不用这个工具；选不中工具时要把错误变成**可纠正的观察**，而不是抛异常。
 
 ## 一、痛点
 
@@ -89,10 +89,9 @@ public static ToolCallingLoop.LoopResult runWithFallback(NativeChatModel nativeM
 
 工具对模型的全部可见面，就是三个字符串——把 `AgentTool` 接口画成对象图就一目了然：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0015.svg" alt="工具对模型的全部可见面，就是三个字符串——把 `AgentTool` 接口画成对象图就一目了然：" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0012.svg" alt="工具对模型的全部可见面，就是三个字符串——把 `AgentTool` 接口画成对象图就一目了然：" />
 
-
-> **图 5-1**　`AgentTool` 接口形态。一个工具对外暴露四件事：名字、描述、参数、执行。**模型只认识前三个**——`execute()` 是系统侧的事，模型看不见。而 `description` 是整个接口里最关键的一个方法：**它写得好不好，直接决定模型会不会选用这个工具。**
+> **图 05-1**　`AgentTool` 接口形态。一个工具对外暴露四件事：名字、描述、参数、执行。**模型只认识前三个**——`execute()` 是系统侧的事，模型看不见。而 `description` 是整个接口里最关键的一个方法：**它写得好不好，直接决定模型会不会选用这个工具。**
 
 **`description` 的注释里那句"影响模型是否选用该工具"，是这一讲最容易被低估的一句话。**
 
@@ -203,8 +202,7 @@ if (!target.startsWith(baseDir)) {
 
 这一层不在 agent-kit 里，而在主线系统 `code-review-agent` 里。它把工具按**风险/成本**分成三级：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0016.svg" alt="这一层不在 agent-kit 里，而在主线系统 `code-review-agent` 里。它把工具按风险/成本分成三级：" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0013.svg" alt="这一层不在 agent-kit 里，而在主线系统 `code-review-agent` 里。它把工具按风险/成本分成三级：" />
 
 裁定逻辑（`ToolGate.java:64-76`）：
 
@@ -354,8 +352,7 @@ private List<Map<String, Object>> executeInParallel(List<NativeToolCall> calls, 
 
 还有一处值得学的记账方式：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0017.svg" alt="还有一处值得学的记账方式：" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0014.svg" alt="还有一处值得学的记账方式：" />
 
 循环里逐轮累加：
 

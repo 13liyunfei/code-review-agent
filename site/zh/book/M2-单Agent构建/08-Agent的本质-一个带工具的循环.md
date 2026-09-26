@@ -2,10 +2,9 @@
 
 > 🎯 导读问题：**"你说的 Agent，和 ChatBot 的区别是什么？"**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0101.svg" alt="🎯 导读问题：&quot;你说的 Agent，和 ChatBot 的区别是什么？&quot;" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0019.svg" alt="🎯 导读问题：&quot;你说的 Agent，和 ChatBot 的区别是什么？&quot;" />
 
-
-> **图 8-0**　本讲地图：判据只有一条：删掉本轮输出，下一轮输入会不会变。会变才是闭环，模型只调一次就只是 ChatBot。闭环里必须备齐状态、动作与三条正交的终止线，四种错误一律当结果返回。
+> **图 08-0**　本讲地图：判据只有一条：删掉本轮输出，下一轮输入会不会变。会变才是闭环，模型只调一次就只是 ChatBot。闭环里必须备齐状态、动作与三条正交的终止线，四种错误一律当结果返回。
 
 ## 一、痛点
 
@@ -62,10 +61,9 @@ text_in ──► [模型] ──► text_out
 **Agent 是一个闭环：**
 
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0102.svg" alt="Agent 是一个闭环：" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0020.svg" alt="Agent 是一个闭环：" />
 
-
-> **图 8-1**　Agent 的闭环。**判据在这条回边上**：把 `Observe` 删掉，如果下一轮的输入不变，那它就还是 ChatBot——不管 prompt 里写了几遍"你是一个 Agent"。
+> **图 08-1**　Agent 的闭环。**判据在这条回边上**：把 `Observe` 删掉，如果下一轮的输入不变，那它就还是 ChatBot——不管 prompt 里写了几遍"你是一个 Agent"。
 
 **所以判据是**：
 
@@ -327,8 +325,7 @@ public String run(String goal, List<Worker> workers, Function<String, String> ru
 
 ### 3.1 `AgentContext`：上下文的四个槽位
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0103.svg" alt="### 3.1 `AgentContext`：上下文的四个槽位" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0021.svg" alt="### 3.1 `AgentContext`：上下文的四个槽位" />
 
 **四个槽位的分工是有讲究的**：
 

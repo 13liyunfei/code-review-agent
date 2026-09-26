@@ -3,8 +3,7 @@
 > 🎯 导读问题：**"你们的向量库怎么建的？换嵌入模型怎么办？"** ——这一讲给你一个能讲 5 分钟的事故复盘。
 > 🔬 本讲涉及的 pgvector 行为在 **PostgreSQL 17.11 + pgvector 0.8.6** 上验证。
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0032.svg" alt="🔬 本讲涉及的 pgvector 行为在 PostgreSQL 17.11 + pgvector 0.8.6 上验证。" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0058.svg" alt="🔬 本讲涉及的 pgvector 行为在 PostgreSQL 17.11 + pgvector 0.8.6 上验证。" />
 
 > **图 24-0**　本讲地图：向量维度是模型、列、配置项的三方契约，必须有单一事实来源。两个默认值 1024 与 256 不一致，改配置就触发自动迁移，存量向量全部作废，日志却只有一行 WARN。
 

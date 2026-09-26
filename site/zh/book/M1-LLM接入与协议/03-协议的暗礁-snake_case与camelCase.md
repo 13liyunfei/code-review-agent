@@ -2,10 +2,9 @@
 
 > 🎯 导读问题：**"你怎么保证接口契约不被静默破坏？"**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0025.svg" alt="🎯 导读问题：&quot;你怎么保证接口契约不被静默破坏？&quot;" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0005.svg" alt="🎯 导读问题：&quot;你怎么保证接口契约不被静默破坏？&quot;" />
 
-
-> **图 3-0**　本讲地图：同一个 JVM 里两套命名并存，在全局 `ObjectMapper` 上设策略会污染自有端点；判据是**让命名策略跟着「是否在模拟外部协议」走**，由每个 DTO 自己声明。
+> **图 03-0**　本讲地图：同一个 JVM 里两套命名并存，在全局 `ObjectMapper` 上设策略会污染自有端点；判据是**让命名策略跟着「是否在模拟外部协议」走**，由每个 DTO 自己声明。
 
 ## 一、痛点
 
@@ -154,8 +153,7 @@ static final ObjectMapper MAPPER = new ObjectMapper()
 
 ### 3.2 走 snake_case 的：模拟 OpenAI 的那些 DTO
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0026.svg" alt="### 3.2 走 snake_case 的：模拟 OpenAI 的那些 DTO" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0006.svg" alt="### 3.2 走 snake_case 的：模拟 OpenAI 的那些 DTO" />
 
 它的类注释点明了理由：
 
@@ -168,8 +166,7 @@ static final ObjectMapper MAPPER = new ObjectMapper()
 
 响应侧同理，而且多了一层设计——**厂商扩展字段放在顶层**：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0027.svg" alt="响应侧同理，而且多了一层设计——厂商扩展字段放在顶层：" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0007.svg" alt="响应侧同理，而且多了一层设计——厂商扩展字段放在顶层：" />
 
 类注释说得很清楚：**前五个字段与 OpenAI 完全兼容**（标准 OpenAI SDK 能直接消费），后五个是扩展字段——**放在顶层而非塞进 `choices` 里**，这样标准客户端会自动忽略它们，兼容性不被破坏。
 
@@ -181,8 +178,7 @@ static final ObjectMapper MAPPER = new ObjectMapper()
 
 对照一下同一个 SDK 里的补报请求——**一个命名注解都没有**：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0028.svg" alt="对照一下同一个 SDK 里的补报请求——一个命名注解都没有：" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0008.svg" alt="对照一下同一个 SDK 里的补报请求——一个命名注解都没有：" />
 
 **这就是"没有全局策略"的价值**：这个类什么都不用做，天然就是对的。而如果当初在全局设了 `SNAKE_CASE`，这个类会变成一颗定时炸弹。
 

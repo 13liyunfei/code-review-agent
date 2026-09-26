@@ -2,8 +2,7 @@
 
 > 🎯 导读问题：**"你的 RAG 为什么效果不好？"** ——这一讲给你一张"病灶定位图"，把笼统的"效果不好"拆成可定位、可测量的 7 个环节。
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0038.svg" alt="🎯 导读问题：&quot;你的 RAG 为什么效果不好？&quot; ——这一讲给你一张&quot;病灶定位图&quot;，把笼统的&quot;效果不好&quot;拆成可定位、可测量的 7 个环节。" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0055.svg" alt="🎯 导读问题：&quot;你的 RAG 为什么效果不好？&quot; ——这一讲给你一张&quot;病灶定位图&quot;，把笼统的&quot;效果不好&quot;拆成可定位、可测量的 7 个环节。" />
 
 > **图 22-0**　本讲地图：RAG 不是一次向量检索，而是两条链路七个环节，写入与检索的质量相乘。第 ④ 查询构造最易漏，也最静默——无命中只打一行 INFO，审查照常进行。
 
@@ -38,8 +37,7 @@
 一个生产级 RAG 是**两条独立的链路**，各自有各自的故障模式：
 
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0039.svg" alt="一个生产级 RAG 是两条独立的链路，各自有各自的故障模式：" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0056.svg" alt="一个生产级 RAG 是两条独立的链路，各自有各自的故障模式：" />
 
 > **图 22-1**　RAG 的两条链路。**它们各自独立，但质量相乘**——写入侧把条款切碎了，检索侧再强也召不回完整语义；反过来也一样。所以"效果不好"必须先回答"是哪条链路、哪一环"。
 

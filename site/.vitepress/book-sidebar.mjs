@@ -228,89 +228,122 @@ export default
     ]
   },
   {
-    text: "M8-ClaudeCode-Harness",
+    text: "M8-DeepSeekHarness",
     items: [
       {
-        text: "49-对照一-模型调用-ClaudeCode的连谁与不连谁",
-        link: "/zh/book/M8-ClaudeCode-Harness/49-对照一-模型调用-ClaudeCode的连谁与不连谁"
+        text: "49-这一层决定模型能力的兑现率",
+        link: "/zh/book/M8-DeepSeekHarness/49-这一层决定模型能力的兑现率"
       },
       {
-        text: "50-对照二-上下文压缩-ClaudeCode的给模型看什么",
-        link: "/zh/book/M8-ClaudeCode-Harness/50-对照二-上下文压缩-ClaudeCode的给模型看什么"
+        text: "50-一切皆插件-Cordis的三个动作",
+        link: "/zh/book/M8-DeepSeekHarness/50-一切皆插件-Cordis的三个动作"
       },
       {
-        text: "51-对照三-工具机制-ClaudeCode的手伸向哪里",
-        link: "/zh/book/M8-ClaudeCode-Harness/51-对照三-工具机制-ClaudeCode的手伸向哪里"
+        text: "51-会话日志-唯一真相源",
+        link: "/zh/book/M8-DeepSeekHarness/51-会话日志-唯一真相源"
       },
       {
-        text: "52-对照四-权限机制-ClaudeCode的边界谁批准",
-        link: "/zh/book/M8-ClaudeCode-Harness/52-对照四-权限机制-ClaudeCode的边界谁批准"
+        text: "52-Agent-Loop-step-turn与waterfall中间件",
+        link: "/zh/book/M8-DeepSeekHarness/52-Agent-Loop-step-turn与waterfall中间件"
       },
       {
-        text: "53-对照五-记忆机制-ClaudeCode怎么记得住",
-        link: "/zh/book/M8-ClaudeCode-Harness/53-对照五-记忆机制-ClaudeCode怎么记得住"
+        text: "53-Capability-Seam-三个角色一次替换改变整个产品",
+        link: "/zh/book/M8-DeepSeekHarness/53-Capability-Seam-三个角色一次替换改变整个产品"
       },
       {
-        text: "54-对照六-技能机制-ClaudeCode的可插拔能力",
-        link: "/zh/book/M8-ClaudeCode-Harness/54-对照六-技能机制-ClaudeCode的可插拔能力"
+        text: "54-一套内核五种形态",
+        link: "/zh/book/M8-DeepSeekHarness/54-一套内核五种形态"
+      },
+      {
+        text: "55-生态与最佳实践-怎么读一个harness",
+        link: "/zh/book/M8-DeepSeekHarness/55-生态与最佳实践-怎么读一个harness"
       },
     ]
   },
   {
-    text: "M9-大模型底层",
+    text: "M9-ClaudeCode-Harness",
     items: [
       {
-        text: "55-大模型底层一-模型的聪明到底从哪来",
-        link: "/zh/book/M9-大模型底层/55-大模型底层一-模型的聪明到底从哪来"
+        text: "56-对照一-模型调用-ClaudeCode的连谁与不连谁",
+        link: "/zh/book/M9-ClaudeCode-Harness/56-对照一-模型调用-ClaudeCode的连谁与不连谁"
       },
       {
-        text: "56-大模型底层二-神经网络-数字怎么学会说人话",
-        link: "/zh/book/M9-大模型底层/56-大模型底层二-神经网络-数字怎么学会说人话"
+        text: "57-对照二-上下文压缩-ClaudeCode的给模型看什么",
+        link: "/zh/book/M9-ClaudeCode-Harness/57-对照二-上下文压缩-ClaudeCode的给模型看什么"
       },
       {
-        text: "57-大模型底层三-NLP-词怎么变成向量",
-        link: "/zh/book/M9-大模型底层/57-大模型底层三-NLP-词怎么变成向量"
+        text: "58-对照三-工具机制-ClaudeCode的手伸向哪里",
+        link: "/zh/book/M9-ClaudeCode-Harness/58-对照三-工具机制-ClaudeCode的手伸向哪里"
       },
       {
-        text: "58-大模型底层四-Transformer-一次看全句的注意力",
-        link: "/zh/book/M9-大模型底层/58-大模型底层四-Transformer-一次看全句的注意力"
+        text: "59-对照四-权限机制-ClaudeCode的边界谁批准",
+        link: "/zh/book/M9-ClaudeCode-Harness/59-对照四-权限机制-ClaudeCode的边界谁批准"
       },
       {
-        text: "59-大模型底层五-语言大模型-预训练涌现与对齐",
-        link: "/zh/book/M9-大模型底层/59-大模型底层五-语言大模型-预训练涌现与对齐"
+        text: "60-对照五-记忆机制-ClaudeCode怎么记得住",
+        link: "/zh/book/M9-ClaudeCode-Harness/60-对照五-记忆机制-ClaudeCode怎么记得住"
       },
       {
-        text: "60-大模型底层六-多模态-模型开始看与听",
-        link: "/zh/book/M9-大模型底层/60-大模型底层六-多模态-模型开始看与听"
-      },
-      {
-        text: "61-大模型底层七-强化学习-让模型按你的标准说话",
-        link: "/zh/book/M9-大模型底层/61-大模型底层七-强化学习-让模型按你的标准说话"
+        text: "61-对照六-技能机制-ClaudeCode的可插拔能力",
+        link: "/zh/book/M9-ClaudeCode-Harness/61-对照六-技能机制-ClaudeCode的可插拔能力"
       },
     ]
   },
   {
-    text: "M10-AI-Agent生态",
+    text: "M10-大模型底层",
     items: [
       {
-        text: "62-AI-Agent生态一-框架地图与对照总纲",
-        link: "/zh/book/M10-AI-Agent生态/62-AI-Agent生态一-框架地图与对照总纲"
+        text: "62-大模型底层一-模型的聪明到底从哪来",
+        link: "/zh/book/M10-大模型底层/62-大模型底层一-模型的聪明到底从哪来"
       },
       {
-        text: "63-AI-Agent生态二-LangChain与链的边界",
-        link: "/zh/book/M10-AI-Agent生态/63-AI-Agent生态二-LangChain与链的边界"
+        text: "63-大模型底层二-神经网络-数字怎么学会说人话",
+        link: "/zh/book/M10-大模型底层/63-大模型底层二-神经网络-数字怎么学会说人话"
       },
       {
-        text: "64-AI-Agent生态三-LangGraph与图模型的闭环",
-        link: "/zh/book/M10-AI-Agent生态/64-AI-Agent生态三-LangGraph与图模型的闭环"
+        text: "64-大模型底层三-NLP-词怎么变成向量",
+        link: "/zh/book/M10-大模型底层/64-大模型底层三-NLP-词怎么变成向量"
       },
       {
-        text: "65-AI-Agent生态四-DeepAgents与多Agent的取向",
-        link: "/zh/book/M10-AI-Agent生态/65-AI-Agent生态四-DeepAgents与多Agent的取向"
+        text: "65-大模型底层四-Transformer-一次看全句的注意力",
+        link: "/zh/book/M10-大模型底层/65-大模型底层四-Transformer-一次看全句的注意力"
       },
       {
-        text: "66-AI-Agent生态五-Jev与决策层-把判断从生成里拆出来",
-        link: "/zh/book/M10-AI-Agent生态/66-AI-Agent生态五-Jev与决策层-把判断从生成里拆出来"
+        text: "66-大模型底层五-语言大模型-预训练涌现与对齐",
+        link: "/zh/book/M10-大模型底层/66-大模型底层五-语言大模型-预训练涌现与对齐"
+      },
+      {
+        text: "67-大模型底层六-多模态-模型开始看与听",
+        link: "/zh/book/M10-大模型底层/67-大模型底层六-多模态-模型开始看与听"
+      },
+      {
+        text: "68-大模型底层七-强化学习-让模型按你的标准说话",
+        link: "/zh/book/M10-大模型底层/68-大模型底层七-强化学习-让模型按你的标准说话"
+      },
+    ]
+  },
+  {
+    text: "M11-AI-Agent生态",
+    items: [
+      {
+        text: "69-AI-Agent生态一-框架地图与对照总纲",
+        link: "/zh/book/M11-AI-Agent生态/69-AI-Agent生态一-框架地图与对照总纲"
+      },
+      {
+        text: "70-AI-Agent生态二-LangChain与链的边界",
+        link: "/zh/book/M11-AI-Agent生态/70-AI-Agent生态二-LangChain与链的边界"
+      },
+      {
+        text: "71-AI-Agent生态三-LangGraph与图模型的闭环",
+        link: "/zh/book/M11-AI-Agent生态/71-AI-Agent生态三-LangGraph与图模型的闭环"
+      },
+      {
+        text: "72-AI-Agent生态四-DeepAgents与多Agent的取向",
+        link: "/zh/book/M11-AI-Agent生态/72-AI-Agent生态四-DeepAgents与多Agent的取向"
+      },
+      {
+        text: "73-AI-Agent生态五-Jev与决策层-把判断从生成里拆出来",
+        link: "/zh/book/M11-AI-Agent生态/73-AI-Agent生态五-Jev与决策层-把判断从生成里拆出来"
       },
     ]
   },

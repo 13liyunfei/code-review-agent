@@ -2,8 +2,7 @@
 
 > 🎯 导读问题：**"你怎么防止不相关的知识被塞进上下文？"** ——这一讲教你怎么让"闸门"真的关上。
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0037.svg" alt="🎯 导读问题：&quot;你怎么防止不相关的知识被塞进上下文？&quot; ——这一讲教你怎么让&quot;闸门&quot;真的关上。" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0061.svg" alt="🎯 导读问题：&quot;你怎么防止不相关的知识被塞进上下文？&quot; ——这一讲教你怎么让&quot;闸门&quot;真的关上。" />
 
 > **图 27-0**　本讲地图：融合后每个文档有两个数：RRF 排名分与真实余弦。把排名分写进 similarity，闸门永不关闭——跌破 0.3 需 rank 大于 140，候选只有 50 条，两者各归其位。
 

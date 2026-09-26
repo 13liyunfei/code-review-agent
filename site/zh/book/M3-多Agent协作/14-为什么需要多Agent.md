@@ -2,8 +2,7 @@
 
 > 🎯 导读问题：**"你为什么用多 Agent？一个 Agent 不够吗？"**（这一问考的是判断力，不是技术）
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0069.svg" alt="🎯 导读问题：&quot;你为什么用多 Agent？一个 Agent 不够吗？&quot;（这一问考的是判断力，不是技术）" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0036.svg" alt="🎯 导读问题：&quot;你为什么用多 Agent？一个 Agent 不够吗？&quot;（这一问考的是判断力，不是技术）" />
 
 > **图 14-0**　本讲地图：多 Agent 不是默认选项，而是一道四级判据：判断标准、失败模式、真实冲突、独立观测。任一不满足就不该拆，通过后还要认下成本翻 N 倍，以及仲裁、编排、聚合三个新问题。
 
@@ -201,8 +200,7 @@ Agent B 的 prompt：你是安全审查专家……【另外，如果发现逻�
 
 ### 3.1 七个 Agent 类型，一个枚举
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0070.svg" alt="### 3.1 七个 Agent 类型，一个枚举" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0037.svg" alt="### 3.1 七个 Agent 类型，一个枚举" />
 
 > **图 14-1**　`AgentType` 的七值枚举。**五个领域角色**（逻辑/安全/性能/规范/架构）是系统拆出来的专业审查维度，**两个拓扑角色**（CUSTOM / COORDINATOR）是架构层面的。CUSTOM 证明"正交维度"这个抽象是开放的；COORDINATOR 则是个值得警惕的信号——它永远不会出现在任何 `Finding` 里，意味着枚举的值域大于实际使用值域。
 
@@ -221,8 +219,7 @@ Agent B 的 prompt：你是安全审查专家……【另外，如果发现逻�
 
 ### 3.2 接口的注释把架构决策写出来了
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0071.svg" alt="### 3.2 接口的注释把架构决策写出来了" />
-
+<img class="mermaid-svg" src="/zh/book-assets/diag-0038.svg" alt="### 3.2 接口的注释把架构决策写出来了" />
 
 > **图 14-2**　星型拓扑的两个核心接口。`Coordinator` 是中央调度节点，`ReviewAgent` 是专业审查节点——一个 Coordinator 并行调度 N 个 ReviewAgent。**两处注释措辞一致地说"星型拓扑"**，这不是废话，它是一个已被决策过的架构选择：想改拓扑的人会先看到这段注释，被迫思考"为什么当初这么选"。
 
