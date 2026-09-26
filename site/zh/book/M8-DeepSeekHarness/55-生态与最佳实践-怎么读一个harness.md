@@ -6,7 +6,9 @@
 >
 > **本讲也是全模块的方法收束**：把六讲的内容压成三个问题。**你能用它们去读 `dsh`，就能用它们去读 codex、读任何你遇到的 agent 系统。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0138.svg" alt="本讲也是全模块的方法收束：把六讲的内容压成三个问题。你能用它们去读 `dsh`，就能用它们去读 codex、读任何你遇到的 agent 系统。" />
+> **⚠️ 事实基准**：本讲所有 `路径:行号` 引用，与第 49 讲讲首的模块级声明同源 —— 取自 **2026-09-26 实读**的 `github.com/deepseek-ai/deepseek-harness`，commit `477b4f4`（标签 `rel/dsh-0.1.7-rc.2`）。**路径是"这一版的事实"，不是永久契约**（`dsh` 官方自称处于开发者预览并预告破坏性变更）。
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0138.svg" alt="⚠️ 事实基准：本讲所有 `路径:行号` 引用，与第 49 讲讲首的模块级声明同源 —— 取自 2026-09-26 实读的 `github.com/deepseek-ai/deepseek-harness`，commit `477b4f4`（标签 `rel/dsh-0.1.7-rc.2`）。路径是&quot;这一版的事实&quot;，不是永久契约（`dsh` 官方自称处于开发者预览并预告破坏性变更）。" />
 
 > **图 55-0**　本讲地图：读一个 harness 就用三个抓手——真相源（可重放）、替换点（seam）、拦截点（事件域与中间件）。而判断"这个仓库值不值得长期投入"，看它有没有把"文档不撒谎"做成门禁：文档级真源与前置判据。
 

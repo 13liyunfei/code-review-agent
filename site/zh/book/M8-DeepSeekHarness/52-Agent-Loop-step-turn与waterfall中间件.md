@@ -6,7 +6,9 @@
 >
 > **为什么单独讲它**：因为你未来要动的大多数"行为微调"，落点都在这一讲的四个事件上。**不知道拦截点在哪，就只能改循环源码——那正是这一模块要你避开的那条路。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0123.svg" alt="为什么单独讲它：因为你未来要动的大多数&quot;行为微调&quot;，落点都在这一讲的四个事件上。不知道拦截点在哪，就只能改循环源码——那正是这一模块要你避开的那条路。" />
+> **⚠️ 事实基准**：本讲所有 `路径:行号` 引用，与第 49 讲讲首的模块级声明同源 —— 取自 **2026-09-26 实读**的 `github.com/deepseek-ai/deepseek-harness`，commit `477b4f4`（标签 `rel/dsh-0.1.7-rc.2`）。**路径是"这一版的事实"，不是永久契约**（`dsh` 官方自称处于开发者预览并预告破坏性变更）。
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0123.svg" alt="⚠️ 事实基准：本讲所有 `路径:行号` 引用，与第 49 讲讲首的模块级声明同源 —— 取自 2026-09-26 实读的 `github.com/deepseek-ai/deepseek-harness`，commit `477b4f4`（标签 `rel/dsh-0.1.7-rc.2`）。路径是&quot;这一版的事实&quot;，不是永久契约（`dsh` 官方自称处于开发者预览并预告破坏性变更）。" />
 
 > **图 52-0**　本讲地图：一个轮次含零或多个步骤；每一步有四个拦截点（`agent/pre-step`、`agent/request`、`llm/stream`、`tools/*`），它们都是 waterfall。而**轮次收尾 `agent/turn-stopping` 偏偏是 serial、没有 `next()`**——这个反差本身就是本讲的判据。
 
