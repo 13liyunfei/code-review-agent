@@ -4,7 +4,7 @@
 
 > **模块九 · 进入方式**：这是最后一讲，对照第六道机制——**技能**。第 48 讲用 `SkillRegistry` 讲"把能力做成可插拔、可声明、可灰度"。Claude Code 的技能/插件机制是"终端 Agent 的开放扩展"形态：第三方可以给一个 Agent 加能力。我们看它的公开形态（技能=名称+描述+指令的声明单元），然后对照你的 `SkillRegistry` 那个"注册 + 声明 + 启停"的骨架。
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0121.svg" alt="模块九 · 进入方式：这是最后一讲，对照第六道机制——技能。第 48 讲用 `SkillRegistry` 讲&quot;把能力做成可插拔、可声明、可灰度&quot;。Claude Code 的技能/插件机制是&quot;终端 Agent 的开放扩展&quot;形态：第三方可以给一个 Agent 加能力。我们看它的公开形态（技能=名称+描述+指令的声明单元），然后对照你的 `SkillRegistry` 那个&quot;注册 + 声明 + 启停&quot;的骨架。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0148.svg" alt="模块九 · 进入方式：这是最后一讲，对照第六道机制——技能。第 48 讲用 `SkillRegistry` 讲&quot;把能力做成可插拔、可声明、可灰度&quot;。Claude Code 的技能/插件机制是&quot;终端 Agent 的开放扩展&quot;形态：第三方可以给一个 Agent 加能力。我们看它的公开形态（技能=名称+描述+指令的声明单元），然后对照你的 `SkillRegistry` 那个&quot;注册 + 声明 + 启停&quot;的骨架。" />
 
 > **图 61-0**　本讲地图：技能机制的核心一致点是"**能力 = 名称 + 描述 + 指令的可插拔声明单元**"，而不是写死的 if。`SkillRegistry` 把声明做成可校验、可灰度；Claude Code 把声明做成开放；两者共同守住的判据是：**能力必须是声明单元，不是硬编码。**
 

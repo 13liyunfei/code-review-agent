@@ -75,11 +75,32 @@ CODE_MUSTACHE = re.compile(r"`([^`\n]*\{\{[^`\n]*)`")
 MOD_DIR = re.compile(r"^M(\d+)-")
 LEC_FILE = re.compile(r"^(\d{2})-(.+)$")
 
+# 全书 mermaid 图块数的**口径快照**（164 = 73 导读图 + 91 正文机制图）。
+# 单点定义：断言与提示都从这里取，避免「改了断言、忘了提示」两处各写一份而滞后。
+# 2026-09-26 M8 补 27 张正文机制图后由 137 更新为 164（口径见源稿 book/README.md「图表索引」）。
+EXPECTED_FIGS = 164
+
 # 判据用：`{{` 是 Vue 插值起点，但 `<code v-pre>…</code>` 里的 `{{` 正是**被显式保护**的，
 # 必须先剥掉保护片段再数，否则这个检查会把唯一一处正确处理报成故障（本判据首版就犯了这错）。
 V_PRE_CODE = re.compile(r"<code v-pre>.*?</code>", re.S)
 MUSTACHE_UNPROTECTED = re.compile(r"\{\{")
 DIAG_REF = re.compile(r"/zh/book-assets/diag-\d{4}\.svg")
+
+# 判据用：产出里**不许有指向站外的相对链接**。
+# 踩过：第 54 讲引用 `docs/architecture.zh.md` 原文时，连原文的 markdown 相对链接
+# （`../packages/bundle/base/README.zh.md`）一起抄进 blockquote，VitePress 把它当
+# 站内路径解析 ⇒ `build error: 2 dead link(s) found`，站点直接构建不出来。
+# 允许的目标：http(s) / `#` / `mailto:` / `data:` / 以 `/` 开头的站内绝对路径。
+REL_HTML = re.compile(r'(?:href|src)\s*=\s*["\'](?!https?://|mailto:|data:|/|#)([^"\']+)["\']')
+REL_MD = re.compile(r"\[[^\]]*\]\((?!https?://|mailto:|#|/)([^)\s]+)\)")
+# 围栏内的内容是**逐字引用**（例如第 53 讲整段抄了 dsh 文档的一张表），不解析、不算问题。
+FENCED = re.compile(r"^[ \t]*```.*?^[ \t]*```[ \t]*$", re.S | re.M)
+
+
+def find_station_relative_links(body: str):
+    """产出正文里所有「会被 VitePress 当站内路径解析」的链接目标（围栏内的不算）。"""
+    visible = FENCED.sub("", body)
+    return (REL_HTML.findall(visible) + REL_MD.findall(visible))
 
 
 # 退化 alt：空白行、纯代码围栏（``` / ```java）、纯分隔线（--- / *** / ___）
@@ -111,7 +132,7 @@ def convert(text: str, src_svg_of_block, first_no: int = 1):
     """源稿正文 → 站点正文。`src_svg_of_block(i)` 返回第 i 个块（0 起）对应的 SVG 绝对路径。
 
     `first_no` 是本文件第 1 张图的**全局**编号（1 起）。编号必须跨文件连续——
-    按文件重置会让所有讲都引用 diag-0001，137 个标签只指向 7 个资源（首版就犯了这个错，
+    按文件重置会让所有讲都引用 diag-0001，164 个标签只指向 7 个资源（首版就犯了这个错，
     靠「引用集合必须等于资产集合」这条断言抓出来）。
 
     空白规则（**不是**逐字复刻历史产物——历史产物是多个一次性脚本版本的叠加，无法也不必复刻）：
@@ -310,7 +331,7 @@ def selftest():
         ok &= not is_degenerate_alt(s)
     print("退化判定（5 必报 + 4 必放过）→ %s" % ("通过" if ok else "失败"))
 
-    # ⑧ 编号必须**跨文件连续**（首版按文件重置 ⇒ 137 个标签只指向 7 个资源）
+    # ⑧ 编号必须**跨文件连续**（首版按文件重置 ⇒ 164 个标签只指向 7 个资源）
     _b1, f1 = convert("```mermaid\nA-->B\n```\n", lambda i: "/tmp/a1.svg", 1)
     b2, f2 = convert("```mermaid\nA-->B\n```\n\n```mermaid\nC-->D\n```\n",
                      lambda i: "/tmp/a2.svg", 1 + len(f1))
@@ -320,6 +341,29 @@ def selftest():
     if not numbering_ok:
         print("  实际 %r" % b2)
     ok &= numbering_ok
+
+    # ⑨ 站外相对链接判据（第 54 讲那次 `build error: 2 dead link(s)` 就是它漏掉的）
+    #    必报 2 个：blockquote 里抄原文的 markdown 相对链接 + HTML img 的相对 src
+    bad = [
+        "> [`dsh-base`](../packages/bundle/base/README.zh.md) 是共享第一层。",
+        '<img class="arch-svg" src="../../_build/architecture/x.svg" alt="a">',
+    ]
+    n_bad = sum(len(find_station_relative_links(s)) for s in bad)
+    print("站外相对链接待报数 = %d，期望 2 → %s" % (n_bad, "通过" if n_bad == 2 else "失败"))
+    ok &= n_bad == 2
+
+    #    必放过 3 类：外链 / 站内锚点 / 站内绝对路径，以及**围栏内的逐字引用**（第 53 讲那张表）
+    good = [
+        "见 [Anthropic 文档](https://docs.anthropic.com/x)。",
+        "见 [本讲](#anchor)，图见 ![图](/zh/book-assets/diag-0001.svg)。",
+        "```markdown\n| `ctx.shell` | `seam` | [`shell`](../packages/shell/shell) |\n```\n",
+    ]
+    n_good = sum(len(find_station_relative_links(s)) for s in good)
+    print("站外相对链接必放过 = %d，期望 0 → %s" % (n_good, "通过" if n_good == 0 else "失败"))
+    if n_good:
+        for s in good:
+            print("  误报：%s → %s" % (s[:30], find_station_relative_links(s)))
+    ok &= n_good == 0
 
     print("\n自测%s" % ("全部通过" if ok else "未通过"))
     return 0 if ok else 1
@@ -352,13 +396,13 @@ def main() -> int:
         problems.append("讲数 %d ≠ 73" % len(lec))
     if len(mods) != 11:
         problems.append("模块数 %d ≠ 11" % len(mods))
-    if n_fig != 137:
-        problems.append("mermaid 图 %d ≠ 137" % n_fig)
+    if n_fig != EXPECTED_FIGS:
+        problems.append("mermaid 图 %d ≠ %d" % (n_fig, EXPECTED_FIGS))
     if len(assets) != n_fig:
         problems.append("图资产 %d ≠ 图块 %d" % (len(assets), n_fig))
 
     # ★ 引用集合必须与资产集合逐一相等：编号一旦「按文件重置」，
-    #   资产数照样是 137，但 137 个标签会全指向 7 个资源 —— 只有这条判据拦得住。
+    #   资产数照样是 164，但 164 个标签会全指向 7 个资源 —— 只有这条判据拦得住。
     refs = DIAG_REF.findall("".join(b for b, _ in outputs.values()))
     if len(refs) != n_fig:
         problems.append("图标签 %d ≠ 图块 %d" % (len(refs), n_fig))
@@ -367,6 +411,17 @@ def main() -> int:
         problems.append("图号被重复引用（编号未全局递增）：%s" % dup)
     if set(refs) != {"/zh/book-assets/" + k for k in assets}:
         problems.append("引用的图号集合与生成的资产集合不一致")
+
+    # ★ 产出里**不许有指向站外的相对链接**（见 find_station_relative_links 的说明）。
+    #   围栏内的逐字引用不算——剥围栏后的检查在函数里做。
+    rel = []
+    for name, (body, _figs) in outputs.items():
+        for target in find_station_relative_links(body):
+            rel.append("%s → %s" % (name, target))
+    if rel:
+        problems.append(
+            "产出里有站外相对链接 %d 处（VitePress 会当站内路径解析并构建失败）：%s"
+            % (len(rel), rel[:3]))
 
     for name, svg in assets.items():
         if not svg or not os.path.exists(svg):

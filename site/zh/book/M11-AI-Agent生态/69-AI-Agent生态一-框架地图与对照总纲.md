@@ -5,7 +5,7 @@
 
 > **模块十一 · 进入方式**：海报里这一块叫 **AI Agent**，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成"Python 框架教程"会跟你这套 **Java 自建系统**的专栏脱节。所以本模块用 **『框架地图 + 对照』**视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去**读懂这些框架各自的设计取向**。读完你能**不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0132.svg" alt="模块十一 · 进入方式：海报里这一块叫 AI Agent，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成&quot;Python 框架教程&quot;会跟你这套 Java 自建系统的专栏脱节。所以本模块用 『框架地图 + 对照』视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去读懂这些框架各自的设计取向。读完你能不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0159.svg" alt="模块十一 · 进入方式：海报里这一块叫 AI Agent，含 4 个专题：通用知识 / LangChain / LangGraph / DeepAgents。但把它写成&quot;Python 框架教程&quot;会跟你这套 Java 自建系统的专栏脱节。所以本模块用 『框架地图 + 对照』视角：不教你写 LangChain 的代码，而是用你在前面建过的机制，去读懂这些框架各自的设计取向。读完你能不是为了并列而认识它们，而是为了在任何 Agent 系统里都能问对问题。" />
 
 > **图 69-0**　本讲地图：Agent 框架不是魔法，是把六大 Harness 机制（模型/工具/记忆/编排…）打包成框架。你已经在 `agent-kit`+`code-review-agent` 里亲手建过针对审查场景的同类东西。看任何框架，先问"它把六大机制堵成了什么"，而不是被 marketing 带走。
 

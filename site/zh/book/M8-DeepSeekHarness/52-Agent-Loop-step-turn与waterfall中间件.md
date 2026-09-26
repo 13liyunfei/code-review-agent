@@ -6,7 +6,7 @@
 >
 > **为什么单独讲它**：因为你未来要动的大多数"行为微调"，落点都在这一讲的四个事件上。**不知道拦截点在哪，就只能改循环源码——那正是这一模块要你避开的那条路。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0112.svg" alt="为什么单独讲它：因为你未来要动的大多数&quot;行为微调&quot;，落点都在这一讲的四个事件上。不知道拦截点在哪，就只能改循环源码——那正是这一模块要你避开的那条路。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0123.svg" alt="为什么单独讲它：因为你未来要动的大多数&quot;行为微调&quot;，落点都在这一讲的四个事件上。不知道拦截点在哪，就只能改循环源码——那正是这一模块要你避开的那条路。" />
 
 > **图 52-0**　本讲地图：一个轮次含零或多个步骤；每一步有四个拦截点（`agent/pre-step`、`agent/request`、`llm/stream`、`tools/*`），它们都是 waterfall。而**轮次收尾 `agent/turn-stopping` 偏偏是 serial、没有 `next()`**——这个反差本身就是本讲的判据。
 
@@ -183,9 +183,9 @@ Agent 的取消不是"停下"这么简单：**在哪个时刻取消，决定了�
 >
 > **丢失的后果是静默的**：缓存前缀失效 ⇒ 成本上升、延迟上升，**但没有任何一处报错**。这类"不报错但变贵/变慢"的失效，正是第 50、51 讲反复出现的同一族——**它不会让你失败，只会让你慢慢不明白为什么变贵了。**
 
-### 2.8 前沿深挖三：工具执行流水线——13 个阶段里"策略"与"实现"的分工
+### 2.8 前沿深挖三：工具执行流水线——20 个节点、13 行归并里"策略"与"实现"的分工
 
-最后补一块：工具调用那条路。`docs/tool-execution-pipeline.zh.md` 把一次工具执行拆成一条**固定顺序**的流水线（`:10-31` 是它的 mermaid 原文，`:8` 是叙述版）。按阶段列出来，并标注**谁有权插进去**：
+最后补一块：工具调用那条路。`docs/tool-execution-pipeline.zh.md` 把一次工具执行拆成一条**固定顺序**的流水线（`:10-63` 是它的 mermaid 原文，`:8` 是叙述版）。**下面这张表是我按"谁能插进来"把图中 20 个节点归并成的 13 行，节点本身多于行数。** 按阶段列出来，并标注**谁有权插进去**：
 
 | # | 阶段 | 谁能插进来 |
 |---|---|---|
@@ -211,6 +211,249 @@ Agent 的取消不是"停下"这么简单：**在哪个时刻取消，决定了�
 
 > **"策略"与"实现"要能分别插，而且插的位置要固定。** 超时、重试、指标在**执行前**（第 5 阶段）；审批、沙箱在**更前**（第 2 阶段）；内容规范化在**执行后**（第 10–12 阶段）。**把顺序写进文档并让它可核对**，你才能回答"为什么我这里的审批没拦住那个工具"——**答案是它挂在了第 10 阶段，而工具在第 6 阶段已经跑了。**
 
+### 2.9 先画出来：一个轮次的完整阶段流
+
+第 2.2 节那张 18 行表信息很密，但它是一张**表**，看不出"哪个节点是拦截点、哪个是流水线内嵌的"。这里把它画成流程图，并在主线上把**四个拦截点**与**轮次收尾**标出来。
+
+真正的轮次主循环不在 `packages/core/agent-loop/src/index.ts`（那是 `AgentLoop` 工厂，`:330 class AgentLoop extends Service`），而在 `packages/core/agent-loop/src/agent.ts` 的 `ReactLoopAgent`：`kick()` 跑 `while (await this.turn()) {}`（`agent.ts:254`），`turn()` 在 `:296-379`，`step()` 在 `:381-527`。
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0124.svg" alt="真正的轮次主循环不在 `packages/core/agent-loop/src/index.ts`（那是 `AgentLoop` 工厂，`:330 class AgentLoop extends Service`），而在 `packages/core/agent-loop/src/agent.ts` 的 `ReactLoopAgent`：`kick()` 跑 `while (await this.turn()) {}`（`agent.ts:254`），`turn()` 在 `:296-379`，`step()` 在 `:381-527`。" />
+
+> **图 52-1**　一个轮次的完整阶段流：主线上四个 waterfall 拦截点（`agent/pre-step` / `agent/request` / `llm/stream` / `tools/*`）都用高亮色标出，轮次收尾 `agent/turn-stopping` 是 **serial、无 `next()`**；`agent/pre-step` 若"拒绝或首次 enter 被改写为空"，直接关闭一个**不含步骤的轮次**。
+
+代码级细节（`packages/core/agent-loop/src/agent.ts`）——驱动入口与 `turn()`：
+
+```ts
+  private async kick(): Promise<void> {
+    try {
+      while (await this.turn()) {}
+```
+
+`pre-step` 的 waterfall 与它的默认 `next()`（`agent.ts:276-282`）：
+
+```ts
+    const decision = await this.dispatch.waterfall(
+      'agent/pre-step', { messages: claimed, ...position, signal },
+      (): Promise<PreStepDecision> => Promise.resolve<PreStepDecision>({
+        kind: 'enter',
+        messages: context === undefined ? claimed : [...claimed, context],
+      }),
+    )
+```
+
+`PreStepDecision` 只有两种形态（`packages/core/agent/src/runtime-types.ts:111-119`）：
+
+```ts
+/** Whether and with which messages the loop enters a proposed step. */
+export type PreStepDecision =
+  | { kind: 'reject' }
+  | {
+    kind: 'enter'
+    messages: UserMessage[]
+    /** Start a distinct model-message series before this step's admitted messages. */
+    startsRequestSeries?: true
+  }
+```
+
+`step()` 里 `agent/request` waterfall 的调用点（`agent.ts:559-562`）：
+
+```ts
+    const proposedConfig = await this.dispatch.waterfall(
+      'agent/request', { turn, step, signal },
+      () => Promise.resolve(seedConfig),
+    )
+```
+
+轮次收尾（`agent.ts:343`）——注意这里是 `serial`，且没有 `next` 参数：
+
+```ts
+          await this.dispatch.serial('agent/turn-stopping', { turn, signal })
+```
+
+### 2.10 三张机制图：流水线四段、waterfall 对照、取消成对提交
+
+**第一张：工具执行流水线。** `docs/tool-execution-pipeline.zh.md:10-63` 的 mermaid 共 **20 个具名节点**（`model`、`toolCall`、`presentCall`、`pre`、`guards`、`denied`、`approval`、`around`、`toolBody`、`fsGate`、`owned`、`project`、`post`、`normalized`、`finalize`、`final`、`context`、`toolResult`、`allResults`、`presentResult`）。按"策略 / 实现 / 规范化 / 通知"四段归置如下：
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0125.svg" alt="第一张：工具执行流水线。 `docs/tool-execution-pipeline.zh.md:10-63` 的 mermaid 共 20 个具名节点（`model`、`toolCall`、`presentCall`、`pre`、`guards`、`denied`、`approval`、`around`、`toolBody`、`fsGate`、`owned`、`project`、`post`、`normalized`、`finalize`、`final`、`context`、`toolResult`、`allResults`、`presentResult`）。按&quot;策略 / 实现 / 规范化 / 通知&quot;四段归置如下：" />
+
+> **图 52-2**　工具执行流水线的四段分区：`docs/tool-execution-pipeline.zh.md:10-63` 的 mermaid 共 20 个节点，按"策略段 4 / 实现段 4 / 规范化段 6 / 通知段 3"归置，入口 3 节点另计——**20 = 3 + 4 + 4 + 6 + 3**。第 2.8 节那张 13 行表是本图的**归并**，不是文档原文的阶段数。
+
+流水线的"策略后段"由两个函数串起（`packages/core/tools/src/index.ts:1641-1659`、`1669-1692`）：
+
+```ts
+  private async finalizeScheduledExecution(exec: ToolRunContext, result: ToolExecutionResult): Promise<ToolExecutionResult> {
+    try {
+      const project = this.contentProjectors.get(exec)
+      this.contentProjectors.delete(exec)
+      const content = project?.(exec, result)
+      const projected = content === undefined
+        ? result
+        : this.markCanonical(exec, this.materializeFinalResult({ ...result, content }))
+      const postResult = await this.postExecute(exec, projected)
+      return this.finishScheduledExecution(
+        exec,
+        this.callerCancelled(exec) && !postResult.isError
+          ? this.cancellationResult(exec, postResult)
+          : postResult,
+      )
+    } catch (error: unknown) {
+      return this.finishScheduledExecution(exec, toolErrorResult(error))
+    }
+  }
+```
+
+```ts
+  private finishScheduledExecution(exec: ToolRunContext, result: ToolExecutionResult): ToolExecutionResult {
+    let materializedResult: ToolExecutionResult
+    try {
+      materializedResult = this.materializeFinalResult(result)
+    } catch (error: unknown) {
+      materializedResult = this.materializeFinalResult(toolErrorResult(error))
+    }
+    let finalResult: ToolExecutionResult
+    try {
+      finalResult = this.materializeFinalResult(this.applyFinalContent(exec, materializedResult))
+    } catch (error: unknown) {
+      finalResult = this.materializeFinalResult(toolErrorResult(error))
+    }
+    this.notifyResult(exec, finalResult)
+    return finalResult
+  }
+```
+
+而三个 `tools/*` waterfall 的声明就写在工具注册表自己的事件表里（`tools/src/index.ts:143-208`，`pre-execute` `:153`、`execute` `:164`、`post-execute` `:176`、`result` `:198`）：
+
+```ts
+    'tools/pre-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision>
+```
+
+```ts
+    'tools/execute'(this: Scoped<ToolRuntime>, exec: ToolDispatchExecution, next: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult>
+```
+
+```ts
+    'tools/post-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>): Promise<PostToolDecision>
+```
+
+```ts
+    'tools/result'(this: Scoped<ToolRuntime>, exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): undefined
+```
+
+**第二张：waterfall 与 serial 的对照。**
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0126.svg" alt="第二张：waterfall 与 serial 的对照。" />
+
+> **图 52-3**　`waterfall` 与 `serial` 的对照：左边 waterfall 靠 `next()` 嵌套，**监听器顺序能改结论**；右边 serial 的监听器**只投递事实**（`agent.steer()`），由状态机重读数据决定，**顺序改不了结论**。这是第 2.5 节那条判据的形状。
+
+`dispatch.ts:119-149` 的真实派发实现——三种模式在这里分道扬镳：
+
+```ts
+  return {
+    emit(name, payload) {
+      // Cordis emit invokes callbacks through Array.map: one synchronous throw
+      // starves later listeners, and returned promises are discarded. Agent
+      // notifications are non-vetoing, so resolve the same filtered callback
+      // set ourselves and contain both failure modes independently.
+      const args: unknown[] = [carrier, name, fused(payload)]
+      const callbacks = ctx.events.dispatch('emit', args)
+      for (const callback of callbacks) {
+        try {
+          const returned: unknown = callback(...args)
+          void Promise.resolve(returned).catch((error: unknown) => {
+            ctx.logger.warn(`agent event "${name}" listener rejected: ${String(error)}`)
+          })
+        } catch (error: unknown) {
+          ctx.logger.warn(`agent event "${name}" listener threw: ${String(error)}`)
+        }
+      }
+    },
+    async serial(name, payload) {
+      // oxlint-disable-next-line typescript/unbound-method -- the events mixin accessor returns a pre-bound function
+      const serial = ctx.serial as (thisArg: Scoped<Agent>, name: string, ...args: unknown[]) => Promise<never>
+      return await serial(carrier, name, fused(payload))
+    },
+    waterfall(name, payload, ...rest) {
+      // oxlint-disable-next-line typescript/unbound-method -- the events mixin accessor returns a pre-bound function
+      const waterfall = ctx.waterfall as (thisArg: Scoped<Agent>, name: string, ...args: unknown[]) => never
+      return waterfall(carrier, name, fused(payload), ...rest)
+    },
+  }
+```
+
+**三种模式的区别就写在这段代码的长度里**：`emit` 要自己包一层 try/catch（因为它必须**容错**——一个监听器同步抛错不能饿死后面的监听器，返回的 promise 也被丢弃），`serial` 与 `waterfall` 直接委托给 Cordis 的对应派发器（因为它们的语义——顺序执行 / 环绕嵌套——已由框架保证）。
+
+**第三张：取消语义的"成对提交"。**
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0127.svg" alt="第三张：取消语义的&quot;成对提交&quot;。" />
+
+> **图 52-4**　取消语义的"成对提交"：在 `agent/request` / `prepareCall()` 的任一异步阶段取消，**system 提示词与 user 消息成对不提交**；同时标出提示词准入依据的是**这次实际路由的能力**，不是上一轮快照。
+
+代码级证据：`agent.ts:387-427` 里"先 `prepareRequest` → 提交 system → 提交 user → 送流"的顺序，正是"成对"的物理依据：
+
+```ts
+      const { config, preparedCall } = await this.prepareRequest(turn, step, signal)
+      ...
+      for (const { message, intent } of commits) {
+        this.session.append('system/message', { turn, step, message }, intent)
+      }
+      if (firstAttempt) {
+        for (const message of decision.messages) {
+          this.session.append('user/message', message, { surfaceOp: 'append' })
+        }
+      }
+```
+
+而 `turn()` 的 catch 分支把"取消"单独裁出成 `aborted` 原因，写进 `turn/end`（`agent.ts:349-364`）：
+
+```ts
+      // A cause is present exactly while the signal is aborted.
+      const cause = abortedCancelCause(signal)
+      if (cause !== undefined) {
+        turnEnds = { kind: 'aborted', reason: cause }
+        throw error
+      }
+```
+
+### 2.11 一手数据：81 条事件主表按分发模式分类
+
+事件主表共 **81 条**记录（`docs/event-producer-consumer.zh.md` 主表行数），按分发模式分：
+
+- **`emit` 59 条** —— 只观察、不改变行为；
+- **`waterfall` 17 条** —— 能做环绕中间件，忘调 `next()` 即否决；
+- **`parallel` 3 条**；
+- **`serial` 2 条** —— 顺序执行、可投递事实。
+
+**这四个数放在一起，结论很清楚：绝大多数事件是 `emit`（只观察）。** 真正"能改行为"的 `waterfall` 只有 17 条，而 `serial` 只有 2 条——**"拦截"是稀缺能力，不是默认可得的。** 这解释了本讲为什么把 `agent/turn-stopping` 的 serial 当成重点：它不是"少数的另一种选择"，而是**整套设计里刻意保留的极少数**。
+
+另外三个和本讲直接相关的数，**口径不同、别混用**：
+
+- 工具执行流水线的 mermaid 是 **20 个节点**（`docs/tool-execution-pipeline.zh.md:10-63`）；同文件的 `:8` 叙述段逐一点名的是 **7 类关注点**（`tools/pre-execute`、单调守卫、`tools/execute`、`tools/post-execute`、`projectContent`、`finalizeContent`、`tools/result`）；本书 2.8 节把它归并成 **13 行**。三个数分别是"节点数 / 文档叙述关注点数 / 本书归并行数"。
+- 本讲的两个关键事件 `agent/pre-step`、`agent/turn-stopping` 声明在 `packages/core/agent/src/runtime-types.ts`（`:309-320`、`:364-381`），属 `agent/*` 域——**它们不进日志**（进日志的是 `session/*` 会话事件，第 51 讲那 14 种）。
+- 工具执行流水线的四个会话侧配对事件 `tool/call` 与 `tool/result` 由 `packages/core/agent-loop/src/tool-calls.ts:262-290` 写入，**不在 `tools/` 包内**：流水线跑在工具注册表里，而"记录这次调用"是循环侧的事。
+
+### 2.12 搬到你自己系统：把 while 循环的四个拦截点暴露出来
+
+第 2.4 节给了判据，这里补**动手改自己循环**的路径。
+
+| dsh 的做法 | 你自己系统里该问的问题 |
+|---|---|
+| 四个位置都做成事件：`pre-step` / `request` / `llm/stream` / `tools/*`（`agent.ts:276`、`:559`、`:419`、`:517`） | 你的循环里，这四类位置现在是"事件、`if`、还是不存在"？ |
+| 主循环只有一句 `while (await this.turn()) {}`（`agent.ts:254`） | 你的循环主体有多少行？超过一屏，说明策略写进了循环。 |
+| 忘调 `next()` 即否决（`dispatch.ts:119-149`） | 你的"观察型"钩子有没有和"拦截型"共用一个挂载点？ |
+| 轮次收尾用 serial + `steer()` 投递事实（`agent.ts:343`） | 你的"能不能结束"判断，是返裁决还是投递事实？ |
+
+**落地步骤（五步，每步一个动作）**：
+
+1. **画一遍你系统的循环**，在图上标出四个位置：① 决定能否进入 ② 请求发出前 ③ 流式中 ④ 工具执行前后。
+2. **对每个位置写"当前实现"**，只能是三者之一：事件 / `if` / 不存在。
+3. **把 `if` 抽成事件**：先加 `emit` 型（只观察），跑一遍确认行为完全不变。
+4. **再升级需要"改结论"的那个**：用 `waterfall` 语义，把下游包成 `next()`。
+5. **最后改"能不能结束"这类判断**：从"钩子返回布尔"改成"钩子投递一条事实 + 状态机重读数据"。
+
+**★ 判据句**：
+
+> **循环里还剩几个 `if`，就是你还没暴露的拦截点数量。**
+
 ## 三、避坑清单
 
 - [ ] **别把循环写成"没有可挂载点"的 while。** 至少要暴露四个点：进入前、请求前、流式中、工具执行前后。
@@ -223,6 +466,9 @@ Agent 的取消不是"停下"这么简单：**在哪个时刻取消，决定了�
 - [ ] **提示词准入依据"这次实际走的路由能力"**，不要用上一轮记下的快照。
 - [ ] **给 UI 的逐字流与落日志的证据分开**：前者瞬态、进程本地；后者紧凑、完整、持久。
 - [ ] **策略的挂载位置要能核对。** 审批挂错了阶段（比如挂在后置），你会得到"审批通过了但工具已经跑完"这种最尴尬的结果。
+- [ ] **把"13 行归并"与"20 个节点"分清。** 文档图是 20 个节点、`:8` 叙述 7 类关注点，13 行是本书的归并——口径混用，你会先在"到底几个阶段"上吵起来。
+- [ ] **"流水线有几个阶段"这种数，要写清是哪一层的数。** 节点数、文档叙述的关注点数、你归并的行数，是三个不同的量。
+- [ ] **别只数"能拦的点"，要数"只观察的点"。** 全仓 81 条事件里 59 条是 `emit`——观察是常态，拦截是稀缺。
 
 ## 四、动手任务
 
@@ -244,6 +490,10 @@ Agent 的取消不是"停下"这么简单：**在哪个时刻取消，决定了�
 
 在"请求发出前"的位置人为取消一次。**任务**：检查日志里是否留下了**孤立的系统提示词**或**孤立的用户消息**。若有，你缺的正是这条"两半都不提交"的纪律。
 
+**步骤 5：数一遍你自己系统的事件，按分发模式分类**
+
+照 2.11 节的口径，把你系统里的事件按"只观察 / 能改结论 / 顺序执行"分三类，各数一遍。**任务**：如果你的"能改结论"那一类占比远高于 `dsh` 的 17/81，说明你把太多"观察"做成了"拦截"——那正是"谁先执行"这类无解问题的来源。
+
 ---
 
 ## 本讲小结
@@ -254,6 +504,6 @@ Agent 的取消不是"停下"这么简单：**在哪个时刻取消，决定了�
 4. **`agent/turn-stopping` 是 serial、没有 `next()`，理由是"数据决定，因此监听器顺序改不了结论"**——它把"表达异议"从**控制流**变成了**数据**（`agent.steer()`）。**这是本讲最值得搬走的一条设计。**
 5. **取消语义是"成对提交或成对不提交"**：在 `agent/request` / `prepareCall` 的任一异步阶段取消，system 与 user 消息都不进日志。提示词准入依据**这次实际路由的能力**，不是上一轮快照。
 6. **`startsRequestSeries` 这类声明必须用 `{ ...decision, ... }` 透传。** 手写字段清单会静默丢掉它，后果是缓存前缀失效——不报错，只是变贵。
-7. **工具执行是一条固定 13 阶段的流水线**：策略（审批 / 沙箱）在前、实现（`execute()`）在中、规范化（`projectContent` / `finalizeContent`）在后。**"审批没拦住"的答案，往往是它挂错了阶段。**
+7. **工具执行是一条固定顺序的流水线（文档图 20 节点，本书归并为 13 行）**：策略（审批 / 沙箱）在前、实现（`execute()`）在中、规范化（`projectContent` / `finalizeContent`）在后。**"审批没拦住"的答案，往往是它挂错了阶段。**
 
 下一讲打开这一模块**最"架构"的一讲**：**Capability Seam**。上一讲的 `ctx.llm`、`ctx.tools`、`ctx.fs` 都是同一类东西——但"三个角色的可替换能力"和"一个接口一份实现"**不是一回事**。我们要回答：**为什么"只有一个 provider"的接口，会因为"只有一个"而彻底失去可替换性。**

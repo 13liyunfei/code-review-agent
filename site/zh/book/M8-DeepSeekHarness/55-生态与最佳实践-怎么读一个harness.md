@@ -6,7 +6,7 @@
 >
 > **本讲也是全模块的方法收束**：把六讲的内容压成三个问题。**你能用它们去读 `dsh`，就能用它们去读 codex、读任何你遇到的 agent 系统。**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0115.svg" alt="本讲也是全模块的方法收束：把六讲的内容压成三个问题。你能用它们去读 `dsh`，就能用它们去读 codex、读任何你遇到的 agent 系统。" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0138.svg" alt="本讲也是全模块的方法收束：把六讲的内容压成三个问题。你能用它们去读 `dsh`，就能用它们去读 codex、读任何你遇到的 agent 系统。" />
 
 > **图 55-0**　本讲地图：读一个 harness 就用三个抓手——真相源（可重放）、替换点（seam）、拦截点（事件域与中间件）。而判断"这个仓库值不值得长期投入"，看它有没有把"文档不撒谎"做成门禁：文档级真源与前置判据。
 
@@ -205,6 +205,232 @@
 | 54 | **形态差异走配置与 patch，不走 fork**；"禁用"≠"不包含"；"例外形态"要另立**显式**的树；"只有 N 种形态"必须被 CI 守着 |
 | 55 | 读一个 harness 用三问；**决策记录不许被改写、必须写清被否决的方案**；**文档里的代码示例要变成可校验的镜像** |
 
+### 2.8 三个抓手：先画出它们的检索位置
+
+2.1 节给了三个问题，但三个问题必须落到**可检索的位置**上才有用。先画出这三处位置——它们是本讲后面所有纪律的坐标系。
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0139.svg" alt="2.1 节给了三个问题，但三个问题必须落到可检索的位置上才有用。先画出这三处位置——它们是本讲后面所有纪律的坐标系。" />
+
+> **图 55-1**　三个抓手各自"在哪里找"：真相源看会话日志与事件声明表，替换点看服务表的 `seam` 行，拦截点看事件矩阵的 `waterfall` 那一列；三者互相定位——知道拦截点，就能反查它挂在哪条 `seam` 上。
+
+三者不是三份并列清单，而是**互相定位**的：**知道拦截点（某个 `waterfall` 事件），就能反查它挂在哪个 `seam` 上**——因为事件总是由某条 seam 的消费方触发的；反过来，**读完一条 `seam` 行的"实现列 + 直接消费方列"，你同时拿到了替换点和"谁会因为替换而受影响"**。这正是第 53 讲"三角色"的真正价值：它不是分类学，是**一张可以互查的地图**。
+
+| 抓手 | 在 `dsh` 里的可检索落点 | 出处与口径 |
+|---|---|---|
+| **① 真相源** | 会话日志（`ctx.sessions`）；事件的**声明表**（主表） | 事件主表 **81** 条（`emit` 59 / `waterfall` 17 / `parallel` 3 / `serial` 2），出处 `docs/event-producer-consumer.zh.md`（`scripts/gen-doc-graphs.ts` 的生成物；数已核实） |
+| **② 替换点** | 服务表的 `seam` 行 | 服务表 **90** 条数据行：`core` 55 / `seam` 33 / `service` 1 / `bundle` 1；`docs/capability-seams.zh.md`:572–661 |
+| **③ 拦截点** | 事件矩阵的 `waterfall` 那一列 | 同上事件主表，`waterfall` 共 **17** 条 |
+
+**★ 判据句（本讲第八个判据）**：
+
+> **三个抓手必须能互相定位，才算真的找到了。** 只找到"有一张 seam 表"不算；**能从一个具体事件反查到它挂在哪条 seam、再由那条 seam 查回它的全部消费方**，才算把这张地图连通了。
+>
+> **连不通的地方就是你的风险点**：一个你查不到归属的事件、一条你找不到实现列的 seam——**它们正是三个月后调试时最贵的地方。**
+
+### 2.9 两条"不撒谎"的链：决策记录的四态与生成物的门禁
+
+2.2–2.5 讲了四条工程纪律。这一节把其中最容易照抄的两条**画成链**：一条管"人写的决策"，一条管"机器生成的文档"。
+
+**A. 决策记录：四态是一条生命周期，不是四个文件夹**
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0140.svg" alt="A. 决策记录：四态是一条生命周期，不是四个文件夹" />
+
+> **图 55-2**　决策记录的四态生命周期：`proposed` 经评审交付转 `implemented`，被否决转 `rejected`，只有 `implemented` 能冻结进 `archived`；四态条目数取自 `git ls-files`（工作区未落盘）。
+
+**目录即状态。** `.agents/notes/` 的顶层就是四态目录。但**在本次稀疏检出里，工作区只有 `AGENTS.md` / `README.zh.md` / `archived` / `implemented` 落盘，`proposed/` 与 `rejected/` 目录本身都不存在**（`.agents/notes/` 下 `ls` 输出）。所以**引用四态条目时，必须写明是 `git ls-files` 口径（工作区未落盘）**，否则会得出"目录是空的"这个错误结论。
+
+四态条目数（**口径：`git ls-files '.agents/notes/*'`，该路径下共 3,617 个被跟踪文件；工作区稀疏检出为空**）：
+
+| 生命周期 | 英文 `.md` | 中文 `.zh.md` | `.i18n.yaml` |
+|---|---|---|---|
+| `proposed/` | 40 | 40 | 40 |
+| `implemented/` | 511 | 509 | 509 |
+| `rejected/` | 14 | 14 | 14 |
+| `archived/` | 641 | 640 | 640 |
+
+**条目 = 一个英文 `.md`。** 这张表与 2.2 节的"规模感"表**不是同一口径**：2.2 节数的是**文件数**（一条标准记录 = 英/中/配对 3 个文件），所以那里的 `proposed` 是 120、`rejected` 是 42；**120 ÷ 3 = 40、42 ÷ 3 = 14，两处对得上。** 而 `implemented`（英文 511 / 中文 509）与 `archived`（641 / 640）三文件数不齐，**说明存在少量非三元组条目**——不要写成"均为完整三元组"。
+
+**文件名规范**（`.agents/notes/README.zh.md`:9）：每份记录的两个维度都编码在**路径**里——`{lifecycle}/{class}/yyyy-mm-dd-topic-title.md`；日期是主题**首次提出**时间（`:17`，以 git 历史为准），记录之间的交叉引用**必须用相对 Markdown 链接**（`:17`），这样既可机械检查、又能在目录间移动时保持有效。
+
+**必填结构（注意：不是 frontmatter）**。每份记录**没有 YAML frontmatter**，正文前是一个**严格的三行头部块**，后跟一个空行（`:64–78`）：
+
+```markdown
+# Agent Note: <title>
+
+Status: <status>
+```
+
+`Status:` 只有三种合法形式，且**必须与文件所在生命周期目录一致**（门禁会交叉检查，`:74–80`）：`Status: proposed` / `Status: implemented` / `Status: rejected — <why, in one line>`。状态行**不带日期、不带括号**（`:80`）——文件名记录首次提出日期，git 记录其余一切。正文骨架按生命周期固定（`:86–95`、`:101–107`）：`proposed/` 用 `## Problem` / `## Proposal` / `…` / `## Alternatives considered` / `## Acceptance criteria` / `## Risks`；`implemented/` 用 `## Problem` / `## Decision` / `…` / `## Alternatives considered` / `## Consequences`。**提案阶段的标题在 implemented 里会被门禁拒绝**（`:109`）：`## Proposal`、`## Plan`、`## Migration plan`、`## Acceptance criteria` 不得出现在已实施记录中。而**每份记录都有唯一一个强制章节：`## Alternatives considered`**（`:115–117`）。
+
+三个脚本管住这条链：`scripts/agent-note-tree.ts` 定义六个**封闭类别**的集合（`feature` / `bug-fix` / `simplification` / `architecture` / `process` / `testing`，`:25`、`:27–34`）；`scripts/verify-agent-note-format.ts` 守头部块与章节格式，命令 `pnpm run verify-agent-note-format`，是 `doc-sync` 的一环（`:62`）；`scripts/verify-archived-agent-notes.ts` 守归档——强制封闭类别目录树、三文件配对、归档元数据、伴随记录 hash、仅追加的冻结 manifest（`:44`）。
+
+**B. 生成物：一条"不能手改"的链**
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0141.svg" alt="B. 生成物：一条&quot;不能手改&quot;的链" />
+
+> **图 55-3**　文档级真源到生成物再到双语配对的门禁链：人工真源 → 生成器 → 生成物（英文）→ 中文对侧 → `.i18n.yaml` 配对记录 → 门禁；链上任何一环失败就返工，而生成物本身不许手改。
+
+链上每一环都有真实的脚本或文件。**生成器**是 `scripts/gen-doc-graphs.ts`（共 **1,732** 行；复算：`wc -l scripts/gen-doc-graphs.ts`），它的文件头注释写明了定位（`:1–6`）：
+
+```ts
+/**
+ * Generate the relationship layer above the module, Cordis, and tool catalogs.
+ * Enumerable facts come from source; hybrid graphs add manifests for policy the
+ * source cannot infer, while curated graphs explain flow and ownership.
+ * `--check` verifies the generated set.
+ */
+```
+
+**生成物**如 `docs/capability-seams.zh.md`、`docs/event-producer-consumer.zh.md` 等，**开头就署名了生成器并禁止手改**（`docs/capability-seams.zh.md`:1–2 原文）：
+
+```markdown
+<!-- 英文源文件由 scripts/gen-doc-graphs.ts 生成；本中文文件是通过双语配对维护的经评审对侧。
+     更新时先运行 `pnpm run gen-doc-graphs` 更新英文，再更新本文件并运行 `pnpm run verify-translation-pairing --write docs/capability-seams.md` 重新记录配对。 -->
+```
+
+**这条注释本身就是纪律：生成物不能手改——改真源、重跑生成器、再重新记录配对。**
+
+**门禁**侧：`verify-doc-graphs` 就是 `gen-doc-graphs.ts --check`，`verify-translation-pairing` 对应 `scripts/verify-translation-pairing.ts`（共 **367** 行；复算：`wc -l scripts/verify-translation-pairing.ts`）。后者的头注释（`:1–11`）：
+
+```ts
+/**
+ * Enforce complete English/Chinese pairs, matching structure, and recorded
+ * per-section hashes for every in-scope document. The manifest contains only explicit
+ * exclusions, which may have neither a counterpart nor a sidecar.
+ * `--list` reports state; `--write <pairs...>` records the named confirmed
+ * pairs (`--write --all` records every complete pair); `--cached <pairs...>`
+ * checks exact index bytes for hooks. ...
+ * See `docs/i18n/README.md` for the owning contract.
+ */
+```
+
+**配对记录 `.i18n.yaml` 是链上的"凭证"**——它是同目录的第三个文件，按标题分节存两侧 hash。`docs/capability-seams.i18n.yaml`（全文 11 行）长这样：
+
+```yaml
+# Bilingual-pair consistency record for capability-seams.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/capability-seams.md
+/:
+  en: 41d772192075e133
+  zh: 5ef3da69b4de1d8a
+/capability-seams-and-core-services:
+  en: 0d14d210d41c6770
+  zh: 964e92962b7cfa88
+```
+
+**它的位置决定了这个动作的形态**：`pnpm run verify-translation-pairing --write <pair>` 重新记录后，**那份 YAML 的 diff 就是"我确认这一对一致"这个动作本身**（`docs/i18n/README.zh.md`:12–13、`:24`）。排除清单的真源是 `scripts/translation-pairing.manifest.json`（共 13 行），**只含显式排除项**：
+
+```json
+{
+  "excluded": [
+    ".agents/notes/AGENTS.md",
+    ".agents/notes/implemented/AGENTS.md",
+    ".agents/notes/implemented/CLAUDE.md",
+    ".github/review-ownership/README.md",
+    "docs/AGENTS.md",
+    "docs/cordis-api/inherited.md",
+    "docs/i18n/style-samples.md",
+    "docs/i18n/terminology.md",
+    "docs/i18n/translation-prompt.md"
+  ]
+}
+```
+
+而这条门禁自己写明了边界：「**门禁通过意味着这组文档在当前内容上的一致性得到了确认，不代表确认本身正确可靠**」（`docs/i18n/README.zh.md`:46）。**把可判定的做门禁、把不可判定的明确标注——这是同一件事的两半。**
+
+最后是入口。这条链的全部命令都是根 `package.json` 里的 npm script（**该文件不在稀疏检出工作区，以下由 `git show HEAD:package.json` 读取**）：`:115–117`、`:121–123`、`:169–170`、`:188` 依次定义了 `verify-agent-note-classification` / `verify-agent-note-format` / `verify-archived-agent-notes` / `verify-translation-pairing` / `test:docs` / `gen-doc-graphs` / `verify-doc-graphs`（即 `--check`）/ `doc-sync`：
+
+```json
+"verify-agent-note-format": "tsx scripts/verify-agent-note-format.ts",
+"verify-archived-agent-notes": "tsx scripts/verify-archived-agent-notes.ts",
+"verify-translation-pairing": "tsx scripts/verify-translation-pairing.ts",
+"gen-doc-graphs": "tsx scripts/gen-doc-graphs.ts",
+"verify-doc-graphs": "tsx scripts/gen-doc-graphs.ts --check",
+"doc-sync": "tsx scripts/run-gates.ts doc-sync",
+```
+
+**C. 事故复盘：收录判据是一道"会变窄"的闸门**
+
+`docs/postmortem/README.zh.md`:9 的收录判据原文：
+
+> 当一个 bug 满足以下条件时，请撰写事故复盘：**隐蔽**（机制不显而易见，即使是细心的工程师也得费力重新推导）、**系统性**（逃逸的原因是测试、工具、约定的缺口，而非一次性的笔误）、**重新发现的代价高**（它消耗了真实的调试时间，且下次还会如此）。请链接该事故复盘所推动建立的防护措施（测试、AGENTS.md 规则、ADR）。
+
+两条边界：`:7`（postmortem ≠ Agent Note）、`:11`（每篇以执行摘要开头）。全部 4 篇的标题（`:13–18` 的表格）：
+
+| # | 标题 |
+|---|---|
+| 0001 | ACP（Agent Client Protocol）服务器在连接时崩溃：`export default` 丢失了插件的 `inject` |
+| 0002 | 文件系统快照工具被一个字面量 `!!js` 对象永久禁用 |
+| 0003 | Web agent（智能体）验证了替代服务器，而非承载其会话的 GUI |
+| 0004 | Landlock 部分强制执行通知导致子进程失败被误归类 |
+
+**这 4 个标题本身就是一门课**：它们全都不是"有人手滑"，而是**测试方式 / 工具 / 约定有缺口**——与 2.3 节那条"系统性"判据严格对应。
+
+### 2.10 一手数据：这个仓库的配套工程有多重
+
+本讲讲的是"这个仓库怎么保证文档不腐烂"。**这份保证的重量是可数的**——下表每个数字都能用一条命令复算。**先记住口径**：凡涉及根 `package.json`、`.github/workflows/`、`.agents/notes/` 的，都是 `git ls-files` / `git show HEAD:package.json` 口径，**这些路径在本次稀疏检出的工作区里没有落盘**。
+
+| 数什么 | 值 | 复算方式（口径） |
+|---|---|---|
+| npm script 总数 | 184 | `git show HEAD:package.json`，读 `scripts` 段的键数（python3） |
+| 其中 `verify-*` | 61 | 同上，按键名前缀统计 |
+| 其中 `gen-*` | 17 | 同上 |
+| `.agents/notes/` 被跟踪文件 | 3,617 | `git ls-files '.agents/notes/*'`（**工作区未落盘**） |
+| 四态条目数 | 40 / 511 / 14 / 641 | 同上 `git ls-files`（条目 = 一个英文 `.md`） |
+| workflow 文件 | 20 | `git ls-files '.github/workflows/*'`（**未落盘**，仅有文件名，未读内容） |
+| Makefile 功能 target | 5 个（`build` / `web` / `desktop` / `dev-web` / `dev-desktop`）加 `help` | `Makefile`:3–4、`:18–31` |
+| `docs/i18n/` 文件 | 5 个（style-samples.md 87 行 / terminology.md 214 行 / translation-prompt.md 263 行 + 两组配对） | `docs/i18n/` 下 `ls` 与 `wc -l` |
+| 事故复盘 | 4 篇 | `docs/postmortem/README.zh.md`:13–18 表格行数 |
+| `gen-doc-graphs.ts` 行数 | 1,732 | `wc -l scripts/gen-doc-graphs.ts` |
+| `verify-translation-pairing.ts` 行数 | 367 | `wc -l scripts/verify-translation-pairing.ts` |
+
+**读这张表要读两件事。** 第一，**重量落在"检查"上而不是"写作"上**：61 个 `verify-*` 对 17 个 `gen-*`——**生成器少、检查器多**，这正是"生成物由脚本产出、由门禁守死"的形态。第二，**Makefile 只有 5 个功能 target，而且它自己注明"真源是 `package.json`"**（`Makefile`:1–2）——**真源唯一**这条纪律，连一个只做转发的 Makefile 都要写清楚。
+
+### 2.11 搬到你自己系统：给你的项目装一份"读得懂"的配套
+
+最后把本讲的方法压成一份**可以照着做**的时间线——它既是你下次读别人 harness 的操作手册，也是你给自己系统做"体检"的顺序。
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0142.svg" alt="最后把本讲的方法压成一份可以照着做的时间线——它既是你下次读别人 harness 的操作手册，也是你给自己系统做&quot;体检&quot;的顺序。" />
+
+> **图 55-4**　"读一个 harness"的操作时间线：先把装配树打印出来，再依次找真相源、替换点、拦截点，最后看它的决策记录与事故复盘——每一步都要留下带出处的一行结论。
+
+先把 `dsh` 的做法翻译成"你该问的问题"：
+
+| `dsh` 的做法 | 你该问自己系统的问题 |
+|---|---|
+| 决策记录用目录编码生命周期（`proposed/` → `implemented/` → `archived/`） | 我项目的决策记录，状态是写在**正文里**还是**路径里**？ |
+| 决策记录**永不被编辑为不同的决策**，只能被取代并互链 | 我允许改历史决策吗？改了以后，谁还找得到"当初为什么没走那条路"？ |
+| `## Alternatives considered` 是唯一强制章节 | 我的决策记录里，写没写被否决的方案？ |
+| 生成物（能力图 / 事件矩阵 / 目录）由脚本产出、`--check` 守死 | 我有哪些文档是"人写容易漏、机器算不会漏"的？ |
+| 文档代码块带 `ts type-equiv` 标记 + manifest + 解析器比对 | 我的文档里贴的类型 / 配置 / SQL，有没有一条会失败的检查？ |
+| 双语配对三文件 + `.i18n.yaml` 记分节 hash | 我的多语言文档，代码围栏被改动时谁会报错？ |
+| 事故复盘只收"隐蔽 + 系统性 + 代价高" | 我的复盘标准是"发生过"还是"值得记"？ |
+
+**四条可以今天就动手的事**（每条一个小标题 + 一句"为什么" + 一步动作）：
+
+**动作 1：给你最常被抄错的那份文档加"一条会失败的检查"。**
+为什么：第 51 讲那条"存两份必然漂移"在这里同样成立——**凡是"另存一份"的东西，都迟早对不上。**
+怎么做：选一样（类型定义 / 配置示例 / SQL schema），按 2.4 节三要素落一遍（标记 + manifest + 真解析器比对）；验收标准是"故意改源码不改文档，检查必须失败"。
+
+**动作 2：把决策记录的"状态"从正文里搬到路径里。**
+为什么：写在正文里的状态，改的时候没人同步；**写在路径里的状态，移动文件本身就是一个必须过的动作。**
+怎么做：建 `proposed/` / `implemented/` / `rejected/` 三个目录 + 一条 review 规则——"标题里的状态与所在目录不符就打回"。
+
+**动作 3：写一页"什么值得复盘"。**
+为什么：**判据比模板重要**——没有判据，你的复盘文件夹会堆满"某人手滑了"。
+怎么做：照抄三条（隐蔽 / 系统性 / 重新发现代价高），并规定**每条复盘必须链接它推动建立的防护措施**。
+
+**动作 4：数一遍你的"配套重量"，再决定加哪条。**
+为什么：门禁不是越多越好，**每一条都要有人维护**；先知道你现有多少条检查，才知道加一条的成本落在谁身上。
+怎么做：用机械方式数你项目的检查脚本数 / CI 文件数 / 文档配对数，写成"口径 + 数字"表；**然后只挑 2 条落地。**
+
+**★ 判据句（本讲第九个判据）**：
+
+> **别整套照抄，只抄"能失败的那几条"。** 门禁的价值全在**它会失败**；一条从不失败的检查等于没有。**先装一条"故意改坏它、它必须报错"的检查，再加第二条。**
+>
+> **顺序也有讲究**：先装"生成物的 `--check`"（最容易做、收益最直接），再装"文档示例的镜像校验"（成本略高、防的是最贵的漂移），最后才轮到双语配对这种"你有多语言才需要"的。**从你自己最常被坑的那类文档开始。**
+
 ## 三、避坑清单
 
 - [ ] **读陌生系统先问三个问题，且按顺序**：真相源 → 替换点 → 拦截点。第一个答不出来，后面两个不值得深入。
@@ -218,6 +444,10 @@
 - [ ] **"能生成的别手写"**：能力图、事件矩阵、工具目录、配置目录、模块图、格式目录——全是机器算更准的东西。
 - [ ] **安全边界要如实写"做不到什么"。** "不保证隔离、不保证防止损害"比"企业级安全"更值得信任。
 - [ ] **"不接受 PR"要配"插件扩展面"**，否则生态不成立。
+- [ ] **决策记录写完就不是文档了，是资产**：状态变，文件就该换目录（`proposed/` → `implemented/` → `archived/`）。**用目录编码状态，别在正文里用一句话描述状态**——前者会被门禁拦住，后者没人同步。
+- [ ] **别在生成物上手改。** 生成物只读；要改就改真源、重跑生成器，`gen-*` 之后必须跟一个 `--check`。
+- [ ] **引用计数必须连口径一起写。** "511 条"是来自 `git ls-files`（工作区未落盘）还是来自工作区 `ls`，是两个数；**只写数字不写口径，等于没写。**
+- [ ] **"配套很重"不是褒义也不是贬义，是事实**：先数清有多少 `verify-*`、多少 workflow，再决定抄哪几条。**别把别人的全套门禁照搬进一个三人的仓库。**
 
 ## 四、动手任务
 
@@ -246,6 +476,10 @@
 用三问回答你自己的系统，**每一问都给出具体位置或明确写"没有"**。
 
 **任务**：三问里答"没有"的那一问，就是你系统的下一个架构任务。**这一条也正好接上下一讲**——我们要去看另一个真实产品，用它当第三参照物，检验这套问题是不是真的通用。
+
+**步骤 5（收尾）：数一遍"配套的重量"，再决定抄哪几条**
+
+**任务**：用机械方式数你项目里的检查脚本数、CI 文件数、文档配对数、决策记录条数，写成一张"口径 + 数字"表——**每行都要写清复算命令或出处文件**。**验收标准**：随便挑表里一行，换个人能在五分钟内用你写的口径复算出一模一样的数。**然后只挑 2 条落地**（推荐"生成物 `--check`"和"文档示例的镜像校验"），并在每条后面写一句"我为什么先抄它"。
 
 ---
 
