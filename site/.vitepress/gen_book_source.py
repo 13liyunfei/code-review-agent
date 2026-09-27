@@ -75,10 +75,18 @@ CODE_MUSTACHE = re.compile(r"`([^`\n]*\{\{[^`\n]*)`")
 MOD_DIR = re.compile(r"^M(\d+)-")
 LEC_FILE = re.compile(r"^(\d{2})-(.+)$")
 
-# 全书 mermaid 图块数的**口径快照**（164 = 73 导读图 + 91 正文机制图）。
+# 全书的**口径快照**（讲数 / mermaid 图块数）。
 # 单点定义：断言与提示都从这里取，避免「改了断言、忘了提示」两处各写一份而滞后。
-# 2026-09-26 M8 补 27 张正文机制图后由 137 更新为 164（口径见源稿 book/README.md「图表索引」）。
-EXPECTED_FIGS = 164
+#
+# 沿革：137 →（2026-09-26 M8 补 27 张正文机制图）164 →（2026-09-27「上篇加深度」
+#   补齐 44/49 等新讲 + 全书重编号 73 → 82 讲）290 = 82 导读图 + 208 正文机制图。
+#
+# ★ 改这两个数之前必须先**实测**，不许按印象改：用两条独立路径各算一次并要求相等——
+#     python3 ~/WorkBuddy/2026-09-11-23-45-agent-column/_build/mermaid-render/extract_blocks.py
+#     python3 -c "import gen_book_source as G; print(sum(len(f) for _,f in G.plan()[0].values()))"
+#   （2026-09-27 实测两边都是 290 / 82，逐模块也对得上。）
+EXPECTED_LECS = 82
+EXPECTED_FIGS = 290
 
 # 判据用：`{{` 是 Vue 插值起点，但 `<code v-pre>…</code>` 里的 `{{` 正是**被显式保护**的，
 # 必须先剥掉保护片段再数，否则这个检查会把唯一一处正确处理报成故障（本判据首版就犯了这错）。
@@ -124,15 +132,27 @@ def alt_of(prev_line: str) -> str:
 
 
 def count_bare_mustache(text: str) -> int:
-    """数「会被 Vue 当插值」的 `{{` 处数 —— 先剥掉 <code v-pre> 保护片段。"""
-    return len(MUSTACHE_UNPROTECTED.findall(V_PRE_CODE.sub("", text)))
+    """数「会被 Vue 当插值」的 `{{` 处数。
+
+    要剥掉两类**已被显式保护**的内容，否则这个检查会把正确处理报成故障
+    （这一类错本判据两版各犯过一次）：
+      ① `<code v-pre>…</code>` —— 本脚本给含 `{{` 的行内代码做的显式保护；
+      ② **围栏代码块** —— VitePress 会给代码块加 `v-pre`，**只有**围栏语言匹配
+         `/-vue(?=:|$)/` 时才不加（见 node_modules/vitepress 的 vitepress:v-pre 插件）。
+         本书的围栏语言是 java/text/yaml/bash，全部落在"加 v-pre"那一侧，
+         所以块内的 `{{variable_name}}`（第 13 讲逐字引用 langchain4j 类注释那段）
+         是安全的。这与 find_station_relative_links 用 FENCED 剥围栏是同一条理由：
+         **围栏内是逐字引用，不解析、不算问题**。
+    """
+    visible = FENCED.sub("", text)
+    return len(MUSTACHE_UNPROTECTED.findall(V_PRE_CODE.sub("", visible)))
 
 
 def convert(text: str, src_svg_of_block, first_no: int = 1):
     """源稿正文 → 站点正文。`src_svg_of_block(i)` 返回第 i 个块（0 起）对应的 SVG 绝对路径。
 
     `first_no` 是本文件第 1 张图的**全局**编号（1 起）。编号必须跨文件连续——
-    按文件重置会让所有讲都引用 diag-0001，164 个标签只指向 7 个资源（首版就犯了这个错，
+    按文件重置会让所有讲都引用 diag-0001，全部标签只指向 7 个资源（首版就犯了这个错，
     靠「引用集合必须等于资产集合」这条断言抓出来）。
 
     空白规则（**不是**逐字复刻历史产物——历史产物是多个一次性脚本版本的叠加，无法也不必复刻）：
@@ -315,6 +335,16 @@ def selftest():
     n_ok = count_bare_mustache("<code v-pre>{{&gt; common_header}}</code>")
     print("v-pre 保护片段待报数 = %d，期望 0 → %s" % (n_ok, "通过" if n_ok == 0 else "失败"))
     ok &= n_ok == 0
+    # 必放过：**围栏代码块内**的 `{{`（VitePress 给代码块加 v-pre；本书围栏语言都不是 -vue）。
+    #   第 13 讲逐字引用 langchain4j 类注释里的 {{variable_name}} 就是这一形态。
+    fence_sample = "前述\n\n```text\n * variables defined as {{variable_name}}\n```\n"
+    n_fence = count_bare_mustache(fence_sample)
+    print("围栏内 `{{` 待放过数 = %d，期望 0 → %s" % (n_fence, "通过" if n_fence == 0 else "失败"))
+    ok &= n_fence == 0
+    # 必报：围栏**外**的裸 `{{` 仍必须报 —— 防"把判据改成永远不报"这种假绿
+    n_bare = count_bare_mustache("正文里裸写 {{x}} 会被 Vue 当插值")
+    print("围栏外裸 `{{` 待报数 = %d，期望 1 → %s" % (n_bare, "通过" if n_bare == 1 else "失败"))
+    ok &= n_bare == 1
 
     # ⑦ 退化 alt 兜底：上一行是分隔线 → 取下一非空行（图注）；上一行有意义时不受影响
     src3 = ('> 视角切换声明\n\n---\n\n```mermaid\nflowchart TB\n  A-->B\n```\n\n'
@@ -331,7 +361,7 @@ def selftest():
         ok &= not is_degenerate_alt(s)
     print("退化判定（5 必报 + 4 必放过）→ %s" % ("通过" if ok else "失败"))
 
-    # ⑧ 编号必须**跨文件连续**（首版按文件重置 ⇒ 164 个标签只指向 7 个资源）
+    # ⑧ 编号必须**跨文件连续**（首版按文件重置 ⇒ 全部标签只指向 7 个资源）
     _b1, f1 = convert("```mermaid\nA-->B\n```\n", lambda i: "/tmp/a1.svg", 1)
     b2, f2 = convert("```mermaid\nA-->B\n```\n\n```mermaid\nC-->D\n```\n",
                      lambda i: "/tmp/a2.svg", 1 + len(f1))
@@ -392,8 +422,8 @@ def main() -> int:
     mods = sorted({r.split("/")[0] for r in lec}, key=lambda e: int(MOD_DIR.match(e).group(1)))
     n_fig = sum(len(f) for _, f in outputs.values())
     problems = []
-    if len(lec) != 73:
-        problems.append("讲数 %d ≠ 73" % len(lec))
+    if len(lec) != EXPECTED_LECS:
+        problems.append("讲数 %d ≠ %d" % (len(lec), EXPECTED_LECS))
     if len(mods) != 11:
         problems.append("模块数 %d ≠ 11" % len(mods))
     if n_fig != EXPECTED_FIGS:
@@ -402,7 +432,7 @@ def main() -> int:
         problems.append("图资产 %d ≠ 图块 %d" % (len(assets), n_fig))
 
     # ★ 引用集合必须与资产集合逐一相等：编号一旦「按文件重置」，
-    #   资产数照样是 164，但 164 个标签会全指向 7 个资源 —— 只有这条判据拦得住。
+    #   资产数与图块数照样相等，但全部标签会全指向 7 个资源 —— 只有这条判据拦得住。
     refs = DIAG_REF.findall("".join(b for b, _ in outputs.values()))
     if len(refs) != n_fig:
         problems.append("图标签 %d ≠ 图块 %d" % (len(refs), n_fig))

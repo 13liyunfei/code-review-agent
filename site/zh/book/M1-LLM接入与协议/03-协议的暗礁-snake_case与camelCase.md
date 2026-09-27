@@ -2,7 +2,7 @@
 
 > 🎯 导读问题：**"你怎么保证接口契约不被静默破坏？"**
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0005.svg" alt="🎯 导读问题：&quot;你怎么保证接口契约不被静默破坏？&quot;" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0009.svg" alt="🎯 导读问题：&quot;你怎么保证接口契约不被静默破坏？&quot;" />
 
 > **图 03-0**　本讲地图：同一个 JVM 里两套命名并存，在全局 `ObjectMapper` 上设策略会污染自有端点；判据是**让命名策略跟着「是否在模拟外部协议」走**，由每个 DTO 自己声明。
 
@@ -153,12 +153,14 @@ static final ObjectMapper MAPPER = new ObjectMapper()
 
 ### 3.2 走 snake_case 的：模拟 OpenAI 的那些 DTO
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0006.svg" alt="### 3.2 走 snake_case 的：模拟 OpenAI 的那些 DTO" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0010.svg" alt="### 3.2 走 snake_case 的：模拟 OpenAI 的那些 DTO" />
+
+> **图 03-1**　对外请求 DTO 的命名策略：`@JsonNaming(SnakeCaseStrategy)` 是**类级**注解，把同一个 record 的全部字段一次性转到 OpenAI 协议的 snake_case。**它是协议适配，不是编码风格**——所以只在跨协议的那一侧声明，绝不上提到全局 `ObjectMapper`。
 
 它的类注释点明了理由：
 
 ```java
-// dto/ChatCompletionRequest.java:13-15
+// token-factory/token-factory-client/src/main/java/io/tokenfactory/client/dto/ChatCompletionRequest.java:13-15
 // 字段命名与 OpenAI /v1/chat/completions 完全一致，因此把 baseUrl 直接指向
 // Token Factory 就能接入，无需改造任何调用代码——这也是这里显式声明 snake_case 的原因：
 // 它是<b>协议</b>，不是本项目的编码风格。
@@ -166,7 +168,9 @@ static final ObjectMapper MAPPER = new ObjectMapper()
 
 响应侧同理，而且多了一层设计——**厂商扩展字段放在顶层**：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0007.svg" alt="响应侧同理，而且多了一层设计——厂商扩展字段放在顶层：" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0011.svg" alt="响应侧同理，而且多了一层设计——厂商扩展字段放在顶层：" />
+
+> **图 03-2**　对外响应 DTO 的两段式字段布局：**标准字段**（`id` / `object` / `created` / `model` / `choices` / `usage`）留在 OpenAI 兼容区；**厂商扩展字段**（`provider` / `upstream_model` / `cost_micros` / `trace_id` / `latency_ms`）放顶层，配合 `@JsonIgnoreProperties(ignoreUnknown = true)`。**扩展不塞进 `choices`**——老客户端不认识新字段是常态，"被新字段打崩"才是事故。
 
 类注释说得很清楚：**前五个字段与 OpenAI 完全兼容**（标准 OpenAI SDK 能直接消费），后五个是扩展字段——**放在顶层而非塞进 `choices` 里**，这样标准客户端会自动忽略它们，兼容性不被破坏。
 
@@ -178,7 +182,9 @@ static final ObjectMapper MAPPER = new ObjectMapper()
 
 对照一下同一个 SDK 里的补报请求——**一个命名注解都没有**：
 
-<img class="mermaid-svg" src="/zh/book-assets/diag-0008.svg" alt="对照一下同一个 SDK 里的补报请求——一个命名注解都没有：" />
+<img class="mermaid-svg" src="/zh/book-assets/diag-0012.svg" alt="对照一下同一个 SDK 里的补报请求——一个命名注解都没有：" />
+
+> **图 03-3**　自有端点 DTO 与它的"定时炸弹"：`UsageReportRequest` 全 camelCase、**一条命名注解都没有**，靠的是"全局 `ObjectMapper` 不设策略"这个**隐性契约**。一旦有人在全局设了 `SNAKE_CASE`，`traceId` 会静默变成 `trace_id`，上行接口字段名不匹配——**这就是第 03 讲 §2.2 那个"聪明的省事"的代价**。
 
 **这就是"没有全局策略"的价值**：这个类什么都不用做，天然就是对的。而如果当初在全局设了 `SNAKE_CASE`，这个类会变成一颗定时炸弹。
 
@@ -206,6 +212,126 @@ record ModelsResponse(List<ModelInfo> data) {      // ← 模拟 OpenAI，snake_
 
 **同一个文件里，两个 DTO 两种策略**——而判据完全一致：`/v1/models` 在模拟 OpenAI，所以 snake_case；错误信封是我们自己的口径，所以 camelCase。
 
+### 2.5 命名策略的工业界口径：三家 SDK 的默认行为对照
+
+同一件"字段名谁说了算"的事，三家 Java/Kotlin 侧的大模型 SDK 给出了三种完全不同的答案。这不是风格差异，**它们各自用不同的机制解决了同一组风险**：
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0013.svg" alt="同一件&quot;字段名谁说了算&quot;的事，三家 Java/Kotlin 侧的大模型 SDK 给出了三种完全不同的答案。这不是风格差异，它们各自用不同的机制解决了同一组风险：" />
+
+> **图 03-4**　三家 SDK 的 JSON 命名口径：`openai-java` 走"**逐字段显式注解**"，`langchain4j` 走"**实现可替换的 SPI**"，`spring-ai` 走"**默认策略 + 不干预**"。三条路的共同点是**都没有用"在全局 `ObjectMapper` 上设 `SNAKE_CASE`"**——**这正是本讲的核心结论：全局命名策略是三家一致避开的选择。**
+
+逐条看它们的原文，三种取舍的代价一目了然。
+
+**第一条：`openai-java` 要求每个字段都标注解**，所以它自己的 SDK 反而要另建一个 mapper 绕开：
+
+```text
+// The SDK `ObjectMappers.jsonMapper()` requires that all fields of classes be marked with
+// `@JsonProperty`, which is not desirable in this context, as it impedes usability. Therefore, a
+// custom JSON mapper configuration is required.
+```
+
+`openai-java/openai-java-core/src/main/kotlin/com/openai/core/StructuredOutputs.kt:26-28`
+
+```text
+    @JsonProperty("access_token") val accessToken: String,
+```
+
+`openai-java/openai-java-core/src/main/kotlin/com/openai/auth/TokenExchangeResponse.kt:6`
+
+它的收益体现在**连"前缀"这种细节都被测住了**：
+
+```text
+    @JsonProperty("is_active") @ExcludeMissing fun _isActive() = isActive
+```
+
+`openai-java/openai-java-core/src/test/kotlin/com/openai/core/ObjectMappersTest.kt:22`（对应的测试名是 `write_whenFieldPrefixedWithIs_keepsPrefix()`，第 `:26` 行）
+
+**第二条：`langchain4j` 把 JSON 实现做成 SPI**，调用方根本不认识底层用的是哪个库：
+
+```text
+     * lets one implementation stand in for another without callers noticing which library is
+```
+
+`langchain4j/langchain4j-core/src/main/java/dev/langchain4j/internal/Json.java:28`
+
+```text
+        for (JsonCodecFactory factory : loadFactories(JsonCodecFactory.class)) {
+```
+
+`langchain4j/langchain4j-core/src/main/java/dev/langchain4j/internal/Json.java:80`
+
+**第三条：`spring-ai` 在自己的 OpenAI 路径上用的是一个"什么都不设"的 mapper**：
+
+```text
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+```
+
+`spring-ai/models/spring-ai-openai/src/main/java/org/springframework/ai/openai/OpenAiChatModel.java:142`
+
+而在它更新的 Responses 路径上，又直接复用了 `openai-java` 那个"要求全字段注解"的 mapper：
+
+```text
+    private static final JsonMapper jsonMapper = ObjectMappers.jsonMapper();
+```
+
+`spring-ai/models/spring-ai-openai/src/main/java/org/springframework/ai/openai/responses/ResponsesRequestBuilder.java:80`
+
+> **这三条放在一起，得出一个比"别设全局策略"更硬的结论**：命名口径必须**跟着边界走**，而不是跟着项目走。同一个进程里可以并存三种命名风格——只要你知道**每一侧归谁管**。`spring-ai` 自己就在一个仓里同时用了两种（第 `:142` 行与第 `:80` 行），它们并不冲突，因为它们管的是不同的边。
+
+### 2.6 一手数据：本项目 DTO 的命名风格分布与复算方式
+
+上面三条是"别人怎么做"。现在看你手上这套系统**自己的分布**——它同时也是判断"有没有把策略设歪"的最快办法。
+
+> **一手数据（可复算）**：`token-factory` 仓共 **100 个 Java 文件**，其中**只有 8 个**出现 `@JsonNaming`，**只有 2 个**出现 `@JsonProperty`。这 8 个里有 6 个是 DTO：
+> - client 侧：`token-factory-client/src/main/java/io/tokenfactory/client/dto/ChatCompletionRequest.java`、`ChatCompletionResponse.java`
+> - server 侧：`token-factory-server/src/main/java/io/tokenfactory/server/api/dto/ChatCompletionRequest.java`、`ChatCompletionResponse.java`、`ChatCompletionChunk.java`
+> - 另外 2 个不是 DTO：`token-factory-client/src/main/java/io/tokenfactory/client/Json.java`（建 mapper 的地方）与 `TokenFactoryClient.java`
+>
+> 复算方式：`grep -rl "@JsonNaming" --include='*.java' .`，再对每个文件看它是不是 DTO。
+
+这个分布本身就是判据：**命名注解的"面积"应该只覆盖跨协议的那条边，而不是整个工程**。8/100 是一个健康的比例；如果你的工程是 80/100，说明你把协议适配当成编码风格了。
+
+一次真实事故的两个数字，能说明另一件事：
+
+| 事实 | 数字 | 出处 |
+|---|---|---|
+| `openai-java` 里显式 `@JsonProperty` 的出现次数 | **21177** | 全仓 `grep -o '@JsonProperty' | wc -l` |
+| 它测试里专门盯"`is` 前缀不被吃"的用例 | 1 个（`ObjectMappersTest.kt:26`） | 同上 |
+
+**21177 处显式注解换来的，是"字段名永不漂移"**；而 1 个用例说明**连 `getIsActive()` 会被 Jackson 读成 `active` 这种冷门行为，都有人替你踩过并测住了**。这就是"用模板代码换确定性"的价格与收益——**如果你的系统要靠字段名对齐上游，这个价格是值得付的。**
+
+**搬到你自己系统**，三步复算：
+
+1. 数出你的"命名注解面积"：`grep -rl "@JsonNaming\|@JsonProperty" --include='*.java' . | wc -l`，再除以总文件数。
+2. 在全局 `Json` / `ObjectMapper` 配置类里搜三样东西：`SNAKE_CASE`、`PropertyNamingStrategies`、`setPropertyNamingStrategy`。**只要有一处，就是一个潜在的跨协议炸弹。**
+3. 把注解所在的文件**按目录分组**。如果它们不集中在"对接外部协议"的那一侧，说明口径已经渗到自有端点了。
+
+**判据**：命名注解应当**只出现在跨协议边的一侧，并且能被一条命令列全**。列不全，就是已经漏了。
+
+### 2.7 搬到你自己系统：跨协议边的契约测试怎么写
+
+命名风格问题最难的地方是**它极难被发现**（本讲 §2.3 已经讲过为什么）。所以它的防线不能是"小心一点"，只能是**机械化的契约测试**。
+
+<img class="mermaid-svg" src="/zh/book-assets/diag-0014.svg" alt="命名风格问题最难的地方是它极难被发现（本讲 §2.3 已经讲过为什么）。所以它的防线不能是&quot;小心一点&quot;，只能是机械化的契约测试。" />
+
+> **图 03-5**　跨协议边的四道契约测试：**①②管"对外那一侧"，③管"往返一致性"，④管"自家端点没被污染"**。第 ④ 条是最容易被忽略、也最值钱的一条——因为全局策略这类错误**只会从自有端点这一侧暴露出来**（对外那一侧被注解保护着，看不出问题）。
+
+| 工业界 / 本项目做法 | 你自己系统里该问的问题 |
+|---|---|
+| 每条边各自声明命名口径（`openai-java` 全注解 / `spring-ai` 两条路两种 mapper） | 你有几条跨协议边？每条边归谁定义字段名？ |
+| `langchain4j` 用 SPI 让"换 JSON 库"不动调用方 | 你换掉 Jackson 需要改几个文件？ |
+| 本仓 `Json.java` 里**故意不设**全局策略，并把理由写进类头 | 你的全局配置里，有没有一处"为了省事"设的策略？ |
+| `openai-java` 为 `is` 前缀专门写了用例 | 你有没有为"自己的字段名"写过一条断言？ |
+
+**搬到你自己系统**，四步：
+
+1. **给每条跨协议边建一个测试类**，名字里带上边名（如 `OpenAiWireFormatTest`）。
+2. **写一条金样本**：把一份真实的请求 JSON 逐字贴进测试，断言"序列化结果与它逐字相等"。**逐字，不是等价**——字段顺序可以放宽，**字段名一个字符都不能放宽**。
+3. **补一条自有端点的负向断言**：拿你的内网 DTO 序列化一次，断言输出里**不含下划线**。这条专门用来抓"全局策略被改坏"。
+4. **把这三条挂到 CI 的必过门禁上**，并在注释里写明"为什么不能改成等价比较"。
+
+**判据**：**跨协议边的正确性只能靠"逐字比对"证明，不能靠"看起来对"**。任何一条依赖"我记得当时是对的"的边，都还没有验收。
+
 ## 四、避坑清单
 
 - [ ] **绝不 `setPropertyNamingStrategy` 到全局。** 让每个 DTO 用 `@JsonNaming` 自己声明。
@@ -215,6 +341,9 @@ record ModelsResponse(List<ModelInfo> data) {      // ← 模拟 OpenAI，snake_
 - [ ] **给扩展字段显式加 `@JsonProperty`。** 依赖隐式命名推导，等于把契约交给框架的默认值。
 - [ ] **记住这个组合最危险**：`HTTP 200` + `字段为 null` + `无异常日志`。见到它就往"契约对不上"上查。
 - [ ] **验收时要看数据，不只看接口**。若当初财务没发现，这个 bug 能活一年。
+- [ ] **别把跨协议边的"逐字比对"降级成"等价比较"。** 字段顺序可以放宽，**字段名一个字符都不能放宽**——命名漂移恰恰是"看起来等价"的那种错。（§2.7）
+- [ ] **给自有端点专门写一条"输出里不含下划线"的负向断言。** 全局策略被改坏时，对外那一侧因为有注解保护而看不出问题，**只有自有端点这一侧会暴露**。（§2.7）
+- [ ] **命名注解要能一条命令列全，并且只出现在跨协议边的一侧。** 列不全说明口径已经渗到自家端点；本书参考仓的实测比例是 **8 / 100 个 Java 文件**。（§2.6）
 
 ## 五、动手任务
 
