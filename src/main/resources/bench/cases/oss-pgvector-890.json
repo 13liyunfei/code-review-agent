@@ -1,0 +1,170 @@
+{
+  "addedLines": 2,
+  "baseSha": "ea4746f6c0864cee7c400741c64c2651121c2aa8",
+  "changedFileCount": 2,
+  "changedFiles": [
+    "src/hnsw.c",
+    "src/ivfflat.c"
+  ],
+  "committedAt": "2025-08-23T10:31:22Z",
+  "deletedLines": 2,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/hnsw.c",
+      "labelSource": "manual",
+      "lineEnd": 133,
+      "lineStart": 133,
+      "note": "NULL→NIL 不是风格统一而是语义变更：NULL 判空指针、NIL 判空列表。在 PostgreSQL 的 List * 上二者通常等价，但改动人需要在提交信息里写明「为何等价」——否则下一个读者看到同文件里两种写法并存，会以为有一处漏改",
+      "ruleId": "SEM-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/ivfflat.c",
+      "labelSource": "manual",
+      "lineEnd": 95,
+      "lineStart": 95,
+      "note": "与 src/hnsw.c:133 是同一模式的第二处：两处必须同时改，否则 hnsw 与 ivfflat 在\"orderby 为空\"这一判据上行为分叉。本 PR 两处都改了，但这个\"必须成对\"的约束没有被注释或测试固定住，下一个只改一处的人不会被拦住",
+      "ruleId": "SEM-002",
+      "severity": "MINOR"
+    }
+  ],
+  "headSha": "a4cbd6308a36ef2237c47cdd5b66de67d97c1f8c",
+  "id": "oss-pgvector-890",
+  "labelCandidates": [],
+  "labeling": {
+    "candidates": 0,
+    "confirmed": 2,
+    "manual": 2,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "mergeCommitSha": "dd3a1e9137d8cd2877c9d5891e6d9928e3f59077",
+  "mergedAt": "2025-08-23T10:31:22Z",
+  "parent": "ea4746f6c0864cee7c400741c64c2651121c2aa8",
+  "patch": "diff --git a/src/hnsw.c b/src/hnsw.c\nindex 5bfc6193e..606466c82 100644\n--- a/src/hnsw.c\n+++ b/src/hnsw.c\n@@ -130,7 +130,7 @@ hnswcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,\n \tRelation\tindex;\n \n \t/* Never use index without order */\n-\tif (path->indexorderbys == NULL)\n+\tif (path->indexorderbys == NIL)\n \t{\n \t\t*indexStartupCost = get_float8_infinity();\n \t\t*indexTotalCost = get_float8_infinity();\ndiff --git a/src/ivfflat.c b/src/ivfflat.c\nindex 9e8370ffe..c4cd1bbdf 100644\n--- a/src/ivfflat.c\n+++ b/src/ivfflat.c\n@@ -92,7 +92,7 @@ ivfflatcostestimate(PlannerInfo *root, IndexPath *path, double loop_count,\n \tRelation\tindex;\n \n \t/* Never use index without order */\n-\tif (path->indexorderbys == NULL)\n+\tif (path->indexorderbys == NIL)\n \t{\n \t\t*indexStartupCost = get_float8_infinity();\n \t\t*indexTotalCost = get_float8_infinity();\n",
+  "patchBytes": 849,
+  "patchSha256": "039ac1bfe444de26098948def67d1acbd897379d1c51441c7819260d05c1f60a",
+  "prNumber": 890,
+  "prUrl": "https://github.com/pgvector/pgvector/pull/890",
+  "provenance": "github-pr",
+  "provenanceNote": "C 扩展：空列表改用 NIL（极小 diff，负向样本）",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/hnsw.c",
+            "lineEnd": 133,
+            "lineStart": 133,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "NULL→NIL 不是风格统一而是语义变更：NULL 判空指针、NIL 判空列表。在 PostgreSQL 的 List * 上二者通常等价，但改动人需要在提交信息里写明「为何等价」——否则下一个读者看到同文件里两种写法并存，会以为有一处漏改",
+            "file": "src/hnsw.c",
+            "lineEnd": 133,
+            "lineStart": 133,
+            "ruleId": "SEM-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "NULL→NIL 不是风格统一而是语义变更：NULL 判空指针、NIL 判空列表。在 PostgreSQL 的 List"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "与 src/hnsw.c:133 是同一模式的第二处：两处必须同时改，否则 hnsw 与 ivfflat 在\"orderby 为空\"这一判据上行为分叉。本 PR 两处都改了，但这个\"必须成对\"的约束没有被注释或测试固定住，下一个只改一处的人不会被拦住",
+            "file": "src/ivfflat.c",
+            "lineEnd": 95,
+            "lineStart": 95,
+            "ruleId": "SEM-002",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "与 src/hnsw.c:133 是同一模式的第二处：两处必须同时改，否则 hnsw 与 ivfflat 在\"order"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/hnsw.c",
+            "lineEnd": 133,
+            "lineStart": 133,
+            "ruleId": "SEM-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）SEM-001"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/hnsw.c",
+            "lineEnd": 633,
+            "lineStart": 633,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/hnsw.c",
+            "lineEnd": 650,
+            "lineStart": 650,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "pgvector/pgvector",
+  "repoUrl": "https://github.com/pgvector/pgvector",
+  "sha": "dd3a1e9137d8cd2877c9d5891e6d9928e3f59077",
+  "shaShort": "dd3a1e9",
+  "subject": "Use NIL for empty lists"
+}

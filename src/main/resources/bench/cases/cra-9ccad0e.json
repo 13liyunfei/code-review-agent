@@ -1,0 +1,268 @@
+{
+  "addedLines": 373,
+  "changedFileCount": 7,
+  "changedFiles": [
+    "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+    "src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java",
+    "src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java",
+    "src/test/java/com/codereview/agent/core/analysis/AdvancedAnalyzerTest.java",
+    "src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorEnhancementTest.java",
+    "src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java",
+    "src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorTimeoutDegradationTest.java"
+  ],
+  "committedAt": "2026-09-04T13:29:16+08:00",
+  "deletedLines": 58,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 195,
+      "lineStart": 195,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 97,
+      "lineStart": 97,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 173,
+      "lineStart": 173,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 242,
+      "lineStart": 242,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    }
+  ],
+  "id": "cra-9ccad0e",
+  "labelCandidates": [
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "} catch (Exception e) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "line": 194,
+      "ruleId": "LOGIC-002",
+      "severity": "MAJOR",
+      "why": "宽泛捕获 Exception/Throwable：会连带吞掉不该处理的异常（需确认是否只 log 不重抛）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[Advanced] 源码索引构建失败，回落 diff 片段模式：{}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "line": 195,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public List<AgentResult> analyze(PullRequest pr, List<CodeDiff> diffs) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "line": 97,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public List<AgentResult> analyze(List<CodeDiff> diffs) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+      "line": 173,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public Optional<String> source(String path) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java",
+      "line": 242,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    }
+  ],
+  "labeling": {
+    "candidates": 5,
+    "confirmed": 4,
+    "manual": 0,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "parent": "365480a09a79706c91c434692aa4226632ad1199",
+  "patch": "diff --git a/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java b/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java\nindex 840cfa0..a0e89f7 100644\n--- a/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java\n+++ b/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java\n@@ -1,14 +1,29 @@\n package com.codereview.agent.core.analysis;\n \n+import com.codereview.agent.core.analysis.index.AnalysisEngines;\n+import com.codereview.agent.core.analysis.index.IndexScope;\n+import com.codereview.agent.core.analysis.index.RepoIndex;\n+import com.codereview.agent.core.analysis.index.RepoSourceLocator;\n+import com.codereview.agent.core.analysis.spi.AnalysisUnit;\n import com.codereview.agent.core.model.AgentResult;\n import com.codereview.agent.core.model.AgentType;\n import com.codereview.agent.core.model.CodeDiff;\n import com.codereview.agent.core.model.Finding;\n+import com.codereview.agent.core.model.PullRequest;\n import com.codereview.agent.core.model.Severity;\n+import org.slf4j.Logger;\n+import org.slf4j.LoggerFactory;\n+import org.springframework.beans.factory.annotation.Autowired;\n import org.springframework.stereotype.Component;\n \n import java.util.ArrayList;\n+import java.util.HashMap;\n import java.util.List;\n+import java.util.Map;\n+import java.util.Optional;\n+import java.util.Set;\n+import java.util.regex.Matcher;\n+import java.util.regex.Pattern;\n \n /**\n  * 高级静态分析聚合器（企业级能力落地）。\n@@ -20,12 +35,26 @@ import java.util.List;\n  *   <li>{@link ScaScanner} —— 依赖 CVE / 许可证 / SBOM。</li>\n  * </ul>\n  *\n+ * <h2>同源病修复（与影响面分析同一个坑）</h2>\n+ * 旧实现用 {@link #reconstruct} 从 diff 片段重建源码再喂给 {@link AstAnalyzer}。\n+ * 真实 PR 的 diff 只含改动处 ±3 行上下文，方法体被截断，{@code AstAnalyzer} 解析出的方法\n+ * 行号/分支/嵌套全错，结果就是 STRUCT-LONG-METHOD / STRUCT-COMPLEX / STRUCT-NESTING\n+ * 在真实 PR 上<b>静默产出 0 条结论</b>——测试里看得到，因为测试用「新增文件全量 patch」替生产满足了前提。\n+ *\n+ * <p>治本：当能拿到仓库坐标（owner/repo + head SHA）与源码定位器时，走 {@link RepoIndex}\n+ * 拉取被改文件的<b>完整源码</b>喂给 {@link AstAnalyzer}，并只评估 hunk 实际触及的方法\n+ * （坐标对齐影响面分析的做法，避免把整文件历史长方法都翻出来刷屏）；\n+ * 影响面文案优先用索引的<b>跨文件</b>调用方，回落到文件内调用图。\n+ * 拿不到坐标（如单测）时回落旧路径，行为不变。\n+ *\n  * <p>输出按 Agent 维度拆分为多条 {@link AgentResult}（架构 + 安全），由 {@code Coordinator}\n  * 与主流程五 Agent 的结果一并聚合、去重、仲裁。\n  */\n @Component\n public class AdvancedAnalyzer {\n \n+    private static final Logger log = LoggerFactory.getLogger(AdvancedAnalyzer.class);\n+\n     /** 方法长度阈值（行）。 */\n     private static final int LONG_METHOD = 60;\n     /** 圈复杂度近似阈值（分支数）。 */\n@@ -33,48 +62,88 @@ public class AdvancedAnalyzer {\n     /** 最大嵌套深度阈值。 */\n     private static final int DEEP_NESTING = 5;\n \n+    /** hunk 头：{@code @@ -a,b +c,d @@} → 取新文件侧起始行与行数。 */\n+    private static final Pattern HUNK = Pattern.compile(\n+            \"^@@[^@]*\\\\+(\\\\d+)(?:,(\\\\d+))?\\\\s@@\", Pattern.MULTILINE);\n+\n+    private final RepoSourceLocator locator;\n+    private final AnalysisEngines engines;\n+    private final IndexScope scope;\n+\n+    /** 生产装配：注入源码定位器，开启「完整源码」模式。 */\n+    @Autowired\n+    public AdvancedAnalyzer(RepoSourceLocator locator) {\n+        this(locator, AnalysisEngines.defaults(), IndexScope.DEFAULT);\n+    }\n+\n+    /** 便于测试（无定位器 → 回落 diff 片段模式）。 */\n+    public AdvancedAnalyzer() {\n+        this(null);\n+    }\n+\n+    private AdvancedAnalyzer(RepoSourceLocator locator, AnalysisEngines engines, IndexScope scope) {\n+        this.locator = locator;\n+        this.engines = engines == null ? AnalysisEngines.defaults() : engines;\n+        this.scope = scope == null ? IndexScope.DEFAULT : scope;\n+    }\n+\n     /**\n-     * 对 PR 变更执行高级静态分析。\n+     * 对 PR 变更执行高级静态分析（完整签名：可拉取完整源码）。\n      *\n+     * @param pr    待审查 PR（需 owner/repo/headSha 才能拉完整源码）\n      * @param diffs 代码变更\n      * @return 拆分为架构 / 安全两条 Agent 结果\n      */\n-    public List<AgentResult> analyze(List<CodeDiff> diffs) {\n+    public List<AgentResult> analyze(PullRequest pr, List<CodeDiff> diffs) {\n         List<Finding> architecture = new ArrayList<>();\n         List<Finding> security = new ArrayList<>();\n \n         // 1. AST + 调用图（仅对 Java 文件）\n-        for (CodeDiff d : diffs) {\n-            if (!\"java\".equals(d.language())) {\n-                continue;\n-            }\n-            String source = reconstruct(d.patch());\n-            AstAnalyzer.AstReport report = AstAnalyzer.analyze(source, d.fileName());\n-            CallGraphAnalyzer.CallGraphReport graph =\n-                    CallGraphAnalyzer.analyze(source, report);\n-\n-            for (AstAnalyzer.ClassInfo ci : report.classes()) {\n-                for (AstAnalyzer.MethodInfo m : ci.methods()) {\n-                    if (m.length() > LONG_METHOD) {\n-                        architecture.add(structureFinding(d.fileName(), m.startLine(), \"STRUCT-LONG-METHOD\",\n-                                \"方法体过长\",\n-                                String.format(\"方法 %s 共 %d 行，超过 %d 行阈值，可读性与可测试性下降。\",\n-                                        m.name(), m.length(), LONG_METHOD),\n-                                \"拆分为更小的职责单一方法。\", impactText(graph, m.name())));\n-                    }\n-                    if (m.branches() > COMPLEX_METHOD) {\n-                        architecture.add(structureFinding(d.fileName(), m.startLine(), \"STRUCT-COMPLEX\",\n-                                \"方法圈复杂度偏高\",\n-                                String.format(\"方法 %s 分支数约 %d（阈值 %d），出错概率与维护成本上升。\",\n-                                        m.name(), m.branches(), COMPLEX_METHOD),\n-                                \"提取条件分支为独立方法或采用策略模式。\", impactText(graph, m.name())));\n-                    }\n-                    if (m.maxNesting() > DEEP_NESTING) {\n-                        architecture.add(structureFinding(d.fileName(), m.startLine(), \"STRUCT-NESTING\",\n-                                \"嵌套层级过深\",\n-                                String.format(\"方法 %s 最大嵌套深度 %d（阈值 %d）。\",\n-                                        m.name(), m.maxNesting(), DEEP_NESTING),\n-                                \"提前返回 / 卫语句降低嵌套。\", impactText(graph, m.name())));\n+        final RepoIndex index = buildIndex(pr, diffs);\n+        try (index) {\n+            // 跨文件调用方：callee 方法名 → 调用方签名（用于 STRUCT 影响面文案）\n+            Map<String, List<String>> crossCallers = buildCrossCallers(index);\n+\n+            for (CodeDiff d : diffs) {\n+                if (!\"java\".equals(d.language())) {\n+                    continue;\n+                }\n+                // 完整源码优先；拿不到就回落 diff 片段重建（坐标对不齐，只能不收敛范围）\n+                Optional<String> full = index.source(d.fileName());\n+                boolean fullSource = full.isPresent();\n+                String source = fullSource ? full.get() : reconstruct(d.patch());\n+                AstAnalyzer.AstReport report = AstAnalyzer.analyze(source, d.fileName());\n+                CallGraphAnalyzer.CallGraphReport graph = CallGraphAnalyzer.analyze(source, report);\n+\n+                // 仅全量源码模式下按 hunk 收敛到「实际改动的方法」，避免整文件历史长方法刷屏\n+                List<int[]> ranges = fullSource ? changedLineRanges(d.patch()) : List.of();\n+\n+                for (AstAnalyzer.ClassInfo ci : report.classes()) {\n+                    for (AstAnalyzer.MethodInfo m : ci.methods()) {\n+                        if (fullSource && !ranges.isEmpty() && !overlapsAny(ranges, m)) {\n+                            continue;\n+                        }\n+                        if (m.length() > LONG_METHOD) {\n+                            architecture.add(structureFinding(d.fileName(), m.startLine(), \"STRUCT-LONG-METHOD\",\n+                                    \"方法体过长\",\n+                                    String.format(\"方法 %s 共 %d 行，超过 %d 行阈值，可读性与可测试性下降。\",\n+                                            m.name(), m.length(), LONG_METHOD),\n+                                    \"拆分为更小的职责单一方法。\", impactText(m.name(), crossCallers, graph)));\n+                        }\n+                        if (m.branches() > COMPLEX_METHOD) {\n+                            architecture.add(structureFinding(d.fileName(), m.startLine(), \"STRUCT-COMPLEX\",\n+                                    \"方法圈复杂度偏高\",\n+                                    String.format(\"方法 %s 分支数约 %d（阈值 %d），出错概率与维护成本上升。\",\n+                                            m.name(), m.branches(), COMPLEX_METHOD),\n+                                    \"提取条件分支为独立方法或采用策略模式。\", impactText(m.name(), crossCallers, graph)));\n+                        }\n+                        if (m.maxNesting() > DEEP_NESTING) {\n+                            architecture.add(structureFinding(d.fileName(), m.startLine(), \"STRUCT-NESTING\",\n+                                    \"嵌套层级过深\",\n+                                    String.format(\"方法 %s 最大嵌套深度 %d（阈值 %d）。\",\n+                                            m.name(), m.maxNesting(), DEEP_NESTING),\n+                                    \"提前返回 / 卫语句降低嵌套。\", impactText(m.name(), crossCallers, graph)));\n+                        }\n                     }\n                 }\n             }\n@@ -100,22 +169,110 @@ public class AdvancedAnalyzer {\n         );\n     }\n \n-    private static Finding structureFinding(String file, int line, String ruleId,\n-                                           String title, String desc, String suggestion, String impact) {\n-        String fullDesc = impact.isBlank() ? desc : desc + \" \" + impact;\n-        return new Finding(AgentType.ARCHITECTURE, file, line, line, Severity.MAJOR,\n-                \"architecture\", ruleId, title, fullDesc, suggestion, 0.85, \"AST\");\n+    /** 兼容入口：无 PR 坐标时回落 diff 片段模式（与旧行为一致）。 */\n+    public List<AgentResult> analyze(List<CodeDiff> diffs) {\n+        return analyze(null, diffs);\n+    }\n+\n+    private static boolean hasCoords(PullRequest pr) {\n+        return pr.owner() != null && !pr.owner().isBlank()\n+                && pr.repoName() != null && !pr.repoName().isBlank()\n+                && pr.headSha() != null && !pr.headSha().isBlank();\n+    }\n+\n+    /** 构建源码索引；任何异常一律回落空索引（增强项不能拖垮审查主链路）。 */\n+    private RepoIndex buildIndex(PullRequest pr, List<CodeDiff> diffs) {\n+        if (pr == null || locator == null || !hasCoords(pr)) {\n+            return RepoIndex.empty();\n+        }\n+        try {\n+            RepoIndex idx = RepoIndex.build(locator.locate(pr.owner(), pr.repoName(), pr.headSha()),\n+                    diffs, scope, engines);\n+            log.info(\"[Advanced] 已构建源码索引：文件 {}，跨文件能力={}\",\n+                    idx.stats().fetched(), idx.crossFileCapable());\n+            return idx;\n+        } catch (Exception e) {\n+            log.warn(\"[Advanced] 源码索引构建失败，回落 diff 片段模式：{}\", e.getMessage());\n+            return RepoIndex.empty();\n+        }\n     }\n \n-    private static String impactText(CallGraphAnalyzer.CallGraphReport graph, String method) {\n-        var up = graph.impact(method);\n+    /** 从索引倒排构建「被调方法名 → 调用方签名」映射（跨文件感知）。 */\n+    private static Map<String, List<String>> buildCrossCallers(RepoIndex index) {\n+        Map<String, List<String>> map = new HashMap<>();\n+        if (index == null || !index.crossFileCapable()) {\n+            return map;\n+        }\n+        for (AnalysisUnit u : index.units().values()) {\n+            for (AnalysisUnit.CallSite cs : u.callSites()) {\n+                if (cs.calleeSignature() == null || cs.callerSignature() == null) {\n+                    continue;\n+                }\n+                map.computeIfAbsent(calleeName(cs.calleeSignature()), k -> new ArrayList<>())\n+                        .add(cs.callerSignature());\n+            }\n+        }\n+        return map;\n+    }\n+\n+    /** 从全限定签名取方法名（去参数）。 */\n+    private static String calleeName(String signature) {\n+        int dot = signature.lastIndexOf('.');\n+        String name = dot >= 0 ? signature.substring(dot + 1) : signature;\n+        int par = name.indexOf('(');\n+        return par >= 0 ? name.substring(0, par) : name;\n+    }\n+\n+    private static String impactText(String method, Map<String, List<String>> cross,\n+                                    CallGraphAnalyzer.CallGraphReport graph) {\n+        List<String> up = cross.getOrDefault(method, List.of());\n         if (up.isEmpty()) {\n-            return \"\";\n+            Set<String> inFile = graph.impact(method);\n+            if (inFile.isEmpty()) {\n+                return \"\";\n+            }\n+            return String.format(\"影响面：该方法被 %d 个上游方法调用（%s），改动需重点关注回归。\",\n+                    inFile.size(), String.join(\", \", inFile));\n         }\n         return String.format(\"影响面：该方法被 %d 个上游方法调用（%s），改动需重点关注回归。\",\n                 up.size(), String.join(\", \", up));\n     }\n \n+    // ===================== hunk 行号收敛（与影响面分析同口径） =====================\n+\n+    /** 解析 diff 中所有 hunk 的新文件侧行范围 [start, end]。 */\n+    private static List<int[]> changedLineRanges(String patch) {\n+        List<int[]> ranges = new ArrayList<>();\n+        if (patch == null) {\n+            return ranges;\n+        }\n+        Matcher m = HUNK.matcher(patch);\n+        while (m.find()) {\n+            int start = Integer.parseInt(m.group(1));\n+            int count = m.group(2) == null ? 1 : Integer.parseInt(m.group(2));\n+            // 行数 0 视为至少覆盖 1 行，避免空集把方法全过滤掉\n+            int end = start + Math.max(count, 1) - 1;\n+            ranges.add(new int[]{start, end});\n+        }\n+        return ranges;\n+    }\n+\n+    private static boolean overlapsAny(List<int[]> ranges, AstAnalyzer.MethodInfo m) {\n+        for (int[] r : ranges) {\n+            if (m.startLine() <= r[1] && m.endLine() >= r[0]) {\n+                return true;\n+            }\n+        }\n+        return false;\n+    }\n+\n+    private static Finding structureFinding(String file, int line, String ruleId,\n+                                           String title, String desc, String suggestion, String impact) {\n+        String fullDesc = impact.isBlank() ? desc : desc + \" \" + impact;\n+        return new Finding(AgentType.ARCHITECTURE, file, line, line, Severity.MAJOR,\n+                \"architecture\", ruleId, title, fullDesc, suggestion, 0.85, \"AST\");\n+    }\n+\n     private static Severity toSeverity(String s) {\n         return switch (s) {\n             case \"BLOCKER\" -> Severity.BLOCKER;\n@@ -125,7 +282,7 @@ public class AdvancedAnalyzer {\n         };\n     }\n \n-    /** 从 unified diff 重建新文件文本（去掉 - 行），供结构分析使用。 */\n+    /** 从 unified diff 重建新文件文本（去掉 - 行），供结构分析使用（回落路径）。 */\n     private static String reconstruct(String patch) {\n         if (patch == null || patch.isBlank()) {\n             return \"\";\ndiff --git a/src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java b/src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java\nindex 8bd3039..8dd31c9 100644\n--- a/src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java\n+++ b/src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java\n@@ -62,24 +62,27 @@ public final class RepoIndex implements AutoCloseable {\n     private final Map<String, AnalysisUnit> units;\n     private final Map<String, List<AnalysisUnit.CallSite>> callersByCallee;\n     private final Map<String, AnalysisUnit.MethodDecl> methodsBySignature;\n+    private final Map<String, String> sources;\n     private final Stats stats;\n     private final boolean crossFileCapable;\n \n     private RepoIndex(Path sourceRoot, Map<String, AnalysisUnit> units,\n                       Map<String, List<AnalysisUnit.CallSite>> callersByCallee,\n                       Map<String, AnalysisUnit.MethodDecl> methodsBySignature,\n+                      Map<String, String> sources,\n                       Stats stats, boolean crossFileCapable) {\n         this.sourceRoot = sourceRoot;\n         this.units = units;\n         this.callersByCallee = callersByCallee;\n         this.methodsBySignature = methodsBySignature;\n+        this.sources = sources;\n         this.stats = stats;\n         this.crossFileCapable = crossFileCapable;\n     }\n \n     /** 空索引（无跨文件能力时的占位，避免调用方判空）。 */\n     public static RepoIndex empty() {\n-        return new RepoIndex(null, Map.of(), Map.of(), Map.of(), Stats.ZERO, false);\n+        return new RepoIndex(null, Map.of(), Map.of(), Map.of(), Map.of(), Stats.ZERO, false);\n     }\n \n     /**\n@@ -209,7 +212,7 @@ public final class RepoIndex implements AutoCloseable {\n         log.info(\"[RepoIndex] 索引完成：拉取 {} 文件，分析成功 {}，失败 {}，跨文件能力={}\",\n                 stats.fetched(), stats.analyzed(), stats.failed(), crossFile);\n         return new RepoIndex(root, Map.copyOf(units), Map.copyOf(inverted),\n-                Map.copyOf(bySig), stats, crossFile);\n+                Map.copyOf(bySig), Map.copyOf(contents), stats, crossFile);\n     }\n \n     /**\n@@ -235,6 +238,11 @@ public final class RepoIndex implements AutoCloseable {\n         return Optional.ofNullable(units.get(path));\n     }\n \n+    /** 取某文件的完整源码（索引阶段从仓库拉取并物化的内容）。 */\n+    public Optional<String> source(String path) {\n+        return Optional.ofNullable(sources.get(path));\n+    }\n+\n     public Map<String, AnalysisUnit> units() {\n         return units;\n     }\ndiff --git a/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java b/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java\nindex 2d35966..2868dbb 100644\n--- a/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java\n+++ b/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java\n@@ -292,8 +292,15 @@ public class CompletableFutureCoordinator implements Coordinator {\n     public ReviewReport review(PullRequest pr) {\n         ReviewContext ctx = pr.toContext();\n         List<CodeDiff> diffs = pr.diffs();\n-        // 全链路追踪：runId 与 traceId 统一，使审查历史/报告与日志链路可据同一 ID 关联\n-        String runId = TraceContext.ensure();\n+        // 断点续跑幂等键（关键修正）：\n+        // 旧实现直接取 TraceContext.ensure()——那是每次请求随机生成的 traceId。\n+        // 崩溃后「同 PR 重试」是新的 HTTP 请求，拿到的是另一串随机 traceId，\n+        // 于是 resumeStore.load(runId) 永远查不到断点，断点续跑在生产上永远不生效\n+        // （典型的「feature 只在测试里跑过、线上是死代码」）。\n+        // 改为从 PR 身份派生稳定键：同一 PR（owner/repo + 编号 + head SHA）的多次审查共享同一 runId，\n+        // 崩溃恢复时才能命中上次落盘的断点；traceId 仍写入 MDC 供日志链路关联。\n+        String runId = resumeKey(pr);\n+        TraceContext.set(runId);\n         long start = System.currentTimeMillis();\n         String teamId = pr.teamId();\n \n@@ -434,7 +441,7 @@ public class CompletableFutureCoordinator implements Coordinator {\n                 : CompletableFuture.supplyAsync(TraceContext.wrap(() -> {\n                     long a0 = System.currentTimeMillis();\n                     log.info(\"[Coordinator] 高级静态分析 开始（AST/调用图/SCA）\");\n-                    List<AgentResult> r = advancedAnalyzer.analyze(diffs);\n+                    List<AgentResult> r = advancedAnalyzer.analyze(pr, diffs);\n                     int total = r.stream().mapToInt(ar -> ar.findings().size()).sum();\n                     log.info(\"[Coordinator] 高级静态分析 完成：{} 个 Agent 结果，共 {} 条，耗时 {}ms\",\n                             r.size(), total, System.currentTimeMillis() - a0);\n@@ -567,6 +574,28 @@ public class CompletableFutureCoordinator implements Coordinator {\n         return report;\n     }\n \n+    /**\n+     * 断点续跑幂等键：从 PR 身份派生，而非随机 traceId。\n+     *\n+     * <p>设计要点：\n+     * <ul>\n+     *   <li>必须稳定——同 PR 的多次审查（含崩溃后重试）算出同一个键，才能命中上次落盘的断点；\n+     *       用随机 traceId 当键是此前断点续跑「永远不生效」的根因。</li>\n+     *   <li>含 head SHA——同 PR 换了新的 commit 应重开审查而非续跑旧断点，\n+     *       避免沿用上一个 commit 的半成品（残留断点仍会被 ResumeJanitor 按 TTL 回收）。</li>\n+     *   <li>headSha 缺失时回落到 {@code repo#id}，保证旧调用方（不带 SHA）也能复用同一键。</li>\n+     * </ul>\n+     */\n+    private static String resumeKey(PullRequest pr) {\n+        String base = (pr.repo() == null ? \"?\" : pr.repo()) + \"#\" + pr.id();\n+        String head = pr.headSha();\n+        String key = (head == null || head.isBlank()) ? base : base + \"@\" + head;\n+        // runId 同时被当作文件名使用（轨迹记录器 / 断点存储），必须文件系统安全：\n+        // repo 形如 owner/repo 含 \"/\"，直接用会写出非法文件名（对应文件/目录创建失败，\n+        // 表现为「轨迹丢了」「断点落不了盘 → 续跑永远命中不了」）。\n+        return key.replace('/', '_').replace('\\\\', '_');\n+    }\n+\n     /**\n      * 保存断点快照：已完成 Agent 类型 + 已产出发现（供崩溃后同 runId 续跑）。\n      * 仅统计主审查 Agent（高级静态分析每次重跑，不参与断点）。\ndiff --git a/src/test/java/com/codereview/agent/core/analysis/AdvancedAnalyzerTest.java b/src/test/java/com/codereview/agent/core/analysis/AdvancedAnalyzerTest.java\nnew file mode 100644\nindex 0000000..1181f57\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/analysis/AdvancedAnalyzerTest.java\n@@ -0,0 +1,112 @@\n+package com.codereview.agent.core.analysis;\n+\n+import com.codereview.agent.core.analysis.index.RepoSourceLocator;\n+import com.codereview.agent.core.analysis.index.SourceFetcher;\n+import com.codereview.agent.core.model.AgentResult;\n+import com.codereview.agent.core.model.AgentType;\n+import com.codereview.agent.core.model.CodeDiff;\n+import com.codereview.agent.core.model.Finding;\n+import com.codereview.agent.core.model.PullRequest;\n+import org.junit.jupiter.api.Test;\n+\n+import java.util.List;\n+import java.util.Optional;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertFalse;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 验证 AdvancedAnalyzer 的「完整源码」根治：\n+ * 旧实现从 diff 片段重建源码，真实 PR 上方法体被截断，STRUCT-* 静默产出 0 条。\n+ * 修复后走 RepoIndex 拉完整源码，长方法/高复杂度/深嵌套都能被检出，且仅收敛到 hunk 触及的方法。\n+ */\n+class AdvancedAnalyzerTest {\n+\n+    /** 构造一个含「超长方法」的完整 Java 源：longMethod 约 80 行，shortMethod 很短。 */\n+    private static String fullSource() {\n+        StringBuilder sb = new StringBuilder();\n+        sb.append(\"package demo;\\n\");\n+        sb.append(\"public class Big {\\n\");\n+        sb.append(\"  public void longMethod() {\\n\");\n+        for (int i = 0; i < 78; i++) {\n+            sb.append(\"    int v\").append(i).append(\" = \").append(i).append(\";\\n\");\n+        }\n+        sb.append(\"  }\\n\");\n+        sb.append(\"  public void shortMethod() {\\n\");\n+        sb.append(\"    int x = 1;\\n\");\n+        sb.append(\"  }\\n\");\n+        sb.append(\"}\\n\");\n+        return sb.toString();\n+    }\n+\n+    /** diff hunk 只新增一行，覆盖整体（让 hunk 行范围与被改长方法相交）。 */\n+    private static CodeDiff diffTouchingLongMethod() {\n+        String patch = \"diff --git a/demo/Big.java b/demo/Big.java\\n\"\n+                + \"--- a/demo/Big.java\\n\"\n+                + \"+++ b/demo/Big.java\\n\"\n+                + \"@@ -1,82 +1,83 @@\\n\"\n+                + \"+// 新增一行注释\\n\"\n+                + \" package demo;\\n\";\n+        // addedLines/delLines 仅用于构造，不影响分析路径\n+        return new CodeDiff(\"demo/Big.java\", patch, \"java\", 83, 82);\n+    }\n+\n+    private static RepoSourceLocator locatorReturning(String source) {\n+        return (owner, repo, ref) -> new SourceFetcher() {\n+            @Override\n+            public Optional<String> fetch(String path) {\n+                return \"demo/Big.java\".equals(path) ? Optional.of(source) : Optional.empty();\n+            }\n+\n+            @Override\n+            public List<String> listDir(String dir) {\n+                return List.of();\n+            }\n+        };\n+    }\n+\n+    private static PullRequest pr() {\n+        return new PullRequest(7001, \"demo/adv\", \"t\", \"@bob\", \"main\",\n+                \"default\", List.of(diffTouchingLongMethod()), \"abcdef\");\n+    }\n+\n+    @Test\n+    void detectsLongMethodWithFullSource() {\n+        AdvancedAnalyzer analyzer = new AdvancedAnalyzer(locatorReturning(fullSource()));\n+        List<AgentResult> results = analyzer.analyze(pr(), List.of(diffTouchingLongMethod()));\n+\n+        AgentResult arch = results.stream()\n+                .filter(r -> r.agentType() == AgentType.ARCHITECTURE).findFirst().orElseThrow();\n+        List<Finding> struct = arch.findings().stream()\n+                .filter(f -> f.ruleId().equals(\"STRUCT-LONG-METHOD\")).toList();\n+\n+        assertEquals(1, struct.size(), \"完整源码下应检出长方法（旧实现因 diff 片段恒为 0）\");\n+        assertTrue(struct.get(0).description().contains(\"longMethod\"), \"应定位到 longMethod\");\n+    }\n+\n+    @Test\n+    void doesNotFlagUntouchedShortMethod() {\n+        AdvancedAnalyzer analyzer = new AdvancedAnalyzer(locatorReturning(fullSource()));\n+        List<AgentResult> results = analyzer.analyze(pr(), List.of(diffTouchingLongMethod()));\n+\n+        AgentResult arch = results.stream()\n+                .filter(r -> r.agentType() == AgentType.ARCHITECTURE).findFirst().orElseThrow();\n+        boolean shortFlagged = arch.findings().stream()\n+                .anyMatch(f -> f.description().contains(\"shortMethod\"));\n+        assertFalse(shortFlagged, \"hunk 未触及的短方法不应被翻出来（范围收敛）\");\n+    }\n+\n+    @Test\n+    void fallsBackToZeroWhenNoSourceAvailable() {\n+        // 无定位器 → 回落 diff 片段模式；片段里方法体被截断，长方法无法识别\n+        AdvancedAnalyzer analyzer = new AdvancedAnalyzer(); // 无 locator\n+        List<AgentResult> results = analyzer.analyze(pr(), List.of(diffTouchingLongMethod()));\n+\n+        AgentResult arch = results.stream()\n+                .filter(r -> r.agentType() == AgentType.ARCHITECTURE).findFirst().orElseThrow();\n+        boolean longFlagged = arch.findings().stream()\n+                .anyMatch(f -> f.ruleId().equals(\"STRUCT-LONG-METHOD\"));\n+        assertFalse(longFlagged, \"无完整源码时（如纯单测）回落旧行为，不误报\");\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorEnhancementTest.java b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorEnhancementTest.java\nindex 159484f..338a7f8 100644\n--- a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorEnhancementTest.java\n+++ b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorEnhancementTest.java\n@@ -146,11 +146,18 @@ class CoordinatorEnhancementTest {\n \n     @Test\n     void resumesFromCheckpointWithoutRerunningDoneAgents(@TempDir Path tempDir) {\n+        // 断点续跑幂等键改为「从 PR 身份派生」——这是修复 P0 的核心：\n+        // 旧实现用随机 traceId 当键，同 PR 重试永远命中不了断点，feature 生产上从不生效。\n+        // 这里用与 Coordinator 相同的派生规则算出键，预置断点使其可命中。\n+        String headSha = \"sha1abc\";\n+        // 注意：repo 含 \"/\" 会被 resumeKey 替换为 \"_\"，故键里是 \"demo_resume\" 而非 \"demo/resume\"\n+        String expectedKey = \"demo_resume#9004@\" + headSha;\n+\n         // 预置断点：SECURITY 已完成并产出 1 条 MAJOR 发现\n         Finding restored = new Finding(AgentType.SECURITY, \"T.java\", 2, 2, Severity.MAJOR,\n                 \"security\", \"SEC-RESTORED\", \"title\", \"desc\", \"建议\", 0.9, \"RULE\");\n         FileResumeStore resumeStore = new FileResumeStore(tempDir);\n-        resumeStore.save(new ResumeState(\"resume-run-1\", 9004, \"demo/resume\", \"default\",\n+        resumeStore.save(new ResumeState(expectedKey, 9004, \"demo/resume\", \"default\",\n                 java.util.Set.of(AgentType.SECURITY), List.of(restored), System.currentTimeMillis()));\n \n         CaptureAgent security = new CaptureAgent(AgentType.SECURITY, () -> List.of(f(\"T.java\", 6)));\n@@ -162,21 +169,21 @@ class CoordinatorEnhancementTest {\n                 java.util.concurrent.ForkJoinPool.commonPool(), null, recorder,\n                 new com.codereview.agent.core.enhance.ReviewEnhancements(resumeStore, null, null, null));\n \n-        // 固定 runId，使断点可命中\n-        com.codereview.agent.core.trace.TraceContext.set(\"resume-run-1\");\n+        // 带 headSha 的 PR：键 = repo#id@headSha，与预置断点一致 → 可命中\n         PullRequest pr = new PullRequest(9004, \"demo/resume\", \"t\", \"@bob\", \"main\",\n-                List.of(new CodeDiff(\"T.java\", \"+x\", \"java\", 1, 0)));\n+                \"default\", List.of(new CodeDiff(\"T.java\", \"+x\", \"java\", 1, 0)), headSha);\n         ReviewReport report = coordinator.review(pr);\n \n-        // 1) 核心约束：仍产出报告，且恢复的发现 + 新 Agent 发现都在\n+        // 1) 核心约束：仍产出报告，已完成 Agent 不重跑、未完成 Agent 执行\n+        assertEquals(expectedKey, report.getRunId(), \"runId 必须源自 PR 身份（修复 P0）\");\n         assertEquals(0, security.calls.get(), \"已完成 Agent 不得重跑（断点续跑）\");\n         assertEquals(1, logic.calls.get(), \"未完成 Agent 应执行\");\n         assertTrue(report.getFindings().stream().anyMatch(x -> x.ruleId().equals(\"SEC-RESTORED\")),\n                 \"断点恢复的发现应并入报告\");\n-        // 2) 正常完成 → 断点清理\n-        assertTrue(resumeStore.load(\"resume-run-1\", \"default\").isEmpty(), \"审查完成后断点应清理\");\n+        // 2) 正常完成 → 断点清理（以派生键为准）\n+        assertTrue(resumeStore.load(expectedKey, \"default\").isEmpty(), \"审查完成后断点应清理\");\n         // 3) 轨迹含 review.resumed 事件（断点续跑可审计）\n-        Path file = tempDir.resolve(\"default\").resolve(\"trajectories\").resolve(\"resume-run-1.jsonl\");\n+        Path file = tempDir.resolve(\"default\").resolve(\"trajectories\").resolve(expectedKey + \".jsonl\");\n         try {\n             String content = Files.readString(file);\n             assertTrue(content.contains(\"\\\"review.resumed\\\"\"), \"轨迹应含 review.resumed\");\ndiff --git a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java\nindex 2cf6bac..774815c 100644\n--- a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java\n+++ b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java\n@@ -64,7 +64,7 @@ class CoordinatorPlanningTest {\n     }\n \n     @Test\n-    void 启用规划时走DAG路径且各Agent仅执行一次(@TempDir Path tmp) throws Exception {\n+    void planningEnabledRunsDagPathWithEachAgentOnce(@TempDir Path tmp) throws Exception {\n         Files.createDirectories(tmp);\n         ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());\n         FakeAgent logic = new FakeAgent(AgentType.LOGIC);\n@@ -103,7 +103,7 @@ class CoordinatorPlanningTest {\n     }\n \n     @Test\n-    void 未启用规划时行为与旧版一致(@TempDir Path tmp) {\n+    void planningDisabledBehavesLikeLegacyCoordinator(@TempDir Path tmp) {\n         ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());\n         FakeAgent logic = new FakeAgent(AgentType.LOGIC);\n \ndiff --git a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorTimeoutDegradationTest.java b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorTimeoutDegradationTest.java\nindex 53d0140..84cab32 100644\n--- a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorTimeoutDegradationTest.java\n+++ b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorTimeoutDegradationTest.java\n@@ -100,7 +100,9 @@ class CoordinatorTimeoutDegradationTest {\n         BlockingAdvancedAnalyzer(long sleepMs) {\n             this.sleepMs = sleepMs;\n         }\n-        @Override public List<AgentResult> analyze(List<CodeDiff> diffs) {\n+        // 覆写生产签名 analyze(pr, diffs)：旧签名 analyze(List) 只是兼容委托，桩若覆写旧的\n+        // 将不再拦截生产调用（Coordinator 已切新签名）——这正是本测试要守护的接线。\n+        @Override public List<AgentResult> analyze(PullRequest pr, List<CodeDiff> diffs) {\n             try {\n                 Thread.sleep(sleepMs);\n             } catch (InterruptedException e) {\n",
+  "patchBytes": 34934,
+  "patchSha256": "425c13a5302c944f190f35f322b3d1cf1158c7c08ed9cd79ad5b45be0a34ce4e",
+  "provenance": "git-history",
+  "provenanceNote": "fix：AdvancedAnalyzer 同源病根治 + 断点续跑 key 稳定化",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 195,
+            "lineStart": 195,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 195,
+            "lineStart": 195,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 195,
+            "lineStart": 195,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）AE-001"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 97,
+            "lineStart": 97,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 173,
+            "lineStart": 173,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java",
+            "lineEnd": 242,
+            "lineStart": 242,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 742,
+            "lineStart": 742,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+            "lineEnd": 759,
+            "lineStart": 759,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "code-review-agent",
+  "repoUrl": "https://github.com/13liyunfei/code-review-agent",
+  "sha": "9ccad0e350c1b8c6242971e33c6fc9a103680909",
+  "shaShort": "9ccad0e",
+  "subject": "fix(analysis): AdvancedAnalyzer 同源病根治与断点续跑 key 稳定化"
+}

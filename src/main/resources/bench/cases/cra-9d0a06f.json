@@ -1,0 +1,256 @@
+{
+  "addedLines": 346,
+  "changedFileCount": 5,
+  "changedFiles": [
+    "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+    "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+    "src/main/resources/application.yml",
+    "src/test/java/com/codereview/agent/core/resume/ResumeJanitorTest.java",
+    "src/test/java/com/codereview/agent/core/resume/ResumeStoreTest.java"
+  ],
+  "committedAt": "2026-09-03T13:29:20+08:00",
+  "deletedLines": 4,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 130,
+      "lineStart": 130,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 148,
+      "lineStart": 148,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 54,
+      "lineStart": 54,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 48,
+      "lineStart": 48,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    }
+  ],
+  "id": "cra-9d0a06f",
+  "labelCandidates": [
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[Resume] 断点根目录扫描失败（跳过本轮清理）：dir={}, 原因={}\", baseDir, e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+      "line": 130,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[Resume] 断点目录扫描失败（跳过）：dir={}, 原因={}\", dir, e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+      "line": 148,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[Resume] 残留断点清理异常（本轮跳过）：{}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+      "line": 54,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public void purge() {",
+      "file": "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+      "line": 48,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    }
+  ],
+  "labeling": {
+    "candidates": 4,
+    "confirmed": 4,
+    "manual": 0,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "parent": "fbff22cec9c4981ff2f405e7fd5f0ed3d2af1029",
+  "patch": "diff --git a/src/main/java/com/codereview/agent/core/resume/FileResumeStore.java b/src/main/java/com/codereview/agent/core/resume/FileResumeStore.java\nindex 6b0976d..2ef1cdd 100644\n--- a/src/main/java/com/codereview/agent/core/resume/FileResumeStore.java\n+++ b/src/main/java/com/codereview/agent/core/resume/FileResumeStore.java\n@@ -12,7 +12,10 @@ import java.io.IOException;\n import java.nio.file.Files;\n import java.nio.file.Path;\n import java.nio.file.StandardCopyOption;\n+import java.time.Duration;\n+import java.util.List;\n import java.util.Optional;\n+import java.util.stream.Stream;\n \n /**\n  * 断点续跑存储（文件持久化）。\n@@ -20,6 +23,7 @@ import java.util.Optional;\n  * <p>每个进行中的审查会话对应一个 {@link ResumeState}，原子落盘为\n  * {@code <data-dir>/<teamId>/resume/<runId>.json}；正常完成后删除（{@link #complete}）。\n  * 写入采用「临时文件 + 原子重命名」，崩溃也不会出现半截 JSON。\n+ * 崩溃遗留的孤儿断点由 {@link #purgeExpired} 兜底回收（{@link ResumeJanitor} 定时驱动）。\n  *\n  * <p>与 {@link com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder} 互补：\n  * 轨迹是「发生了什么」的审计日志（只增），断点是「审到哪了」的可恢复快照（可覆盖）。\n@@ -29,6 +33,12 @@ public class FileResumeStore {\n \n     private static final Logger log = LoggerFactory.getLogger(FileResumeStore.class);\n \n+    /** 断点子目录名（位于 {@code <data-dir>/<teamId>/} 之下）。 */\n+    private static final String RESUME_DIR = \"resume\";\n+\n+    /** 临时文件后缀：写入完成前先落这个名字，再原子重命名。 */\n+    private static final String TMP_SUFFIX = \".json.tmp\";\n+\n     private final Path baseDir;\n     private final ObjectMapper objectMapper = new ObjectMapper()\n             .enable(SerializationFeature.INDENT_OUTPUT);\n@@ -52,10 +62,10 @@ public class FileResumeStore {\n             return;\n         }\n         try {\n-            Path dir = baseDir.resolve(Teams.sanitize(state.teamId())).resolve(\"resume\");\n+            Path dir = baseDir.resolve(Teams.sanitize(state.teamId())).resolve(RESUME_DIR);\n             Files.createDirectories(dir);\n             Path target = dir.resolve(state.runId() + \".json\");\n-            Path tmp = target.resolveSibling(state.runId() + \".json.tmp\");\n+            Path tmp = target.resolveSibling(state.runId() + TMP_SUFFIX);\n             Files.writeString(tmp, objectMapper.writeValueAsString(state));\n             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);\n         } catch (IOException e) {\n@@ -65,7 +75,7 @@ public class FileResumeStore {\n \n     /** 读取断点（不存在返回空）。 */\n     public Optional<ResumeState> load(String runId, String teamId) {\n-        Path file = baseDir.resolve(Teams.sanitize(teamId)).resolve(\"resume\").resolve(runId + \".json\");\n+        Path file = resolve(runId, teamId);\n         if (!Files.exists(file)) {\n             return Optional.empty();\n         }\n@@ -79,11 +89,86 @@ public class FileResumeStore {\n \n     /** 审查正常完成时清理断点。 */\n     public void complete(String runId, String teamId) {\n-        Path file = baseDir.resolve(Teams.sanitize(teamId)).resolve(\"resume\").resolve(runId + \".json\");\n+        Path file = resolve(runId, teamId);\n         try {\n             Files.deleteIfExists(file);\n         } catch (IOException e) {\n             log.warn(\"[Resume] 断点清理失败（无碍）：runId={}, 原因={}\", runId, e.getMessage());\n         }\n     }\n+\n+    /**\n+     * 清理超过 {@code maxAge} 未更新的残留断点——<b>崩溃遗留断点的唯一回收路径</b>。\n+     *\n+     * <p>正常完成的断点由 {@link #complete} 删除。但进程崩溃 / 机器重启后，若那个 runId\n+     * 再也不被触发（PR 被关闭、合并、或换了新的 commit），断点文件就会<b>永久残留在磁盘上</b>。\n+     * 本方法由 {@link ResumeJanitor} 定时调用，兜底回收这类孤儿文件。\n+     *\n+     * <p><b>判据用文件最后修改时间（mtime），而不是 JSON 里的 updatedAt</b>：损坏到无法解析的\n+     * 断点（写入被中断，留下半截 JSON）同样需要被清掉，而它根本读不出 updatedAt。\n+     * 只要审查还在推进就会不断 {@link #save} 覆盖、刷新 mtime，所以「超过 TTL 没有任何写入」\n+     * 就等价于「这次审查已经死了」——误删正在进行的审查不会发生。\n+     *\n+     * <p>连 {@code .json.tmp} 一并清理：崩溃若发生在写完临时文件、{@code ATOMIC_MOVE} 之前，\n+     * 临时文件同样会成为无人回收的残留。\n+     *\n+     * @param maxAge 超过该时长未更新的断点视为残留；null 或非正数时不清理\n+     * @return 实际删除的文件数\n+     */\n+    public int purgeExpired(Duration maxAge) {\n+        if (maxAge == null || maxAge.isNegative() || maxAge.isZero()) {\n+            return 0;\n+        }\n+        if (!Files.isDirectory(baseDir)) {\n+            return 0;\n+        }\n+        long cutoff = System.currentTimeMillis() - maxAge.toMillis();\n+        List<Path> teamDirs;\n+        try (Stream<Path> teams = Files.list(baseDir)) {\n+            teamDirs = teams.toList();\n+        } catch (IOException e) {\n+            log.warn(\"[Resume] 断点根目录扫描失败（跳过本轮清理）：dir={}, 原因={}\", baseDir, e.getMessage());\n+            return 0;\n+        }\n+        int removed = 0;\n+        for (Path team : teamDirs) {\n+            Path resumeDir = team.resolve(RESUME_DIR);\n+            if (Files.isDirectory(resumeDir)) {\n+                removed += purgeDir(resumeDir, cutoff);\n+            }\n+        }\n+        return removed;\n+    }\n+\n+    private int purgeDir(Path dir, long cutoffMillis) {\n+        List<Path> files;\n+        try (Stream<Path> list = Files.list(dir)) {\n+            files = list.toList();\n+        } catch (IOException e) {\n+            log.warn(\"[Resume] 断点目录扫描失败（跳过）：dir={}, 原因={}\", dir, e.getMessage());\n+            return 0;\n+        }\n+        int removed = 0;\n+        for (Path file : files) {\n+            String name = file.getFileName().toString();\n+            if (!name.endsWith(\".json\") && !name.endsWith(TMP_SUFFIX)) {\n+                continue;\n+            }\n+            try {\n+                if (Files.getLastModifiedTime(file).toMillis() < cutoffMillis) {\n+                    Files.deleteIfExists(file);\n+                    removed++;\n+                }\n+            } catch (IOException e) {\n+                // 单个文件失败不影响其余：删不掉的下轮再试\n+                log.warn(\"[Resume] 残留断点删除失败（下轮重试）：file={}, 原因={}\",\n+                        file.getFileName(), e.getMessage());\n+            }\n+        }\n+        return removed;\n+    }\n+\n+    private Path resolve(String runId, String teamId) {\n+        return baseDir.resolve(Teams.sanitize(teamId)).resolve(RESUME_DIR).resolve(runId + \".json\");\n+    }\n }\ndiff --git a/src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java b/src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java\nnew file mode 100644\nindex 0000000..8a4ce99\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java\n@@ -0,0 +1,66 @@\n+package com.codereview.agent.core.resume;\n+\n+import org.slf4j.Logger;\n+import org.slf4j.LoggerFactory;\n+import org.springframework.beans.factory.annotation.Value;\n+import org.springframework.scheduling.annotation.Scheduled;\n+import org.springframework.stereotype.Component;\n+\n+import java.time.Duration;\n+\n+/**\n+ * 断点残留清理任务（孤儿断点的兜底回收）。\n+ *\n+ * <p>{@link FileResumeStore#complete} 只在审查<b>正常完成</b>时被调用。进程被杀、机器重启之后，\n+ * 若那个 runId 再也不被触发（PR 被关闭 / 合并 / 换了新的 commit），断点 JSON 就会永远躺在磁盘上。\n+ * 文件存储最容易被忽略的运维问题不是性能、不是一致性，而是这种<b>缓慢的磁盘泄漏</b>：\n+ * 每次崩溃漏一个，攒几个月就攒出一目录垃圾。\n+ *\n+ * <p>为什么不放进 {@code ScheduledScanService}：那是技术债务巡检服务，装配需要\n+ * {@code GiteaApiClient} / {@code Coordinator} 一整套依赖，且 {@code scan.enabled=false} 时整体跳过。\n+ * 断点清理是存储自身的生命周期管理，与是否开启巡检无关，必须独立。\n+ *\n+ * <p>为什么不用 {@code updatedAt} 而用 mtime、以及为什么不会误删正在进行的审查，\n+ * 见 {@link FileResumeStore#purgeExpired}。\n+ */\n+@Component\n+public class ResumeJanitor {\n+\n+    private static final Logger log = LoggerFactory.getLogger(ResumeJanitor.class);\n+\n+    /**\n+     * 单轮清理数量超过该值即告警：说明不是偶发崩溃，而是清理链路本身没在正常工作\n+     * （比如 TTL 配错、或者大量审查卡死后无人重试）。\n+     */\n+    private static final int NOISY_THRESHOLD = 100;\n+\n+    private final FileResumeStore store;\n+    private final Duration maxAge;\n+\n+    public ResumeJanitor(FileResumeStore store,\n+                         @Value(\"${review.resume.ttl:24h}\") Duration maxAge) {\n+        this.store = store;\n+        this.maxAge = maxAge;\n+    }\n+\n+    /** 每日清理一次残留断点（默认 03:30，避开巡检的 02:00）。 */\n+    @Scheduled(cron = \"${review.resume.cleanup-cron:0 30 3 * * *}\")\n+    public void purge() {\n+        int removed;\n+        try {\n+            removed = store.purgeExpired(maxAge);\n+        } catch (RuntimeException e) {\n+            // 清理属于旁路维护，绝不影响审查主链路\n+            log.warn(\"[Resume] 残留断点清理异常（本轮跳过）：{}\", e.getMessage());\n+            return;\n+        }\n+        if (removed == 0) {\n+            log.debug(\"[Resume] 残留断点清理完成：无残留（TTL={}）\", maxAge);\n+        } else if (removed > NOISY_THRESHOLD) {\n+            log.warn(\"[Resume] 残留断点清理完成：删除 {} 个（TTL={}），数量异常偏高，请检查是否有审查持续崩溃\",\n+                    removed, maxAge);\n+        } else {\n+            log.info(\"[Resume] 残留断点清理完成：删除 {} 个（TTL={}）\", removed, maxAge);\n+        }\n+    }\n+}\ndiff --git a/src/main/resources/application.yml b/src/main/resources/application.yml\nindex 193ea20..8c439bf 100644\n--- a/src/main/resources/application.yml\n+++ b/src/main/resources/application.yml\n@@ -133,6 +133,14 @@ review:\n     timeout-ms: ${REVIEW_AGENT_TIMEOUT_MS:300000}\n   # 数据目录：误报反馈、审查历史的本地 JSON 持久化位置（不可写时自动回退内存）\n   data-dir: ./data\n+  # ===== 断点续跑（崩溃后同 runId 继续，不重跑已完成 Agent）=====\n+  resume:\n+    # 残留断点保留时长：超过该时长未更新的断点视为「崩溃遗留」，由 ResumeJanitor 定时清理。\n+    # 只要审查仍在推进就会不断保存、刷新 mtime，因此跑得再久也不会被误删。\n+    # 调小不会让续跑更快失效，只会更快回收孤儿文件。\n+    ttl: ${REVIEW_RESUME_TTL:24h}\n+    # 清理任务 cron（默认每日 03:30，避开 02:00 的定时巡检）\n+    cleanup-cron: ${REVIEW_RESUME_CLEANUP_CRON:0 30 3 * * *}\n   # 人工介入与监控接口（/api/feedback、/api/quality-report）开关\n   api:\n     enabled: true\ndiff --git a/src/test/java/com/codereview/agent/core/resume/ResumeJanitorTest.java b/src/test/java/com/codereview/agent/core/resume/ResumeJanitorTest.java\nnew file mode 100644\nindex 0000000..2352d23\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/resume/ResumeJanitorTest.java\n@@ -0,0 +1,62 @@\n+package com.codereview.agent.core.resume;\n+\n+import org.junit.jupiter.api.Test;\n+import org.junit.jupiter.api.io.TempDir;\n+import org.springframework.boot.convert.ApplicationConversionService;\n+\n+import java.nio.file.Files;\n+import java.nio.file.Path;\n+import java.time.Duration;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertFalse;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 断点残留清理任务：配置绑定 + 清理委托。\n+ *\n+ * <p>项目全部为纯单元测试（无 {@code @SpringBootTest}），{@code application.yml} 里的\n+ * {@code review.resume.ttl} 没有任何测试兜底——格式写错要到启动才炸，所以这里锁住绑定行为。\n+ */\n+class ResumeJanitorTest {\n+\n+    /**\n+     * Spring 的 Duration 绑定有个坑：<b>不带单位的纯数字按毫秒算</b>。\n+     * 若有人把 {@code ttl} 写成 {@code 24} 以为是 24 小时，实际是 24 毫秒——\n+     * 每次清理都会把所有断点（包括正在跑的）一扫而空，且现象是「续跑莫名其妙不生效」，极难排查。\n+     */\n+    @Test\n+    void ttlFormatMustCarryUnit() {\n+        ApplicationConversionService cs = new ApplicationConversionService();\n+        assertEquals(Duration.ofHours(24), cs.convert(\"24h\", Duration.class), \"ttl=24h 必须解析为 24 小时\");\n+        assertEquals(Duration.ofMillis(24), cs.convert(\"24\", Duration.class), \"不带单位按毫秒：这就是要防的坑\");\n+    }\n+\n+    @Test\n+    void purgeRemovesStaleCheckpoints(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        Path dir = tempDir.resolve(\"teamA\").resolve(\"resume\");\n+        Files.createDirectories(dir);\n+        Path stale = dir.resolve(\"stale.json\");\n+        Files.writeString(stale, \"{}\");\n+        Files.setLastModifiedTime(stale, java.nio.file.attribute.FileTime.fromMillis(\n+                System.currentTimeMillis() - Duration.ofDays(3).toMillis()));\n+\n+        new ResumeJanitor(store, Duration.ofHours(24)).purge();\n+\n+        assertFalse(Files.exists(stale), \"定时任务应清理超期断点\");\n+    }\n+\n+    @Test\n+    void purgeKeepsFreshCheckpoints(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        Path dir = tempDir.resolve(\"teamA\").resolve(\"resume\");\n+        Files.createDirectories(dir);\n+        Path fresh = dir.resolve(\"fresh.json\");\n+        Files.writeString(fresh, \"{}\");\n+\n+        new ResumeJanitor(store, Duration.ofHours(24)).purge();\n+\n+        assertTrue(Files.exists(fresh), \"未超期断点必须保留\");\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/core/resume/ResumeStoreTest.java b/src/test/java/com/codereview/agent/core/resume/ResumeStoreTest.java\nindex c23b5c3..9c2bd5e 100644\n--- a/src/test/java/com/codereview/agent/core/resume/ResumeStoreTest.java\n+++ b/src/test/java/com/codereview/agent/core/resume/ResumeStoreTest.java\n@@ -8,6 +8,8 @@ import org.junit.jupiter.api.io.TempDir;\n \n import java.nio.file.Files;\n import java.nio.file.Path;\n+import java.nio.file.attribute.FileTime;\n+import java.time.Duration;\n import java.util.List;\n import java.util.Optional;\n import java.util.Set;\n@@ -63,4 +65,123 @@ class ResumeStoreTest {\n                 Set.of(AgentType.SECURITY), List.of(), 0);\n         assertTrue(partial.hasPending(Set.of(AgentType.SECURITY, AgentType.LOGIC)));\n     }\n+\n+    /**\n+     * 把文件最后修改时间往回拨，模拟「很久没被写过」。\n+     */\n+    private static void age(Path file, Duration howOld) throws Exception {\n+        Files.setLastModifiedTime(file, FileTime.fromMillis(System.currentTimeMillis() - howOld.toMillis()));\n+    }\n+\n+    private static Path checkpointFile(Path tempDir, String teamId, String runId) {\n+        return tempDir.resolve(teamId).resolve(\"resume\").resolve(runId + \".json\");\n+    }\n+\n+    @Test\n+    void purgeExpiredRemovesStaleCheckpoint(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        store.save(new ResumeState(\"old\", 9002, \"demo/repo\", \"teamA\",\n+                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));\n+        Path file = checkpointFile(tempDir, \"teamA\", \"old\");\n+        age(file, Duration.ofDays(2));\n+\n+        assertEquals(1, store.purgeExpired(Duration.ofHours(24)), \"超期断点应被清理\");\n+        assertFalse(Files.exists(file), \"超期断点文件应删除\");\n+        assertTrue(store.load(\"old\", \"teamA\").isEmpty());\n+    }\n+\n+    @Test\n+    void purgeExpiredKeepsFreshCheckpoint(@TempDir Path tempDir) {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        store.save(new ResumeState(\"fresh\", 9003, \"demo/repo\", \"teamA\",\n+                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));\n+\n+        assertEquals(0, store.purgeExpired(Duration.ofHours(24)), \"未超期断点不得清理\");\n+        assertTrue(store.load(\"fresh\", \"teamA\").isPresent(), \"未超期断点应保留\");\n+    }\n+\n+    /**\n+     * TTL 方案的<b>核心安全性质</b>：只要审查还在推进就会不断 save、刷新 mtime，\n+     * 因此跑得再久的审查也不会被当成残留删掉。\n+     */\n+    @Test\n+    void saveRefreshesMtimeSoLongRunningReviewSurvives(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        Path file = checkpointFile(tempDir, \"teamD\", \"long\");\n+        store.save(new ResumeState(\"long\", 9004, \"demo/repo\", \"teamD\",\n+                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));\n+        age(file, Duration.ofHours(23));\n+\n+        // 审查仍在推进：又完成一个 Agent，再次保存 → mtime 刷新回当下\n+        store.save(new ResumeState(\"long\", 9004, \"demo/repo\", \"teamD\",\n+                Set.of(AgentType.SECURITY, AgentType.LOGIC), List.of(), System.currentTimeMillis()));\n+\n+        assertEquals(0, store.purgeExpired(Duration.ofHours(24)), \"仍在推进的审查不得被清理\");\n+        assertTrue(store.load(\"long\", \"teamD\").isPresent());\n+    }\n+\n+    /**\n+     * 损坏到无法解析的断点也必须能被清掉——这正是判据用 mtime 而不是 JSON 里 updatedAt 的原因：\n+     * 半截 JSON 根本读不出 updatedAt，按业务时间清理会让它永久残留。\n+     */\n+    @Test\n+    void purgeExpiredRemovesUnparseableCheckpoint(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        Path dir = tempDir.resolve(\"teamC\").resolve(\"resume\");\n+        Files.createDirectories(dir);\n+        Path broken = dir.resolve(\"broken.json\");\n+        Files.writeString(broken, \"{\\\"runId\\\":\\\"broken\\\",\\\"doneAgents\\\":[\");\n+        age(broken, Duration.ofDays(5));\n+\n+        assertTrue(store.load(\"broken\", \"teamC\").isEmpty(), \"前置条件：损坏断点读不出来\");\n+        assertEquals(1, store.purgeExpired(Duration.ofHours(24)), \"损坏断点同样应被清理\");\n+        assertFalse(Files.exists(broken));\n+    }\n+\n+    /** 崩溃若发生在「写完临时文件、ATOMIC_MOVE 之前」，tmp 同样会成为无人回收的残留。 */\n+    @Test\n+    void purgeExpiredRemovesOrphanTmpFile(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        Path dir = tempDir.resolve(\"teamB\").resolve(\"resume\");\n+        Files.createDirectories(dir);\n+        Path tmp = dir.resolve(\"half.json.tmp\");\n+        Files.writeString(tmp, \"{\\\"runId\\\":\\\"half\\\"\");\n+        age(tmp, Duration.ofDays(3));\n+\n+        assertEquals(1, store.purgeExpired(Duration.ofHours(24)), \"孤儿临时文件应被清理\");\n+        assertFalse(Files.exists(tmp));\n+    }\n+\n+    @Test\n+    void purgeExpiredIgnoresUnrelatedFiles(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        Path dir = tempDir.resolve(\"teamE\").resolve(\"resume\");\n+        Files.createDirectories(dir);\n+        Path unrelated = dir.resolve(\"notes.txt\");\n+        Files.writeString(unrelated, \"别删我\");\n+        age(unrelated, Duration.ofDays(30));\n+\n+        assertEquals(0, store.purgeExpired(Duration.ofHours(24)), \"非断点文件不得清理\");\n+        assertTrue(Files.exists(unrelated));\n+    }\n+\n+    @Test\n+    void purgeExpiredWithoutDataDirIsNoop(@TempDir Path tempDir) {\n+        FileResumeStore store = new FileResumeStore(tempDir.resolve(\"not-created\"));\n+        assertEquals(0, store.purgeExpired(Duration.ofHours(24)), \"根目录不存在时不应报错\");\n+    }\n+\n+    /** TTL 配成 0 / 负数 / 未配置时一律不清理：宁可泄漏，也不能删掉正在跑的审查。 */\n+    @Test\n+    void purgeExpiredRejectsNonPositiveTtl(@TempDir Path tempDir) throws Exception {\n+        FileResumeStore store = new FileResumeStore(tempDir);\n+        store.save(new ResumeState(\"keep\", 9005, \"demo/repo\", \"teamA\",\n+                Set.of(AgentType.SECURITY), List.of(f(AgentType.SECURITY)), System.currentTimeMillis()));\n+        age(checkpointFile(tempDir, \"teamA\", \"keep\"), Duration.ofDays(99));\n+\n+        assertEquals(0, store.purgeExpired(Duration.ZERO), \"TTL=0 不得清理\");\n+        assertEquals(0, store.purgeExpired(Duration.ofHours(-1)), \"负 TTL 不得清理\");\n+        assertEquals(0, store.purgeExpired(null), \"TTL 未配置不得清理\");\n+        assertTrue(store.load(\"keep\", \"teamA\").isPresent(), \"配置异常时断点必须保住\");\n+    }\n }\n",
+  "patchBytes": 21483,
+  "patchSha256": "0e50e4bfe53f125d7f8bec8a4221a14c10beee227853ad064ac398ef775ade64",
+  "provenance": "git-history",
+  "provenanceNote": "fix：崩溃遗留的断点永久残留，补定时清理",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+            "lineEnd": 130,
+            "lineStart": 130,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+            "lineEnd": 130,
+            "lineStart": 130,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+            "lineEnd": 148,
+            "lineStart": 148,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+            "lineEnd": 54,
+            "lineStart": 54,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+            "lineEnd": 130,
+            "lineStart": 130,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）AE-001"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java",
+            "lineEnd": 48,
+            "lineStart": 48,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+            "lineEnd": 648,
+            "lineStart": 648,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/resume/FileResumeStore.java",
+            "lineEnd": 665,
+            "lineStart": 665,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "code-review-agent",
+  "repoUrl": "https://github.com/13liyunfei/code-review-agent",
+  "sha": "9d0a06fb7332846bd7ac119f87c16aec6f017a7d",
+  "shaShort": "9d0a06f",
+  "subject": "fix(resume): 崩溃遗留的断点永久残留，补定时清理"
+}

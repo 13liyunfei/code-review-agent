@@ -79,8 +79,8 @@ class TokenFactoryIntegrationTest {
                 {"id":"chatcmpl-1","model":"default",
                  "choices":[{"index":0,"message":{"role":"assistant","content":"LGTM"},"finish_reason":"stop"}],
                  "usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120},
-                 "provider":"deepseek","upstream_model":"deepseek-chat",
-                 "cost_micros":12345,"trace_id":"trace-1","latency_ms":842}
+                 "tf":{"provider":"deepseek","upstream_model":"deepseek-chat",
+                       "cost_micros":12345,"trace_id":"trace-1","latency_ms":842}}
                 """));
         TokenUsageRecorder recorder = new TokenUsageRecorder(16);
         TokenFactoryChatProvider provider =

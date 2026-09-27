@@ -1,0 +1,82 @@
+# 规则索引（TAB 分隔）：pattern <TAB> ruleId <TAB> title
+# pattern 用 gitignore 风格 glob；不含 / 的规则匹配任意深度。
+# ruleId 对应同目录下 <ruleId>.md。
+# 该文件是「文件模式 -> 规则文档」映射的唯一真源：新增规则必须同时改本文件与 .md。
+**/*Mapper.xml	java-mapper-xml	MyBatis Mapper XML 审查要点
+**/*Dao.xml	java-mapper-xml	MyBatis Mapper XML 审查要点
+**/mapper/**/*.xml	java-mapper-xml	MyBatis Mapper XML 审查要点
+pom.xml	pom-dependency	Maven 依赖与构建配置审查要点
+**/pom.xml	pom-dependency	Maven 依赖与构建配置审查要点
+**/application*.yml	spring-config	Spring 配置审查要点
+**/application*.yaml	spring-config	Spring 配置审查要点
+**/application*.properties	spring-config	Spring 配置审查要点
+**/bootstrap*.yml	spring-config	Spring 配置审查要点
+**/*.sql	sql-migration	数据库变更（迁移脚本）审查要点
+**/db/migration/**	sql-migration	数据库变更（迁移脚本）审查要点
+**/migration/**/*.sql	sql-migration	数据库变更（迁移脚本）审查要点
+**/service/**/*.java	java-service-transaction	Service 层事务与一致性审查要点
+**/*ServiceImpl.java	java-service-transaction	Service 层事务与一致性审查要点
+**/*Service.java	java-service-transaction	Service 层事务与一致性审查要点
+**/*Controller.java	java-controller-api	Controller / HTTP 接口审查要点
+**/*Endpoint.java	java-controller-api	Controller / HTTP 接口审查要点
+**/*Executor*.java	java-concurrency	并发与线程池审查要点
+**/*Pool*.java	java-concurrency	并发与线程池审查要点
+**/*Thread*.java	java-concurrency	并发与线程池审查要点
+**/*Scheduler*.java	java-concurrency	并发与线程池审查要点
+**/*Async*.java	java-concurrency	并发与线程池审查要点
+**/security/**/*.java	java-security	安全相关代码审查要点
+**/*Auth*.java	java-security	安全相关代码审查要点
+**/*Token*.java	java-security	安全相关代码审查要点
+**/*Secret*.java	java-security	安全相关代码审查要点
+**/*Crypto*.java	java-security	安全相关代码审查要点
+**/*Permission*.java	java-security	安全相关代码审查要点
+**/*Entity.java	java-entity-dto	实体与 DTO 审查要点
+**/*DTO.java	java-entity-dto	实体与 DTO 审查要点
+**/*VO.java	java-entity-dto	实体与 DTO 审查要点
+**/*Request.java	java-entity-dto	实体与 DTO 审查要点
+**/*Response.java	java-entity-dto	实体与 DTO 审查要点
+**/dto/**/*.java	java-entity-dto	实体与 DTO 审查要点
+**/entity/**/*.java	java-entity-dto	实体与 DTO 审查要点
+**/*Config.java	java-config-class	配置类装配审查要点
+**/*Configuration.java	java-config-class	配置类装配审查要点
+**/*Properties.java	java-config-class	配置类装配审查要点
+**/src/test/**/*.java	java-test	测试代码审查要点
+**/*Test.java	java-test	测试代码审查要点
+**/*Tests.java	java-test	测试代码审查要点
+**/*IT.java	java-test	测试代码审查要点
+**/logback*.xml	java-logging	日志与可观测性配置审查要点
+**/log4j2*.xml	java-logging	日志与可观测性配置审查要点
+**/logging*.yml	java-logging	日志与可观测性配置审查要点
+**/logback-spring.xml	java-logging	日志与可观测性配置审查要点
+**/*Exception.java	java-exception-handling	异常与错误处理审查要点
+**/*Handler.java	java-exception-handling	异常与错误处理审查要点
+**/*Advice.java	java-exception-handling	异常与错误处理审查要点
+**/*ErrorCode*.java	java-exception-handling	异常与错误处理审查要点
+Dockerfile	docker-build	容器构建与编排审查要点
+Dockerfile.*	docker-build	容器构建与编排审查要点
+**/Dockerfile	docker-build	容器构建与编排审查要点
+**/Dockerfile.*	docker-build	容器构建与编排审查要点
+docker-compose*.yml	docker-build	容器构建与编排审查要点
+docker-compose*.yaml	docker-build	容器构建与编排审查要点
+**/docker-compose*.yml	docker-build	容器构建与编排审查要点
+**.github/workflows/*.yml	ci-pipeline	CI/CD 流水线审查要点
+**.github/workflows/*.yaml	ci-pipeline	CI/CD 流水线审查要点
+**/.gitlab-ci.yml	ci-pipeline	CI/CD 流水线审查要点
+Jenkinsfile	ci-pipeline	CI/CD 流水线审查要点
+**/.gitea/workflows/*.yml	ci-pipeline	CI/CD 流水线审查要点
+**/azure-pipelines.yml	ci-pipeline	CI/CD 流水线审查要点
+**/messages*.properties	i18n-resource	多语言资源审查要点
+**/i18n/**	i18n-resource	多语言资源审查要点
+**/*_zh_CN.properties	i18n-resource	多语言资源审查要点
+**/*_en_US.properties	i18n-resource	多语言资源审查要点
+**/messages*.yaml	i18n-resource	多语言资源审查要点
+**/*.ts	frontend-ts	前端 TypeScript / 组件审查要点
+**/*.tsx	frontend-ts	前端 TypeScript / 组件审查要点
+**/*.jsx	frontend-ts	前端 TypeScript / 组件审查要点
+**/*.vue	frontend-ts	前端 TypeScript / 组件审查要点
+**/*.svelte	frontend-ts	前端 TypeScript / 组件审查要点
+**/*.py	python-code	Python 代码审查要点
+**/*.pyi	python-code	Python 代码审查要点
+**/*.md	docs-markdown	文档与 Markdown 审查要点
+**/*.mdx	docs-markdown	文档与 Markdown 审查要点
+**/*.rst	docs-markdown	文档与 Markdown 审查要点

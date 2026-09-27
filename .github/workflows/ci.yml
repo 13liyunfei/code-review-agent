@@ -19,5 +19,29 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # ★ 必须真的跑测试，不能只 -DskipTests 打包。
+      #   本项目历史上 CI 只做了 `package -DskipTests`，等于"编译过就算绿"——
+      #   而死代码门禁（DeadCodeGuardTest）与审查级评测基准门禁（ReviewBenchGateTest）
+      #   都是**测试形态**的门禁，跳过测试等于两条门禁都不存在。
+      #
+      #   无需外部基础设施：依赖 PG 的 E2E 用例（PgClusterE2eTest / PgHnswIndexE2eTest 等）
+      #   自己用 `Assumptions.assumeTrue(pgUp, ...)` 做前置判定，没有 PG 就显式 skip，
+      #   不会假绿也不会假红。
+      - name: Test（单元 + E2E 自跳过 + 死代码门禁 + 审查级评测基准门禁）
+        run: ./mvnw -B test
+
+      # 把基线数字打进 CI 日志：跑分结果应当是"每次都能一眼看到"的，
+      # 否则没人会去关心它是否在缓慢退化。
+      - name: 打印当前评测基线
+        run: cat src/main/resources/bench/BASELINE.json
+
       - name: Build with Maven
         run: ./mvnw -B package -DskipTests
+
+      - name: 失败时上传测试报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore

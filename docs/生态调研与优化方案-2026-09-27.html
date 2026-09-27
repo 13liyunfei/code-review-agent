@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>代码审查开源生态调研 · 与 code-review-agent 优化方案</title>
+<style>
+:root{--fg:#1f2328;--muted:#59636e;--line:#d8dee4;--bg:#ffffff;--soft:#f6f8fa;
+--link:#0969da;--code-bg:#f6f8fa;--th:#f6f8fa;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.75 -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+main{max-width:980px;margin:0 auto;padding:48px 32px 96px;}
+h1{font-size:30px;line-height:1.35;margin:0 0 8px;padding-bottom:12px;border-bottom:2px solid var(--line);}
+h2{font-size:23px;margin:44px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+h3{font-size:19px;margin:30px 0 10px;}
+h4{font-size:16px;margin:22px 0 8px;color:var(--muted);}
+p{margin:12px 0;}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:var(--code-bg);border:1px solid var(--line);border-radius:5px;
+padding:1px 5px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+pre{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow:auto;}
+pre code{background:none;border:none;padding:0;font-size:13px;line-height:1.6;}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--soft);
+border-left:4px solid #b9c4d0;border-radius:0 6px 6px 0;color:#3a4450;}
+blockquote p{margin:6px 0;}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow-x:auto;}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top;}
+th{background:var(--th);font-weight:600;}
+tbody tr:nth-child(even){background:#fbfcfd;}
+ul,ol{padding-left:26px;margin:12px 0;}
+li{margin:6px 0;}
+hr{border:none;border-top:1px solid var(--line);margin:36px 0;}
+strong{font-weight:650;}
+</style>
+</head><body>
+<main>
+<h1>代码审查开源生态调研 · 与 code-review-agent 优化方案</h1>
+<blockquote>
+<p><strong>日期</strong>：2026-09-27　<strong>适用对象</strong>：<code>code-review-agent</code>（本书主线系统）+ <code>code-review-console</code>
+<strong>数据底座</strong>：三份同日实测报告（全部通过 GitHub REST API 一手抓取，二手数字一律不采）</p>
+<ul>
+<li><code>_build/生态调研/ai-driven-cr.md</code>（AI 驱动类 7 项）</li>
+<li><code>_build/生态调研/platform-static.md</code>（平台型 4 项 + 静态分析 5 项）</li>
+<li><code>_build/生态调研/open-code-review-对比.md</code>（锚点 + 12 项对比集）</li>
+</ul>
+<p>本文件里所有 stars / 贡献者 / 提交时间都是 <strong>2026-09-27 快照</strong>；标「未获取」的地方表示没拿到一手证据，<strong>没有估算</strong>。</p>
+</blockquote>
+<hr />
+<h2>0. 一页结论（TL;DR）</h2>
+<p><strong>四句话</strong>：</p>
+<ol>
+<li><strong>锚点项目 <code>alibaba/open-code-review</code> 真实、活跃、Apache-2.0、Go、41,646★ / 192 贡献者</strong>，差异点是「<strong>确定性工程硬约束 + LLM Agent</strong>」混合架构与成体系的多语言内置规则集；但它<strong>明确不做 AST</strong>、<strong>不支持 Gitea</strong>、<strong>没有阻断式门禁</strong>。</li>
+<li><strong>本项目 <code>code-review-agent</code> 在两条线上已经领先锚点</strong>：① <strong>AST 语义分析</strong>（JavaParser + tree-sitter，OCR 全篇无 AST）；② <strong>Gitea 一等公民 + 多租户 + 成本治理</strong>（OCR 无 Gitea、无多租户、无成本口径）。这是可以对外讲的<strong>真实差异点</strong>，不是自我感觉。</li>
+<li><strong>本项目最大的三处落后</strong>：① <strong>确定性规则层只有 3 个 Skill + 1 份 handbook</strong>（OCR 是 ~40 类文件/语言规则文档，四层优先级链）；② <strong>完全没有阻断式质量门禁</strong>（全库 grep <code>block|gate|failOn</code> <strong>命中 0</strong>）；③ <strong>没有 CLI / Coding-Agent 插件 / MCP Server 出口</strong>（只有服务端 webhook）。</li>
+<li><strong>落地上分三档</strong>：<strong>P0 三项</strong>（规则层扩容、文件筛选闸门、质量门禁）<strong>不改架构即可做</strong>，本周就能开工；<strong>P1 四项</strong>（文件捆绑、定位+反思轮、审查级评测基准、出口层）需要新增模块；<strong>P2 两项</strong>（Semgrep 第二道闸门、可信度材料）涉外部依赖与法务，<strong>必须权衡</strong>。</li>
+</ol>
+<p><strong>三个「不要做」</strong>（下面 §7 有完整理由）：</p>
+<ul>
+<li>❌ <strong>不要为了像 OCR 而把服务改成 Go CLI</strong>——OCR 的定位是&quot;开发者本地一条命令&quot;，本项目的定位是&quot;平台上的一等服务&quot;，改架构换来的是别人的形状。</li>
+<li>❌ <strong>不要引入 AGPL / 非 OSI 的源码</strong>（Kodus <code>AGPL-3.0+EE</code>、LiveReview <code>Sustainable Use License</code>、Sweep <code>EE License</code>）——本项目是 MIT，混入会污染许可面。<strong>只借鉴设计，不抄代码。</strong></li>
+<li>❌ <strong>不要选 CodeQL 做第二道闸门</strong>——<code>github/codeql</code> 仓库的 MIT <strong>只覆盖查询库</strong>，真正的 CLI/engine 是<strong>商业专有许可</strong>，没有 GHAS 时按其条款<strong>只能用于 GitHub.com 上的开源库</strong>，私有库跑 CI 即违约。</li>
+</ul>
+<hr />
+<h2>1. 业界项目分类地图</h2>
+<h3>1.1 为什么按&quot;它到底在哪一层动手&quot;分类</h3>
+<p>同一批项目被混在一起时，最常见的误判是<strong>拿&quot;审查载体&quot;去比&quot;审查能力&quot;</strong>（例如问 Gerrit 和 AI-Jury 哪个强）。正确的分法是问三个问题：</p>
+<ol>
+<li><strong>它持有什么？</strong>（diff 与评论的托管权 / 分析能力 / 交付管道）</li>
+<li><strong>它什么时候被触发？</strong>（commit 前 / PR 打开 / 人工点一下）</li>
+<li><strong>它的输出是&quot;给人看的&quot;还是&quot;给机器判的&quot;？</strong></li>
+</ol>
+<h3>1.2 四类地图</h3>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>它持有</th>
+<th>触发点</th>
+<th>输出</th>
+<th>代表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A. AI 驱动类</strong></td>
+<td>LLM 推理 + 评论回写</td>
+<td>PR 事件 / 评论 @ / CLI</td>
+<td>给人和给机器都有</td>
+<td>见 §1.3</td>
+</tr>
+<tr>
+<td><strong>B. 传统 / 平台型</strong></td>
+<td><strong>diff 与评审流程的托管权</strong>（不做分析）</td>
+<td>推 patchset / 提交评审请求</td>
+<td>门禁判定（submit / Ship It）</td>
+<td>Gerrit、Phabricator→Phorge、Review Board</td>
+</tr>
+<tr>
+<td><strong>C. 静态分析 / Linter 集成类</strong></td>
+<td><strong>确定性分析引擎</strong>或<strong>投递管道</strong></td>
+<td>pre-commit / CI / PR</td>
+<td>SARIF / issue 列表</td>
+<td>SonarQube、Semgrep、CodeQL、reviewdog</td>
+</tr>
+<tr>
+<td><strong>D. 工具与机器人</strong></td>
+<td>编排：把 A/C 的能力塞进某个平台</td>
+<td>平台事件</td>
+<td>平台侧评论 / 状态检查</td>
+<td>reviewdog、Mozilla Code Review Bot、ReviewBot</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键洞察</strong>：<strong>B 类在&quot;什么算通过&quot;这件事上的成熟度远高于 A 类</strong>。Gerrit 的 submit requirements、Review Board 的 Ship It 是<strong>可审计的门禁语义</strong>；而绝大多数 A 类项目（包括 OCR）只做&quot;发评论&quot;，<strong>不做 fail the build</strong>。本项目要补的门禁，正确做法是<strong>借 B 类的语义</strong>，而不是抄 A 类的代码。</p>
+<h3>1.3 A 类（AI 驱动）总表 —— 按&quot;是不是真 Agent&quot;再分三档</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>仓库（核实后全名）</th>
+<th>协议</th>
+<th>语言</th>
+<th>Agent 档次</th>
+<th>平台</th>
+<th>Stars</th>
+<th>最近提交</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Open Code Review</strong>（锚点）</td>
+<td><code>alibaba/open-code-review</code></td>
+<td>Apache-2.0</td>
+<td>Go</td>
+<td><strong>确定性流水线 + LLM Agent（混合）</strong></td>
+<td>GitHub Actions / GitLab CI（含自建）/ Bitbucket / Gerrit / GitFlic / Codeup；<strong>无 Gitea</strong></td>
+<td>41,646</td>
+<td>2026-09-24</td>
+</tr>
+<tr>
+<td>PR-Agent</td>
+<td><code>The-PR-Agent/pr-agent</code>（原 <code>qodo-ai/pr-agent</code>，已捐赠给社区并转移）</td>
+<td>MIT</td>
+<td>Python</td>
+<td><strong>单次调用 + 自反思</strong>（官方原文：each tool uses a single LLM call）</td>
+<td>GitHub / GitLab（含自建）/ Bitbucket / Azure DevOps / <strong>Gitea</strong></td>
+<td>13,160</td>
+<td>2026-09-26</td>
+</tr>
+<tr>
+<td>Kodus</td>
+<td><code>kodustech/kodus-ai</code></td>
+<td><strong>AGPL-3.0 + 商业 EE</strong>（<code>.ee.</code> / <code>ee/</code> 走商业许可）</td>
+<td>TypeScript</td>
+<td><strong>Agent</strong>（Kody Agent + 队列 + MCP tool outputs）</td>
+<td>GitHub / GitLab / Bitbucket / Azure Repos / <strong>Forgejo</strong>（未见 Gitea）</td>
+<td>1,421</td>
+<td>2026-09-26</td>
+</tr>
+<tr>
+<td>ChatGPT-CodeReview</td>
+<td><code>anc95/ChatGPT-CodeReview</code></td>
+<td>ISC</td>
+<td>JavaScript</td>
+<td>单次 chat completion</td>
+<td><strong>仅 GitHub</strong></td>
+<td>4,467</td>
+<td>2026-08-10</td>
+</tr>
+<tr>
+<td>Gito</td>
+<td><code>Nayjest/Gito</code></td>
+<td>MIT</td>
+<td>Python</td>
+<td>单次/并行分片调用（未声明 tool-calling）</td>
+<td>GitHub ✅ / GitLab（Beta）/ Bitbucket（Planned）</td>
+<td>438</td>
+<td>2026-09-24</td>
+</tr>
+<tr>
+<td>shippie</td>
+<td><code>mattzcarey/shippie</code>（原名 Code Review GPT）</td>
+<td>MIT</td>
+<td>TypeScript</td>
+<td>Agent loop（flue + pi），可作 MCP client</td>
+<td>GitHub Action / 本地 / GitLab CI（<strong>运行环境</strong>，非平台集成）</td>
+<td>2,505</td>
+<td>2026-09-13</td>
+</tr>
+<tr>
+<td>AI-Jury</td>
+<td><code>berkayturanci/ai-jury</code></td>
+<td>MIT</td>
+<td>Python（<strong>运行时零依赖</strong>）</td>
+<td><strong>三段式：并行评审 → 辩论 → 验证裁决</strong></td>
+<td>官方仅 GitHub（可对本地 diff 跑）</td>
+<td>7</td>
+<td>2026-09-26</td>
+</tr>
+<tr>
+<td>diffray CLI</td>
+<td><code>strelov1/diffray</code></td>
+<td>package.json 标称 MIT，<strong>但仓库根无 LICENSE 文件</strong>（授权不完整）</td>
+<td>TypeScript</td>
+<td>Agent（编排 5 个 agent，执行体是外部 agentic CLI）</td>
+<td>本地任意 Git 仓库（SaaS 版才连 GitHub/GitLab）</td>
+<td>24</td>
+<td><strong>2026-01-25</strong>（约 8 个月无提交）</td>
+</tr>
+<tr>
+<td>~~ai-pr-reviewer~~</td>
+<td><code>coderabbitai/ai-pr-reviewer</code></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><strong>404，仓库已不存在</strong></td>
+</tr>
+<tr>
+<td><strong>Sweep</strong></td>
+<td><code>sweepai/sweep</code></td>
+<td><strong>Sweep EE License（源码可见、非 OSI；free 部分 MIT）</strong></td>
+<td>Python（主）</td>
+<td>已转型 JetBrains 编码助手</td>
+<td>GitHub App（历史）</td>
+<td>7,709</td>
+<td><strong>2025-09-18</strong>；753 open issues</td>
+</tr>
+<tr>
+<td>Tabby</td>
+<td><code>TabbyML/tabby</code></td>
+<td>Apache-2.0（<code>ee/</code> 商业）</td>
+<td>Rust</td>
+<td><strong>不是审查工具</strong>：自托管 AI 编码助手</td>
+<td>无 PR/MR 审查工作流</td>
+<td>33,894</td>
+<td>2026-06-30</td>
+</tr>
+<tr>
+<td>LiveReview</td>
+<td><code>HexmosTech/LiveReview</code></td>
+<td><strong>Sustainable Use License（fair-code，官方明示非 OSI 开源）</strong></td>
+<td>Go</td>
+<td>Blast-Radius 打分 + 自托管</td>
+<td>GitHub / GitLab / Bitbucket / <strong>Gitea</strong> / Azure DevOps</td>
+<td>62</td>
+<td>2026-09-26</td>
+</tr>
+<tr>
+<td>Gerrit（3.14 起）</td>
+<td><code>GerritCodeReview/gerrit</code></td>
+<td>Apache-2.0</td>
+<td>Java+TS</td>
+<td><strong>官方 AI 评审接入</strong>（<code>AiCodeReviewProvider</code> + 官方 MCP Server）</td>
+<td>Gerrit 本体</td>
+<td>1,228</td>
+<td>2026-09-25</td>
+</tr>
+</tbody>
+</table>
+<p><strong>三处必须纠正的常见误解</strong>（都是本轮实测出来的）：</p>
+<table>
+<thead>
+<tr>
+<th>常见说法</th>
+<th>实测结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>「<code>qodo-ai/pr-agent</code>」</td>
+<td>该路径已重定向到 <strong><code>The-PR-Agent/pr-agent</code></strong>；Qodo 已把项目<strong>捐赠给社区</strong>，且 README 明写&quot;本仓库不是 Qodo 免费层&quot;</td>
+</tr>
+<tr>
+<td>「<code>coderabbitai/ai-pr-reviewer</code>」</td>
+<td><strong>仓库 404，已不存在</strong>；<code>coderabbitai</code> 组织下 38 个仓库里没有它</td>
+</tr>
+<tr>
+<td>「Sweep AI」</td>
+<td><strong>事实停更</strong>（最后 push 2025-09-18、753 open issues、description 已改为 JetBrains 助手）；许可是 <strong>EE License 不是 MIT</strong>。作为审查选型<strong>已不具现实可行性</strong></td>
+</tr>
+<tr>
+<td>「Tabby 也是代码审查」</td>
+<td><strong>Tabby 没有 PR/MR 审查工作流</strong>。社区做法是自写 GitHub Actions 拼 prompt，产品本身不提供</td>
+</tr>
+<tr>
+<td>「codereview-cli」</td>
+<td>GitHub 上<strong>至少三个同名仓库</strong>（Go/MIT 的 <code>open-cli-collective/codereview-cli</code>、Python 的 <code>cmanikandan</code>、Shell 的 <code>im47cn/coderocket-cli</code>），定位与许可完全不同，<strong>无法唯一确定所指</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>1.4 C 类（静态分析）的关键：<strong>许可差异比能力差异更要命</strong></h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>引擎许可</th>
+<th>规则/查询许可</th>
+<th>能不能进商业产品</th>
+<th>一句话定位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Semgrep CE</strong></td>
+<td><strong>LGPL-2.1（最干净）</strong></td>
+<td>Semgrep Rules License v1.0（源码可用、非 OSI）</td>
+<td>✅ 引擎可用可改；<strong>规则在&quot;卖竞争性扫描 SaaS&quot;时受限</strong>，内部用 OK</td>
+<td>单文件模式 + 密钥类，最易落地；<strong>卡不住跨文件污点</strong></td>
+</tr>
+<tr>
+<td><strong>SonarQube</strong></td>
+<td>核心 LGPL-3.0</td>
+<td><strong>内置分析器自 2024-11-29 起改为 SSALv1（源码可用、非 OSI）</strong></td>
+<td>⚠️ <strong>有雷</strong>：SSAL 明文<strong>禁止在自带功能之外用 AI 与软件交互</strong> → 想喂给自研 LLM <strong>必须法务确认</strong></td>
+<td>复杂度 / 重复率 / 覆盖率等<strong>质量阈值</strong>是行业基准</td>
+</tr>
+<tr>
+<td><strong>CodeQL</strong></td>
+<td><strong>CLI/engine 商业专有</strong>（<code>github/codeql</code> 的 MIT 只覆盖查询库）</td>
+<td>查询库 MIT</td>
+<td>❌ 无 GHAS 时<strong>只能用于 GitHub.com 上的开源库</strong>；私有库跑 CI 即违约</td>
+<td>跨文件 CWE/注入类最强，<strong>许可最难</strong></td>
+</tr>
+<tr>
+<td>reviewdog</td>
+<td>MIT</td>
+<td>—</td>
+<td>✅</td>
+<td><strong>自身零分析引擎</strong>，只是 SARIF/errorformat → PR 评论的<strong>投递管道</strong></td>
+</tr>
+<tr>
+<td>Mozilla Code Review Bot</td>
+<td>MPL-2.0</td>
+<td>—</td>
+<td>✅</td>
+<td>编排型：调用外部分析器投递到 Phabricator</td>
+</tr>
+</tbody>
+</table>
+<p><strong>结论（用于 §5 的选型）</strong>：要做&quot;确定性第二道闸门&quot;，<strong>Semgrep CE 是许可最干净的入口</strong>（但要注意：它只卡单文件模式与已知模式，<strong>别指望它做跨文件污点分析</strong>）；<strong>CodeQL 直接排除</strong>（许可）；<strong>SonarQube 的分析器要过法务</strong>。</p>
+<hr />
+<h2>2. 与 <code>alibaba/open-code-review</code> 的定位对比</h2>
+<h3>2.1 锚点画像（核实结论）</h3>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仓库</td>
+<td><code>alibaba/open-code-review</code>（org 无误）</td>
+<td>官方站点 open-codereview.ai</td>
+</tr>
+<tr>
+<td>协议</td>
+<td><strong>Apache-2.0</strong></td>
+<td>可直接借鉴<strong>设计</strong>（不是抄代码的理由，但法务无阻）</td>
+</tr>
+<tr>
+<td>语言 / 产物</td>
+<td><strong>Go</strong>，分发壳用 npm，命令 <code>ocr</code></td>
+<td><code>npm install -g @alibaba-group/open-code-review</code></td>
+</tr>
+<tr>
+<td>热度</td>
+<td><strong>41,646★</strong> / 2,994 forks / <strong>192 贡献者</strong> / 776 commits / v1.12.9</td>
+<td>创建 <strong>2026-05-18</strong>，pushed 2026-09-24</td>
+</tr>
+<tr>
+<td>架构</td>
+<td><strong>确定性流水线 + LLM Agent（混合）</strong></td>
+<td>README 原文：deterministic pipelines + LLM Agent</td>
+</tr>
+<tr>
+<td>规则</td>
+<td>内置 <code>system_rules.json</code> 硬编码在二进制里，<strong>四层优先级</strong>：<code>--rule</code> &gt; 项目 <code>.opencodereview/rule.json</code> &gt; 全局 <code>~/.opencodereview/rule.json</code> &gt; 内置 system 层</td>
+<td>覆盖 ~40 类文件/语言（含 <code>pom.xml</code> / MyBatis mapper / <code>.properties</code> / ArkTS）</td>
+</tr>
+<tr>
+<td>模型</td>
+<td>25 个内置 provider（含百炼/火山/混元/智谱/Kimi/MiniMax/千帆/星火/硅基流动/小米 MiMo）+ 任意 OpenAI 兼容端点 + Ollama + 自建 LiteLLM 网关</td>
+<td>本地模型<strong>必须支持 native tool calling</strong>（官方 FAQ 明确）</td>
+</tr>
+<tr>
+<td>平台</td>
+<td>GitHub Actions / GitLab CI（<strong>含自建 GitLab</strong>，靠 <code>CI_SERVER_URL</code>）/ Bitbucket / Gerrit / GitFlic / Codeup</td>
+<td><strong>无 Gitea</strong>（examples 里没有 gitea 目录，官方 CI/CD 文档也只写两个 recipe）</td>
+</tr>
+<tr>
+<td>门禁</td>
+<td><strong>未获取到任何阻断式门禁 / 阈值证据</strong>（只做&quot;跑审查 + 回帖评论&quot;）</td>
+<td>这是它的<strong>弱项</strong>，不是我们的参照系</td>
+</tr>
+<tr>
+<td>AST</td>
+<td><strong>明确不做</strong>（只有 glob + 模板化规则文本）</td>
+<td>与 Kodus 的本质架构差异</td>
+</tr>
+</tbody>
+</table>
+<p><strong>它自己承认的取舍</strong>（README 原话，值得抄进我们的文档）：</p>
+<blockquote>
+<p>&quot;Note that its Recall is lower than general-purpose agents — <strong>a deliberate trade-off favoring precision over noise</strong>.&quot;</p>
+</blockquote>
+<p>这句话对我们比它的功能列表更值钱：<strong>&quot;精度换噪音&quot;是一个需要公开声明、并配 benchmark 支撑的工程决策</strong>。</p>
+<h3>2.2 五维对比表（本项目 vs 锚点 vs 两个&quot;能打&quot;的对手）</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th><strong>本项目 <code>code-review-agent</code></strong></th>
+<th>OCR（锚点）</th>
+<th>PR-Agent</th>
+<th>LiveReview</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>实现语言 / 形态</td>
+<td>Java 服务（221 个主源文件 / 22,784 行）+ 独立 console</td>
+<td><strong>Go CLI</strong>（无自托管服务端概念）</td>
+<td>Python CLI/Action/服务</td>
+<td>Go 自托管</td>
+</tr>
+<tr>
+<td>协议</td>
+<td>MIT</td>
+<td>Apache-2.0</td>
+<td>MIT</td>
+<td><strong>非 OSI（fair-code）</strong></td>
+</tr>
+<tr>
+<td><strong>AST / 语义分析</strong></td>
+<td>✅ <strong>JavaParser + tree-sitter + 调用图 + 影响面</strong></td>
+<td>❌ 不做 AST</td>
+<td>❌ 未获取证据</td>
+<td>⚠️ 有 call graph，实现未披露</td>
+</tr>
+<tr>
+<td><strong>Git 平台</strong></td>
+<td>GitLab + <strong>Gitea</strong></td>
+<td>GitHub / GitLab / Bitbucket / Gerrit / GitFlic / Codeup；<strong>无 Gitea</strong></td>
+<td>GitHub / GitLab / Bitbucket / Azure DevOps / <strong>Gitea</strong></td>
+<td>GitHub / GitLab / Bitbucket / <strong>Gitea</strong> / Azure DevOps</td>
+</tr>
+<tr>
+<td><strong>多租户</strong></td>
+<td>✅ team 级隔离（知识/记忆/历史/反馈/规则全套）+ RLS 方向</td>
+<td>❌ 无</td>
+<td>❌ 无</td>
+<td>⚠️ 组织级</td>
+</tr>
+<tr>
+<td><strong>成本治理</strong></td>
+<td>✅ 独立 <code>token-factory</code> 网关（价目表/配额/熔断/用量上报）</td>
+<td>❌ 无（有 <code>spend_logs</code> 但属 LiteLLM 侧）</td>
+<td>❌ 无</td>
+<td>❌ 无</td>
+</tr>
+<tr>
+<td><strong>规则层</strong></td>
+<td>⚠️ <strong>仅 3 个 Skill + 1 份 handbook</strong></td>
+<td>✅ ~40 类规则文档 + 四层优先级</td>
+<td>⚠️ 靠 prompt</td>
+<td>⚠️ jq 规则集（用于门禁）</td>
+</tr>
+<tr>
+<td><strong>质量门禁</strong></td>
+<td>❌ <strong>完全没有</strong></td>
+<td>❌ 没有</td>
+<td>⚠️ 未获取</td>
+<td>✅ jq 规则 + HTTP 状态阻断</td>
+</tr>
+<tr>
+<td><strong>出口形态</strong></td>
+<td>⚠️ 服务端 webhook + REST API（有 IDE LSP 接口）</td>
+<td>CLI + Action + <strong>Coding-Agent 插件（Claude Code/Codex/Cursor/Kimi/OpenCode）</strong> + <strong>MCP Server</strong> + <strong>Session Viewer</strong></td>
+<td>Action + CLI + Docker + webhook</td>
+<td>CLI（<code>git lrc review</code>）+ 扩展 + MCP Server</td>
+</tr>
+<tr>
+<td>私有化本地模型</td>
+<td>✅ 经 token-factory / 任意 OpenAI 兼容</td>
+<td>✅ Ollama 逐行配置</td>
+<td>✅ 经 LiteLLM</td>
+<td>✅ Ollama</td>
+</tr>
+</tbody>
+</table>
+<h3>2.3 三个&quot;选型场景&quot;里谁赢</h3>
+<ul>
+<li><strong>想要&quot;最接近 OCR 的体验&quot;</strong> → 只有 OCR 自己（它的体验来自 CLI + 规则集 + Session Viewer 的组合，缺一个都不像）。</li>
+<li><strong>想要&quot;私有化 + Gitea + 自托管 GitLab 一次齐活&quot;</strong> → <strong>PR-Agent</strong> 与 <strong>LiveReview</strong> 是仅有的两家。</li>
+<li><strong>想要&quot;阻断式门禁&quot;</strong> → <strong>LiveReview</strong>（jq + <code>GET /ci-rulesets/:id/evaluate</code> 按 HTTP 状态阻断）；合规面是 <strong>Kodus Enterprise</strong>（SSO/RBAC/audit/SOC 2）与 <strong>SonarQube Quality Gate</strong>。</li>
+</ul>
+<hr />
+<h2>3. 三类典型方案：适用场景与优缺点</h2>
+<h3>3.1 方案一 · 可自托管 AI Agent 类</h3>
+<p><strong>代表</strong>：Kodus、LiveReview、OCR（自托管 GitLab 形态）、本项目
+<strong>形态</strong>：一个常驻服务 + webhook 接入 + 队列 + 存储（PG/向量库）+ 控制台</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>适用</strong></td>
+<td>代码不能出网；要团队级知识库/规则；要审计与成本口径；要多平台多租户；要接内部系统（工单/IM）</td>
+</tr>
+<tr>
+<td><strong>优点</strong></td>
+<td>数据可控；能力可堆叠（RAG / 记忆 / 校准 / 成本）；能覆盖&quot;组织级&quot;的横切需求（租户、配额、审计）</td>
+</tr>
+<tr>
+<td><strong>缺点</strong></td>
+<td><strong>运维成本</strong>：PG + 向量库 + Redis + 迁移 + 容量；<strong>上线周期长</strong>；<strong>升级即风险</strong>（配置/迁移耦合）</td>
+</tr>
+<tr>
+<td><strong>本项目的位置</strong></td>
+<td><strong>已经在这条路上，且比 OCR 多做了横切面</strong>（多租户 / 成本 / 可观测）。<strong>方向没错，缺的是规则层与出口层</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>3.2 方案二 · GitHub Action 轻量集成类</h3>
+<p><strong>代表</strong>：ChatGPT-CodeReview（4,467★）、shippie（2,505★）、PR-Agent Action、reviewdog
+<strong>形态</strong>：<code>uses: xxx@v0</code> 一行接入，跑在 runner 上，无服务端</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>适用</strong></td>
+<td>个人/小团队快速试用；只想&quot;每条 PR 自动多一双眼睛&quot;；不想运维</td>
+</tr>
+<tr>
+<td><strong>优点</strong></td>
+<td><strong>5 分钟能用</strong>；零基础设施；成本随用量；失败即失败，不污染别的系统</td>
+</tr>
+<tr>
+<td><strong>缺点</strong></td>
+<td><strong>无状态</strong>：没有记忆、没有团队知识、没有跨 PR 的跟踪（Kodus 的 &quot;Kody Issues&quot; 这类能力天然没有）；无多租户；token 出网；<strong>细粒度权限受限</strong>（<code>pull_request_target</code> 的安全陷阱）</td>
+</tr>
+<tr>
+<td><strong>意外结论</strong></td>
+<td>这一类<strong>不是本项目的竞争对手，而是本项目的&quot;入口&quot;</strong>——Action 可以只做&quot;调我们服务的 API&quot;，见 §5 P1-8</td>
+</tr>
+</tbody>
+</table>
+<h3>3.3 方案三 · 静态分析 + AI 混合类</h3>
+<p><strong>代表</strong>：Semgrep + LLM、SonarQube + LLM、OCR（规则文本 + LLM，<strong>注意它做的不是真 AST</strong>）、Kodus（tree-sitter AST + LLM）
+<strong>形态</strong>：确定性层先跑（模式/类型/污点），LLM 只看&quot;确定性层标记过的东西&quot;或做解释</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>适用</strong></td>
+<td>有合规/审计要求；要<strong>可复现</strong>的结论；要<strong>可门禁</strong>（&quot;新增严重问题数 = 0&quot;这种硬阈值）</td>
+</tr>
+<tr>
+<td><strong>优点</strong></td>
+<td><strong>结论可复现、可举证</strong>（这是 AI 单独给不了的）；成本低（确定性层不烧 token）；<strong>天然适合做门禁</strong></td>
+</tr>
+<tr>
+<td><strong>缺点</strong></td>
+<td>事实上的&quot;两种技术栈&quot;要维护；误报率是这类工具的<strong>主要敌人</strong>（假警报多了就被关掉）；语言覆盖受规则生态限制</td>
+</tr>
+<tr>
+<td><strong>关键判断</strong></td>
+<td><strong>&quot;混合&quot;有两种完全不同的混法</strong>：<br>· <strong>OCR 式</strong>：规则是<strong>文本</strong>注入 prompt（便宜、覆盖广、但不理解语法树）<br>· <strong>Kodus 式</strong>：AST + Code Knowledge Graph 喂给 LLM（贵、语言少、但结构信息真实）<br><strong>本项目已有第二种的底子（JavaParser + tree-sitter），却还没把它变成&quot;审查输入&quot;</strong> → 见 §5 P1-9</td>
+</tr>
+</tbody>
+</table>
+<h3>3.4 选择矩阵</h3>
+<table>
+<thead>
+<tr>
+<th>你的约束</th>
+<th>首选</th>
+<th>次选</th>
+<th>避开</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码必须出不了网</td>
+<td>Gito（本地模型声明最具体）/ LiveReview / 本项目</td>
+<td>OCR + Ollama</td>
+<td>diffray（未声明）、shippie（无本地）</td>
+</tr>
+<tr>
+<td>有 Gitea + 自托管 GitLab</td>
+<td>PR-Agent / LiveReview / <strong>本项目</strong></td>
+<td>—</td>
+<td>OCR（无 Gitea）</td>
+</tr>
+<tr>
+<td>必须 5 分钟启用</td>
+<td>ChatGPT-CodeReview / shippie</td>
+<td>PR-Agent Action</td>
+<td>Kodus（首装 15–30 分钟）</td>
+</tr>
+<tr>
+<td>必须有阻断式门禁</td>
+<td>LiveReview / SonarQube</td>
+<td>Semgrep CE</td>
+<td><strong>OCR（无门禁）</strong>、ChatGPT-CodeReview</td>
+</tr>
+<tr>
+<td>要跨文件语义分析</td>
+<td>Kodus（tree-sitter 9 语言）/<strong>本项目</strong></td>
+<td>Semgrep（generic AST，非 AI）</td>
+<td>OCR（无 AST）</td>
+</tr>
+<tr>
+<td>要企业合规材料</td>
+<td>Kodus Enterprise（SOC 2/RBAC/audit）/ SonarQube</td>
+<td>—</td>
+<td>个人向 Action 类</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. 当前项目能力盘点（基于实况复算，不凭记忆）</h2>
+<h3>4.1 已有能力（数字可复算）</h3>
+<p>复算方式：<code>find src/main/java -path &quot;*/&lt;包&gt;/*&quot; -name '*.java' | wc -l</code> 与 <code>-exec cat {} + | wc -l</code>。</p>
+<table>
+<thead>
+<tr>
+<th>能力域</th>
+<th>包</th>
+<th>文件</th>
+<th>行数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AST / 调用图 / 影响面</td>
+<td><code>core/analysis</code></td>
+<td>18</td>
+<td>2,709</td>
+</tr>
+<tr>
+<td>RAG（混合检索 + 重排 + 切分 + MMR）</td>
+<td><code>core/rag</code></td>
+<td>13</td>
+<td>1,951</td>
+</tr>
+<tr>
+<td>记忆（三层 + 淘汰）</td>
+<td><code>core/memory</code></td>
+<td>16</td>
+<td>1,921</td>
+</tr>
+<tr>
+<td>后管 / 控制台 API</td>
+<td><code>core/admin</code></td>
+<td>17</td>
+<td>1,084</td>
+</tr>
+<tr>
+<td>审查 Agent（5 类 + 声明式）</td>
+<td><code>core/agent</code></td>
+<td>8</td>
+<td>992</td>
+</tr>
+<tr>
+<td>注入防御（分层）</td>
+<td><code>core/security</code></td>
+<td>9</td>
+<td>833</td>
+</tr>
+<tr>
+<td>协调 / 聚合仲裁</td>
+<td><code>core/coordinator</code></td>
+<td>2</td>
+<td>726</td>
+</tr>
+<tr>
+<td>Skill 插件</td>
+<td><code>core/skill</code></td>
+<td>10</td>
+<td>708</td>
+</tr>
+<tr>
+<td>自动修复</td>
+<td><code>core/autofix</code></td>
+<td>4</td>
+<td>402</td>
+</tr>
+<tr>
+<td>全链路轨迹</td>
+<td><code>core/trajectory</code></td>
+<td>5</td>
+<td>276</td>
+</tr>
+<tr>
+<td>IDE LSP 接口</td>
+<td><code>agent/ide</code></td>
+<td>1</td>
+<td>269</td>
+</tr>
+<tr>
+<td>断点续跑</td>
+<td><code>core/resume</code></td>
+<td>4</td>
+<td>189</td>
+</tr>
+<tr>
+<td>多租户</td>
+<td><code>agent/tenant</code></td>
+<td>3</td>
+<td>182</td>
+</tr>
+<tr>
+<td>置信度校准</td>
+<td><code>core/calibration</code></td>
+<td>2</td>
+<td>175</td>
+</tr>
+<tr>
+<td>工具调用 / 规划 / 工作流 / 调度 / 反馈 / 画像 / 提示词</td>
+<td><code>core/{toolcalling,planning,workflow,scheduler,feedback,profile,prompt}</code></td>
+<td>11</td>
+<td>676</td>
+</tr>
+</tbody>
+</table>
+<p><strong>总量</strong>：<code>src/main/java</code> <strong>221 个 Java 文件 / 22,784 行</strong>；测试 <strong>67 个测试类</strong>。</p>
+<p><strong>其他可核实的实况</strong>：</p>
+<ul>
+<li>集成平台：<code>integration/</code> 下<strong>只有 <code>gitea</code> 和 <code>gitlab</code></strong> 两个包。</li>
+<li>内置规则资产：<code>core/skill/impl/</code> <strong>只有 3 个</strong>（<code>HardcodedSecretSkill</code>、<code>PatternSkill</code>、<code>SqlInjectionSkill</code>）；<code>resources/handbook/</code> <strong>只有 1 份</strong>（<code>java-coding-standard.md</code>）；<code>resources/prompts/</code> 5 份维度提示词。</li>
+<li>HTTP 面：<code>api/</code> 4 个类（<code>ApiAuthFilter</code>、<code>HealthController</code>、<code>ReviewApiController</code>、<code>FeedbackRequest</code>）。</li>
+<li><strong>阻断式门禁：全库对 <code>block|Block|gate|Gate|failOn|fail_on|exitCode</code> 的检索在 <code>src/main/java</code> 下命中 0</strong>。</li>
+</ul>
+<h3>4.2 与锚点的逐项差距（9 条，按&quot;缺了会不会出事&quot;排序）</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>差距</th>
+<th>缺了会出什么事（不是&quot;功能少&quot;，是<strong>故障形态</strong>）</th>
+<th>参照</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>无阻断式门禁</strong></td>
+<td>审查结论<strong>没有任何下游消费者</strong>——被忽略的 P0 问题照样合入；&quot;审查通过&quot;这句话在系统里不存在，无法审计</td>
+<td>LiveReview、Gerrit submit requirements、SonarQube Quality Gate</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>确定性规则层过薄</strong>（3 个 Skill / 1 份 handbook）</td>
+<td>规则覆盖率低 → <strong>&quot;没报问题&quot;被读成&quot;没有问题&quot;</strong>；且团队规范（唯一那份 handbook）是全局的，<strong>无法按团队/按文件模式生效</strong></td>
+<td>OCR 四层优先级 + ~40 类规则文档</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>无文件筛选闸门</strong></td>
+<td>把 <code>.env</code> / <code>.ssh/**</code> / 二进制 / vendor 目录的 diff 送进 LLM ⇒ <strong>密钥出网 + token 白烧</strong>；反过来又可能漏掉重要变更</td>
+<td>OCR <code>selection.go</code> 六道闸门 + secret 路径<strong>优先于用户规则</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>无文件捆绑（bundling）</strong></td>
+<td>相关文件被拆到不同 Agent 的上下文里 ⇒ <strong>跨文件不一致审不出来</strong>（如 i18n 两份 properties、DTO 与契约）</td>
+<td>OCR smart file bundling（<code>message_en/zh.properties</code> 绑成一个单元，每 bundle 一个隔离上下文的 sub-agent）</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>无&quot;定位 + 反思&quot;独立环节</strong></td>
+<td>行级评论位置漂移 ⇒ 评论挂在错误的行上，<strong>比不评论更伤信任</strong></td>
+<td>OCR 的 external positioning + reflection modules；AI-Jury 的 verify 轮</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>无审查级评测基准</strong></td>
+<td>改 prompt / 换模型之后<strong>无法回答&quot;是不是变好了&quot;</strong>；&quot;精度换噪音&quot;这类取舍<strong>没有数据支撑，只能靠感觉</strong></td>
+<td>OCR 的 <code>Alibaba-Aone/aacr-bench</code>（50 仓库 / 200 PR / 10 语言 / 1,505 条 ground truth / 80+ 人交叉标注）</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>无 CLI / Coding-Agent 插件 / MCP Server 出口</strong></td>
+<td>开发者只能在平台上等 webhook；<strong>无法&quot;本地先跑一遍&quot;</strong>，也就无法在提交前发现问题（审查的价值被推迟到 PR 阶段）</td>
+<td>OCR：<code>ocr review/scan/session --resume</code> + Claude Code/Codex/Cursor 插件 + MCP Server + Session Viewer</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>平台面窄</strong>（仅 Gitea + GitLab）</td>
+<td>面向 GitHub 用户时<strong>根本无法接入</strong>；企业里 Bitbucket / Azure DevOps 场景直接出局</td>
+<td>PR-Agent 五平台、LiveReview 五平台</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>AST 结果没有变成&quot;审查输入&quot;</strong></td>
+<td>已经有 JavaParser + tree-sitter + 调用图，但审查路径里<strong>没有把它作为结构化上下文注入</strong>（Kodus 的 <code>CALLS/IMPORTS/EXTENDS/IMPLEMENTS</code> + 影响面 0/1/2/N 分级是现成参照）</td>
+<td>Kodus、Semgrep generic AST</td>
+</tr>
+</tbody>
+</table>
+<h3>4.3 反向优势（可以对外讲的真实差异点，3 条）</h3>
+<ol>
+<li><strong>AST 语义分析</strong>：OCR <strong>明确不做 AST</strong>，Kodus 的 AST 微服务<strong>已归档</strong>（<code>kodustech/kodus-service-ast</code> <code>archived: true</code>）。本项目把 JavaParser + tree-sitter + 调用图留在主干里，<strong>这是稀缺的</strong>。</li>
+<li><strong>Gitea 一等公民</strong>：OCR <strong>不支持 Gitea</strong>，Kodus 只覆盖 Forgejo（Gitea 的 fork，<strong>不做等价断言</strong>）。同时支持 Gitea + 自托管 GitLab 的，全生态只有 <strong>PR-Agent、LiveReview、本项目</strong>三家。</li>
+<li><strong>横切面完备</strong>：多租户（team 级隔离 + 知识/记忆/历史/反馈/规则全套）、成本治理（独立 <code>token-factory</code>）、全链路轨迹（对应 harness 的 &quot;Model-visible means logged&quot; 不变式）——<strong>OCR、PR-Agent、ChatGPT-CodeReview 三家一个都没有</strong>。</li>
+</ol>
+<hr />
+<h2>5. 优化方案：最佳实践 → 拟改进点 → 优先级</h2>
+<blockquote>
+<p>每条给：<strong>借鉴自谁 / 为什么 / 怎么做 / 验收判据</strong>。验收判据一律是<strong>可机械检查的</strong>，不接受&quot;感觉好了&quot;。</p>
+</blockquote>
+<h3>P0 · 不改架构即可落地（三周内可完成，收益最大）</h3>
+<h4>P0-1 · 确定性规则层扩容：从「3 个 Skill」到「文件模式 → 规则文档」四层链</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR 的 <code>system_rules.json</code> + 四层优先级（<code>--rule</code> &gt; 项目 <code>.opencodereview/rule.json</code> &gt; 全局 <code>~/.opencodereview/rule.json</code> &gt; 内置 system 层），以及它的&quot;文件模式 → 规则文档&quot;映射。</li>
+<li><strong>为什么</strong>：现在 <code>core/skill/impl/</code> 只有 3 个 Skill、<code>resources/handbook/</code> 只有 1 份全局 Java 规范 ⇒ 规则命中率和&quot;按团队/按路径生效&quot;两个能力都不存在。这是最容易见效的一处。</li>
+<li><strong>怎么做</strong>（4 步）：
+<ol>
+<li>在 <code>resources/</code> 下新建 <code>rules/</code> 目录，<strong>按文件模式组织</strong>（<code>**/*mapper*{mapper,dao}*.xml</code>、<code>pom.xml</code>、<code>application*.yml</code>、<code>**/*.sql</code>、<code>**/*.java</code> 等），每份是一段 markdown 规则文本；</li>
+<li>在 <code>core/skill</code> 里加一层 <code>RuleResolver</code>，<strong>四级覆盖链</strong>：请求级（API 参数）&gt; 团队级（team 隔离的存储）&gt; 全局 &gt; 内置 <code>rules/</code>；</li>
+<li>结构上保持&quot;<strong>永远有规则可解析</strong>&quot;——内置层不可被覆盖为空（OCR 的设计要点）；</li>
+<li>把已命中的规则文档<strong>写进 ReviewTrajectory</strong>（可追溯）。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① <code>find src/main/resources/rules -name '*.md' | wc -l</code> ≥ 15；② 对 10 个真实 PR 跑一遍，<strong>规则命中率（至少命中一条规则文档的 diff 占比）≥ 90%</strong>，且命中清单可从轨迹里读出；③ 故意把团队级规则置空，请求仍能跑通（验证&quot;不可覆盖为空&quot;）。</li>
+</ul>
+<h4>P0-2 · 文件筛选闸门 + 密钥路径保护（safe-by-default）</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR <code>internal/agent/selection.go</code> 的<strong>六道闸门</strong>：<code>binary</code> → <code>secret_exclude</code> → <code>user_exclude</code> → <code>user_include</code> → <code>unsupported_ext</code> → <code>default_path</code>；以及&quot;<strong>secret 路径优先于用户规则、<code>include</code> 也无法覆盖</strong>&quot;这条硬约束。另有&quot;diff 单独超过 max_tokens 80% 即判 <code>too_large</code>&quot;。</li>
+<li><strong>为什么</strong>：这是<strong>唯一一条既省钱又防泄露</strong>的改动。当前没有任何筛选 ⇒ <code>.env</code> / 密钥文件 / 二进制 / <code>target/</code> 构建产物都可能进 prompt。</li>
+<li><strong>怎么做</strong>（3 步）：
+<ol>
+<li>实现 <code>PathGate</code> 链（六道闸门按固定顺序，短路求值）；</li>
+<li>内置 secret 清单（<code>**/.ssh/**</code>、<code>**/.npmrc</code>、<code>**/.pypirc</code>、<code>**/.dockercfg</code>、除 <code>*.example</code>/<code>*.sample</code> 外的 <code>.env*</code>…），<strong>且放在用户 <code>include</code> 之前</strong>；</li>
+<li>每个被拦掉的路径记 <code>${reason}</code>（<code>secret_exclude</code> / <code>binary</code> / <code>too_large</code>…），进轨迹并可在控制台按原因聚合。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① 造一个含 <code>.env</code> + <code>*.jar</code> + <code>target/</code> 的测试 PR，<strong>三者全部不出现在送审清单里</strong>，且原因可查；② 用户显式 <code>include: .env</code> 时<strong>仍被拦</strong>（这条最容易做错）；③ 拦掉的路径数进指标端点。</li>
+</ul>
+<h4>P0-3 · 阻断式质量门禁（fail the build）</h4>
+<ul>
+<li><strong>借鉴</strong>：LiveReview 的 <strong>jq 规则 + <code>GET /ci-rulesets/:id/evaluate</code> 按 HTTP 状态阻断合并</strong>（README 给了三档团队策略的 jq 示例，安全敏感团队的规则是 <code>(.counts.by_category.security &gt; 0) or (.counts.by_severity.critical &gt; 0)</code> 即阻断）；语义层借 Gerrit 的 <strong>submit requirements</strong>。</li>
+<li><strong>为什么</strong>：<strong>这是本项目最大的结构性缺口</strong>（全库 grep 命中 0）。没有门禁，审查结论就只是&quot;一条没人看的评论&quot;，也就不可能有&quot;审查通过&quot;这个状态可审计。</li>
+<li><strong>怎么做</strong>（4 步）：
+<ol>
+<li>把 <code>ReviewReport</code> 派生出<strong>规范化计数</strong>（<code>counts.by_severity.*</code> / <code>counts.by_category.*</code>）——这是门禁规则的判据面；</li>
+<li>新增 <code>RuleSet</code> 实体（<strong>按团队隔离</strong>，复用现有多租户存储），规则正文是<strong>可执行的表达式</strong>（Java 侧可用 SpEL / MVEL，或直接存 jq 并 shell 出去）；</li>
+<li>新增端点 <code>POST /api/rulesets/{id}/evaluate</code>，入参是 <code>reportId</code>，<strong>返回 HTTP 200/409</strong>（冲突即&quot;门禁失败&quot;）；</li>
+<li>平台侧：Gitea/GitLab 的 <strong>commit status / pipeline 步骤</strong>接入该端点——评论照发，但<strong>构建要红</strong>。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① 造一个含 Critical 安全问题的 PR，门禁端点返回非 2xx 且 <strong>Gitea 上该 PR 的检查状态为 failed</strong>（在平台 UI 上肉眼可见）；② 同一个 PR 修掉问题后状态转 success；③ 门禁判据（用的哪条规则、读了哪几个计数）<strong>能在报告里回读</strong>——&quot;为什么红&quot;必须可回答。</li>
+</ul>
+<h3>P1 · 需要新增模块（一个月量级）</h3>
+<h4>P1-4 · 文件捆绑（bundling）：把「按维度并行」补成「按维度 × 按 bundle」二维</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR 的 smart file bundling——<strong>把相关文件打包为一个审查单元，每个 bundle 作为一个隔离上下文的 sub-agent 并发跑</strong>（README 举的例子就是 <code>message_en.properties</code> 与 <code>message_zh.properties</code> 必须在一起）。</li>
+<li><strong>为什么</strong>：本项目现在的并行是<strong>星型按维度 fan-out</strong>（5 个 Agent 各审全部 diff）。这解决&quot;专业分工&quot;，但<strong>没解决&quot;同一改动散落在多个文件&quot;</strong>——i18n、DTO+契约、SQL+实体这三类不一致<strong>必然审不出来</strong>。</li>
+<li><strong>怎么做</strong>：在 <code>ReviewContext</code> 里引入 <code>Bundle</code> 维度；先做三类<strong>静态可判</strong>的捆绑规则（同 basename 不同语言后缀 / 同名 <code>.xml</code> mapper 与 <code>@Mapper</code> 接口 / entity 与 migration SQL），再考虑按调用图聚簇（这里正好能复用 <code>core/analysis</code> 的调用图）。</li>
+<li><strong>验收判据</strong>：① 造一个&quot;改了 <code>message_zh.properties</code> 但没改 <code>message_en.properties</code>&quot;的 PR，<strong>审查必须报出这一条</strong>（当前基线：报不出，先测出基线再改）；② bundle 数与 sub-agent 并发数在轨迹里可读。</li>
+</ul>
+<h4>P1-5 · 定位校验 + 反思轮（把&quot;评论挂错行&quot;变成可检出缺陷）</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR 的 <strong>external positioning + reflection modules</strong>；AI-Jury 的 <strong>verify + synthesis 轮</strong>（三段式：并行评审 → 自适应辩论 → 验证裁决，且带&quot;去假阳性验证轮&quot;）。</li>
+<li><strong>为什么</strong>：行级评论位置漂移是<strong>最伤信任</strong>的一类错误（比漏报更伤）。本项目有行内评论 + Apply 按钮，但<strong>没有独立的定位校验环节</strong>。</li>
+<li><strong>怎么做</strong>（3 步）：
+<ol>
+<li>加 <code>PositionVerifier</code>：拿 finding 的 <code>file+line</code> 回到 diff <strong>原文</strong>核对，对不上就降级为&quot;文件级评论&quot;或丢弃；</li>
+<li>加一轮<strong>反思调用</strong>：只把&quot;高严重度 + 低置信度&quot;的 finding 送去复核（成本可控，不要把全部送一轮）；</li>
+<li>反思的输入里显式带上<strong>引用原文</strong>，输出必须是&quot;保留 / 降级 / 丢弃 + 理由&quot;，理由入轨迹。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① 构造 10 条故意错位的 finding，<strong>位置校验必须拦下全部</strong>；② 反思轮的 token 增量 <strong>≤ 总 token 的 15%</strong>（超了就不划算）；③ 保留/丢弃的理由可回读。</li>
+</ul>
+<h4>P1-6 · 审查级评测基准（回答&quot;改完到底变好没有&quot;）</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR 的 <code>Alibaba-Aone/aacr-bench</code>（<strong>50 个热门开源仓库 / 200 个真实 PR / 10 种语言 / 1,505 条 ground-truth issue / 80+ 资深工程师交叉标注</strong>），以及它<strong>敢把&quot;Recall 低于通用 Agent&quot;写在 README 里</strong>这件事本身。</li>
+<li><strong>为什么</strong>：本项目已有 <code>RagEvaluator</code> + golden 检索指标（hit@k / MRR），但那是<strong>检索级</strong>的；<strong>审查结论级</strong>的 precision / recall 完全没有。没有它，任何 prompt 或模型改动都是<strong>不可验证的</strong>。</li>
+<li><strong>怎么做</strong>（4 步）：
+<ol>
+<li>选 <strong>20 个 PR</strong>（自己仓库的历史 PR + 2 个开源仓库的真实 PR），人工标注 ground-truth issue；</li>
+<li>定义三个指标：<strong>precision（报出的问题里真问题占比）/ recall（真问题里报出占比）/ 噪音比（每 PR 平均评论数）</strong>；</li>
+<li>把 <code>ReviewReplay</code>（确定性回放）接到这套基准上——<strong>保证&quot;同输入同输出&quot;</strong>，否则指标不可比；</li>
+<li>基准跑分写进 CI，<strong>回归即红</strong>。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① 基准集 ≥ 20 PR / ground-truth issue ≥ 60 条；② 同一次改动前后两次跑分<strong>可复现</strong>（同输入同输出）；③ 报告里必须显式写出<strong>当前是&quot;精度优先&quot;还是&quot;召回优先&quot;以及理由</strong>——这是 OCR 教给我们最重要的一条纪律。</li>
+</ul>
+<h4>P1-7 · 出口层：CLI + MCP Server + Coding-Agent 插件</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR 的 <code>ocr review</code>（workspace / <code>--from/--to</code> merge-base / <code>--commit</code>）、<code>ocr scan</code>（无 git 历史也可全文件扫描）、<code>ocr session list</code>、<code>ocr review --resume &lt;session-id&gt;</code>、<strong>Coding-Agent 插件（Claude Code / Codex / Cursor / Kimi Code / OpenCode）</strong>、<strong>官方 MCP Server</strong>、<strong>Session Viewer</strong>（回放会话、把评论标为 fixed/ignored）。</li>
+<li><strong>为什么</strong>：本项目已经有 <code>core/resume</code>（断点续跑）与 <code>core/trajectory</code>（事件源轨迹）——<strong>能力都在，只是没有出口</strong>。没有 CLI/插件，审查只能发生在 PR 阶段；<strong>提交前的那一步是空的</strong>。</li>
+<li><strong>怎么做</strong>（按性价比排序）：
+<ol>
+<li><strong>MCP Server</strong>（最便宜）：把&quot;审查本地 diff / 取某次审查的 finding / 标记已修&quot;暴露为 3–5 个工具，<strong>复用现有 REST 层</strong>；</li>
+<li><strong>CLI</strong>（次便宜）：一个薄壳（<code>cr review --staged</code> / <code>--base main</code>），调 REST；</li>
+<li><strong>Session Viewer</strong>：控制台已有 Skills 市场/知识库，<strong>加一个&quot;审查会话回放&quot;页</strong>，把 <code>ReviewTrajectory</code> 渲染出来；</li>
+<li>Coding-Agent 插件：最后做（它依赖前三个稳定）。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① MCP Server 在 Claude Code 里能被发现并成功调用一次真实审查；② CLI 能对<strong>未提交的 staged diff</strong> 出结论（这条是&quot;提交前闸门&quot;的前提）；③ Session Viewer 能回放出<strong>至少一次完整审查</strong>的全部阶段耗时。</li>
+</ul>
+<h4>P1-8 · 平台面补齐（GitHub 优先）</h4>
+<ul>
+<li><strong>借鉴</strong>：PR-Agent / LiveReview 的五平台面；OCR 的 <code>examples/</code> 组织方式（每个平台一个目录 + 一份 recipe 文件）。</li>
+<li><strong>为什么</strong>：现在 <code>integration/</code> 只有 <code>gitea</code> + <code>gitlab</code> ⇒ <strong>GitHub 用户接不进来</strong>，开源项目的&quot;可试用面&quot;直接砍半。而 Gitea 是本项目的<strong>差异点</strong>，不该被&quot;平台太少&quot;拖累。</li>
+<li><strong>怎么做</strong>：抽 <code>GitPlatformClient</code> 接口（现在两个包各自实现），新增 <code>github</code> 实现（webhook 签名 + commit status + inline comment），然后按同样的 recipe 补 Bitbucket / Azure DevOps。<strong>这一步和第 P0-3 门禁是同一件事的两面</strong>（门禁要靠 commit status）。</li>
+<li><strong>验收判据</strong>：① 在 GitHub 上提一个 PR，端到端出评论 + 门禁状态；② 平台适配层<strong>新增一个平台不修改审核内核</strong>（用 diff 里&quot;改动只在 <code>integration/github/</code>&quot;来证明）。</li>
+</ul>
+<h4>P1-9 · 把 AST 结果变成审查输入（兑现已有优势）</h4>
+<ul>
+<li><strong>借鉴</strong>：Kodus 的 <strong>tree-sitter 9 语言 → Code Knowledge Graph</strong>（节点 + <code>CALLS</code> / <code>IMPORTS</code> / <code>EXTENDS</code> / <code>IMPLEMENTS</code> 关系）+ <strong>影响面按层级 0/1/2/N 分组</strong>；Semgrep 的 generic AST 思路。</li>
+<li><strong>为什么</strong>：本项目有 <code>core/analysis</code> <strong>18 文件 / 2,709 行</strong>（JavaParser + tree-sitter + 调用图 + 影响面），却在审查路径里没用起来 ⇒ <strong>优势只是&quot;存在于仓库里&quot;</strong>。这是唯一一条&quot;投入产出比最高&quot;的增强：基础设施已付过账了。</li>
+<li><strong>怎么做</strong>（3 步）：
+<ol>
+<li>在 <code>ReviewContext</code> 里加 <code>structuralContext</code>：对每个改动点给出<strong>调用方清单（含层级）+ 被调方 + 继承/实现关系</strong>；</li>
+<li>按影响面分层，<strong>只把&quot;层级 0/1 + 跨模块&quot;的部分注入 prompt</strong>（全部注入必然爆预算）；</li>
+<li>关系类型对齐 Kodus 的四类命名，便于和业界文档对话。</li>
+</ol>
+</li>
+<li><strong>验收判据</strong>：① 造一个&quot;改了被 30 处调用的公共方法&quot;的 PR，<strong>审查输出里必须提到影响面</strong>（当前基线：不提）；② 结构上下文的 token 占比 ≤ 上下文预算的 25%；③ 影响面数据在报告里可回读。</li>
+</ul>
+<h3>P2 · 涉外部依赖与法务，必须先权衡</h3>
+<h4>P2-10 · 第二道确定性闸门：<strong>选 Semgrep CE，不选 CodeQL / SonarQube</strong></h4>
+<ul>
+<li><strong>结论与理由（三条硬事实）</strong>：
+<ul>
+<li>✅ <strong>Semgrep CE</strong>：引擎 <strong>LGPL-2.1</strong>，无人数限制、无需登录；官方规则是 <strong>Semgrep Rules License v1.0</strong>，<strong>只在&quot;卖竞争性扫描 SaaS&quot;时受限</strong>，内部使用 OK。<strong>最易落地，但要接受它的边界：卡单文件模式与密钥类，卡不住跨文件污点。</strong></li>
+<li>⚠️ <strong>SonarQube</strong>：核心 LGPL-3.0 可商用，但<strong>内置分析器自 2024-11-29 起改为 SSALv1</strong>，SSAL 明文<strong>禁止在自带功能之外用 AI 与软件交互</strong> ⇒ 想把它接进自研 LLM 链路<strong>必须法务确认</strong>。</li>
+<li>❌ <strong>CodeQL</strong>：<code>github/codeql</code> 的 MIT <strong>只覆盖查询库</strong>，CLI/engine 是<strong>商业专有许可</strong>；无 GHAS 时<strong>只能用于 GitHub.com 上的开源库</strong>，私有库跑 CI 即违约。</li>
+</ul>
+</li>
+<li><strong>怎么做</strong>：Semgrep CE 跑在<strong>送审之前</strong>（正好接在 P0-2 的闸门之后），输出 SARIF，<strong>只把命中项交给 LLM 解释</strong>（而不是让它重审一遍），并把严重级映射到 P0-3 的计数里。</li>
+<li><strong>验收判据</strong>：① 一次扫描的 SARIF 条目数与 LLM 调用数<strong>都可比对</strong>；② LLM 侧对&quot;Semgrep 已标记项&quot;的解释覆盖率 ≥ 90%；③ 许可清单进 <code>NOTICE</code>，写明规则集许可与边界。</li>
+</ul>
+<h4>P2-11 · 可信度材料（把&quot;能交付&quot;变成&quot;可举证&quot;）</h4>
+<ul>
+<li><strong>借鉴</strong>：OCR 的 <code>ASSURANCE_CASE.md</code> + <strong>OpenSSF Best Practices Gold 徽章</strong>（它把合规材料当产品的一部分）。</li>
+<li><strong>为什么</strong>：企业采购问的第一个问题往往不是&quot;准不准&quot;，而是&quot;<strong>凭什么信你</strong>&quot;。</li>
+<li><strong>怎么做</strong>：补 <code>SECURITY.md</code>（威胁模型 + 已知边界）、<code>ASSURANCE_CASE.md</code>（每项安全主张对应的实现与证据）、<code>NOTICE</code>（第三方许可）、SBOM；把 P2-10 的 Semgrep 集成写进威胁模型。</li>
+<li><strong>验收判据</strong>：① 每一条安全主张都<strong>指向一个可执行证据</strong>（测试名或脚本名），不允许&quot;设计上支持&quot;这种话；② <code>NOTICE</code> 覆盖全部直接依赖。</li>
+</ul>
+<hr />
+<h2>6. 工具选型建议（四个场景）</h2>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>首选</th>
+<th>备选</th>
+<th>不要选 / 注意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>① 最接近 open-code-review 体验</strong></td>
+<td><strong><code>alibaba/open-code-review</code></strong> 本身：Apache-2.0、41,646★、CLI <code>ocr</code>、~40 类规则、25 个 provider、Session Viewer。<strong>&quot;像 OCR&quot;只有 OCR 自己</strong></td>
+<td><code>The-PR-Agent/pr-agent</code>（要自托管服务 + 五平台时）</td>
+<td>注意 OCR <strong>无 Gitea</strong>、<strong>无门禁</strong>；<code>kodustech/kodus-ai</code> 是 <strong>AGPL-3.0+EE</strong>，用于商业产品前必须过法务</td>
+</tr>
+<tr>
+<td><strong>② 私有化本地模型（代码不出网）</strong></td>
+<td><strong><code>Nayjest/Gito</code></strong>：README <strong>明确列出 Ollama / vLLM / llama.cpp / SGLang / LM Studio</strong>，<code>LLM_API_BASE</code> 指自托管端点，原话 &quot;If you use a local model, your code never leaves your network&quot;</td>
+<td><strong>OCR + Ollama</strong>（官方有逐行配置，<strong>但约束：本地模型必须支持 native tool calling</strong>）；<strong>LiveReview</strong>（Ollama + &quot;no code leaves your network&quot;）；<strong>AI-Jury</strong>（<code>vendor=&quot;local&quot;</code> 默认 <code>http://localhost:11434/v1</code>）</td>
+<td>❌ <code>diffray</code>（未声明本地模型，FAQ 说代码送给 Claude/Cursor）；❌ <code>shippie</code>（provider 只有 Anthropic/OpenAI/OpenRouter/Cloudflare Workers AI）；❌ <code>Tabby</code>（<strong>本地化最彻底但不是审查工具</strong>，只能当本地模型基础设施参考）</td>
+</tr>
+<tr>
+<td><strong>③ 快速启用（5 分钟）</strong></td>
+<td><strong><code>anc95/ChatGPT-CodeReview</code></strong>（ISC，GitHub Action 一行 <code>uses:</code>，4,467★）</td>
+<td><strong><code>mattzcarey/shippie</code></strong>（MIT，<code>uses: mattzcarey/shippie@v0</code>，可 <code>/shippie review</code> 按需触发）；<strong>PR-Agent Action</strong></td>
+<td>注意三者<strong>都只有单次/少量 LLM 调用</strong>：无记忆、无团队知识、无跨 PR 跟踪。<strong>它们适合&quot;先看一眼&quot;，不适合做质量体系</strong></td>
+</tr>
+<tr>
+<td><strong>④ 企业级质量门禁</strong></td>
+<td><strong><code>HexmosTech/LiveReview</code></strong>：<strong>唯一有完整&quot;阻断式门禁&quot;文档</strong>的项目——写 jq 规则 + <code>GET /ci-rulesets/:id/evaluate</code>，<strong>用 HTTP 状态阻断合并</strong>，README 给了三档团队策略示例</td>
+<td><strong>SonarQube</strong>（Quality Gate 是行业事实标准：New Code 覆盖率/重复率/严重问题数阈值）；<strong>Semgrep CE</strong>（pre-commit / CI 阻断，许可最干净）；<strong>Gerrit 3.14</strong>（<code>AiCodeReviewProvider</code> + submit requirements，<strong>评审载体自带门禁</strong>）</td>
+<td>❌ <strong>OCR 没有门禁</strong>（它只发评论）；<code>LiveReview</code> 是<strong>非 OSI 的 fair-code 许可</strong>，<strong>不能抄代码</strong>，只能借鉴设计；Kodus 的合规面（SOC 2/RBAC/audit）在 <strong>Enterprise 版</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>一句话选型</strong>：</p>
+<blockquote>
+<p><strong>要看齐体验 → 直接用 OCR；要私有化 → Gito 最明确；要快 → ChatGPT-CodeReview/shippie；要门禁 → LiveReview 的 jq+HTTP 设计 + SonarQube 的阈值语义（代码自己写，因为它和本项目同源收益最大）。</strong></p>
+</blockquote>
+<hr />
+<h2>7. 落地边界：哪些可直接落地、哪些需权衡</h2>
+<h3>7.1 可直接落地（无外部依赖、无许可风险、不改架构）</h3>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>为什么可以直接做</th>
+<th>落地成本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P0-1 规则层扩容</strong></td>
+<td>纯新增资源 + 一层解析器；规则文本自己写，不引入第三方</td>
+<td>低（写规则 + 一个 Resolver）</td>
+</tr>
+<tr>
+<td><strong>P0-2 文件筛选闸门</strong></td>
+<td>纯本地算法（glob + 短路链），OCR 是 Apache-2.0 但<strong>设计与实现都是常识级</strong>，自己写更合适</td>
+<td>低</td>
+</tr>
+<tr>
+<td><strong>P0-3 质量门禁</strong></td>
+<td>复用现有 <code>ReviewReport</code> + 多租户存储；Gitea commit status 有公开 API</td>
+<td>中（要动平台适配层）</td>
+</tr>
+<tr>
+<td><strong>P1-5 定位校验</strong></td>
+<td>纯本地：拿 finding 回 diff 原文核对</td>
+<td>低</td>
+</tr>
+<tr>
+<td><strong>P1-6 评测基准</strong></td>
+<td>纯本地：标 + 跑 <code>ReviewReplay</code></td>
+<td><strong>中（人力在标注，不在代码）</strong></td>
+</tr>
+<tr>
+<td><strong>P1-7 MCP Server / CLI</strong></td>
+<td>复用现有 REST 层</td>
+<td>低–中</td>
+</tr>
+<tr>
+<td><strong>P1-9 AST 注入审查</strong></td>
+<td><code>core/analysis</code> 已存在，只是没接线</td>
+<td>中（要控 token 预算）</td>
+</tr>
+<tr>
+<td><strong>P2-11 可信度材料</strong></td>
+<td>纯文档 + 已有测试名</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<h3>7.2 需权衡取舍（做之前必须先定条件）</h3>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>取舍点</th>
+<th>建议的决策规则</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P1-4 文件捆绑</strong></td>
+<td>捆绑会让 <strong>bundle 数 × sub-agent 数</strong>上升 ⇒ 成本与延迟同时涨</td>
+<td>先只做三类<strong>静态可判</strong>的捆绑（i18n / mapper / entity-migration）；用 P1-6 的基准证明&quot;报出了原本报不出的问题&quot;<strong>再扩</strong></td>
+</tr>
+<tr>
+<td><strong>P1-8 补平台</strong></td>
+<td>每个平台一套签名/状态/评论语义，<strong>维护面线性增长</strong></td>
+<td><strong>只补 GitHub</strong>（收益/成本最高），其余等有真实用户再排；抽接口是前提</td>
+</tr>
+<tr>
+<td><strong>P2-10 Semgrep</strong></td>
+<td>引擎许可干净，但<strong>规则集是独立许可</strong>，且它的&quot;跨文件能力弱&quot;会<strong>改变产品承诺</strong></td>
+<td>明确写&quot;我们做的是单文件模式 + 密钥闸门&quot;，<strong>不要对外宣称污点分析</strong>；规则集许可进 <code>NOTICE</code></td>
+</tr>
+<tr>
+<td><strong>SonarQube 接入</strong></td>
+<td><strong>SSALv1 明文禁止在自带功能之外用 AI 与软件交互</strong></td>
+<td><strong>先法务，再动手</strong>；不确定就不要接</td>
+</tr>
+<tr>
+<td><strong>CodeQL</strong></td>
+<td>无 GHAS 时仅限 GitHub.com 上的开源库</td>
+<td><strong>不接</strong>（本项目面向私有库场景）</td>
+</tr>
+<tr>
+<td><strong>许可纯度</strong></td>
+<td>Kodus <code>AGPL-3.0+EE</code>、LiveReview <code>Sustainable Use License</code>、Sweep <code>EE License</code> 都<strong>不是 OSI 开源</strong></td>
+<td><strong>只读设计、不抄代码</strong>；需要抄的算法（如影响面分层、jq 门禁表达式）<strong>自己实现</strong></td>
+</tr>
+<tr>
+<td><strong>改造成 Go CLI</strong></td>
+<td>会丢掉服务端横切能力（多租户/成本/轨迹）</td>
+<td><strong>不做</strong>。要&quot;本地体验&quot;就补 P1-7 的 CLI + MCP，<strong>而不是把服务改成 CLI</strong></td>
+</tr>
+<tr>
+<td><strong>本地模型的现实约束</strong></td>
+<td>OCR 官方明确：<strong>本地模型必须支持 native tool calling</strong>，否则链路跑不通；且慢速模型要把 <code>timeout_sec</code> 从 300 调到 900</td>
+<td>本项目若开本地模型通道，<strong>启动时先做一次 tool-calling 冒烟探测</strong>，不支持就 fail-fast（拒绝启动该 provider），<strong>不要静默降级</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>7.3 建议的执行顺序（依赖关系）</h3>
+<pre><code>P0-1 规则层 ─┐
+P0-2 闸门  ─┼─→ P0-3 门禁（门禁的判据面来自规则命中的计数）
+            │
+            └─→ P2-10 Semgrep（接在闸门之后，只把命中项交给 LLM）
+P1-6 评测基准 ─→ 之后所有内容改动都以它为验收（没有它任何改动都不可验证）
+P1-9 AST 注入 ─→ P1-5 定位/反思（反思要用到结构上下文判断&quot;这条是否真的可达&quot;）
+P1-8 补平台   ─→ P1-7 CLI/MCP（CLI 依赖稳定的平台层；门禁也依赖 commit status）
+</code></pre>
+<p><strong>一句话</strong>：<strong>先做 P1-6（基准），再做 P0-1/P0-2/P0-3（规则 / 闸门 / 门禁）</strong>——基准必须先于所有内容改动，否则后面每一次改动都无法判断是变好还是变坏。</p>
+<hr />
+<h2>8. 附录</h2>
+<h3>8.1 数据来源与口径</h3>
+<ul>
+<li>仓库元数据（full_name / license / language / stars / forks / pushed_at / archived）：<code>GET https://api.github.com/repos/&lt;owner&gt;/&lt;repo&gt;</code>，<strong>2026-09-27</strong></li>
+<li>贡献者数：<code>img.shields.io/github/contributors/&lt;owner&gt;/&lt;repo&gt;</code> 或 API <code>?per_page=100&amp;anon=1</code> 全量翻页</li>
+<li>README / LICENSE / 配置文件原文：<code>raw.githubusercontent.com</code></li>
+<li>官方文档：<code>open-codereview.ai/docs/*</code>、<code>kodus.io</code>、<code>hexmos.com/livereview</code>、<code>diffray.ai</code> 等</li>
+<li><strong>本项目侧数字</strong>：<code>find</code> / <code>wc -l</code> 实测（复算命令见 §4.1）</li>
+</ul>
+<h3>8.2 本轮明确&quot;未获取&quot;的项（不估算、不编）</h3>
+<ul>
+<li>OCR 的<strong>阻断式门禁 / 阈值 / 合规报告</strong>实现细节（官方文档只讲&quot;跑审查 + 回帖评论&quot;）</li>
+<li>PR-Agent 的门禁 / 阈值配置</li>
+<li>Kodus 对 <strong>Ollama / vLLM 的具名配置示例</strong>（只有&quot;任意 OpenAI 兼容端点&quot;声明）；Kodus 的<strong>精确 AST 语言清单</strong>（三方来源不一致，且 AST 微服务已归档）；Kodus 对 <strong>Gitea</strong> 的支持（只有 Forgejo）</li>
+<li>LiveReview 的 <strong>AST / 调用图实现技术</strong>、<strong>离线 / air-gapped 镜像获取方式</strong></li>
+<li>shippie / PR-Agent / ChatGPT-CodeReview 的 AST 证据</li>
+<li>SonarQube Quality Gate 的<strong>具体阈值原文</strong>、CodeQL CLI 的<strong>专有许可原文</strong></li>
+<li><strong><code>codereview-cli</code> 的唯一确定指向</strong>（三个同名仓库）</li>
+<li>Sweep 停更的<strong>官方公告</strong>（仅能依据最后 push / open issues / description 三项客观事实推断）</li>
+</ul>
+<h3>8.3 数据可信度警告（值得单独记住）</h3>
+<p>同一时间窗内，中文技术媒体与项目聚合站对 <code>alibaba/open-code-review</code> 给出的 stars <strong>差了三倍量级</strong>：23,480 / 28,789 / 21,067 / 19,021，而 GitHub API 一手值是 <strong>41,646</strong>——<strong>二手数字不仅彼此冲突，且全部低于一手值</strong>。
+⇒ <strong>本类调研跳过 API 直接抄榜单，会系统性低估。</strong> 这条纪律推广到本项目的对外材料同理：<strong>任何数字都必须能说出复算命令。</strong></p>
+<hr />
+<h2>9. 落地进度（按实况核对，不按计划勾选）</h2>
+<blockquote>
+<p>本节的存在理由：方案写完之后，「哪些真的改了代码」与「哪些只是写得好」会被混为一谈。
+因此这里只记录<strong>可以在仓库里复算</strong>的事实，并显式列出<strong>未落地</strong>与<strong>未验证</strong>的项。</p>
+</blockquote>
+<h3>9.1 已落地</h3>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>落地内容</th>
+<th>复算证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P1-6 审查级评测基准（机制）</strong></td>
+<td>新增 <code>core/eval/</code>：<code>BenchGroundTruth</code> / <code>BenchCase</code> / <code>BenchCorpus</code>（classpath 只读加载 + patchSha256 完整性校验）/ <code>ReviewReplay</code>（<strong>重建</strong>，见下）/ <code>ReviewBenchMetrics</code>（三指标 + 匹配口径）/ <code>ReviewBenchReport</code>（含取舍声明）/ <code>ReviewBenchRunner</code> / <code>ReviewBenchGate</code>（五条门禁规则）/ <code>BenchRunnerCli</code>（<code>bench.run=true</code> 时以 <code>ApplicationRunner</code> 跑分）</td>
+<td><code>ls src/main/java/com/codereview/agent/core/eval/</code>；<code>mvn test -Dtest=ReviewBench*Test</code> → <strong>12+11 例</strong></td>
+</tr>
+<tr>
+<td><strong>P1-6 语料与标注</strong></td>
+<td>语料 <strong>20 个真实 PR</strong>（本仓历史 18 + 开源 PR 2）、<strong>ground-truth 148 条</strong>（跨 17 个 case）；采集器 <code>tools/bench/collect_corpus.py</code>（provenance 全机器提取 + 18 条缺陷 rubric + <code>--check</code> 漂移校验）、标注工作台 <code>tools/bench/label_assist.py</code>（<code>--sheet</code> / <code>--classify</code> / <code>--apply</code> / <code>--build-replay-input</code> / <code>--stats</code>）、人工标注记录 <code>tools/bench/labels.tsv</code> + <code>manual_labels.tsv</code></td>
+<td><code>python3 tools/bench/label_assist.py --stats</code>；<code>cat src/main/resources/bench/manifest.json</code></td>
+</tr>
+<tr>
+<td><strong>P1-6 CI 门禁</strong></td>
+<td><code>.github/workflows/ci.yml</code> 从「只 <code>package -DskipTests</code>」改为<strong>真的跑测试</strong>（死代码门禁与评测门禁都是测试形态，跳过测试等于两条门禁都不存在），并打印基线</td>
+<td><code>.github/workflows/ci.yml</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>怎么跑（可复算的命令）</strong>：</p>
+<pre><code class="language-bash"># ① 跑分并打印报告（人工看当前水平）
+./mvnw -B test -Dtest='ReviewBench*Test'                  # 机制自测：指标口径 / 回放确定性 / 门禁五条规则
+./mvnw spring-boot:run -Dspring-boot.run.arguments=&quot;--bench.run=true --bench.mode=report&quot;
+
+# ② 门禁（CI 里跑的就是它；回归即红）
+./mvnw -B test                                             # ReviewBenchGateTest 与 committed 基线比较
+
+# ③ 显式刷新基线（一次需要人负责的决定，不是自动行为）
+./mvnw -B test -Dtest=ReviewBenchGateTest#updateBaselineExplicitly -Dbench.updateBaseline=true
+
+# 语料与标注（采集要联网 / 裁决要人；都不在构建链上）
+python3 tools/bench/collect_corpus.py                      # 采集 20 条语料（provenance 全机器提取）
+python3 tools/bench/collect_corpus.py --check              # 语料漂移校验（patch 哈希）
+python3 tools/bench/label_assist.py --sheet                # 打印候选 + hunk 上下文（人工过一遍）
+python3 tools/bench/label_assist.py --classify --apply     # 按已裁决规则生成 labels.tsv 并写入 groundTruth
+python3 tools/bench/label_assist.py --build-replay-input   # 由 GT 派生回放输入（含受控干扰项）
+</code></pre>
+<p>| <strong>P0-2 文件筛选闸门</strong> | 新增 <code>core/gate/</code>（<code>GateReason</code> / <code>GateDecision</code> / <code>GateReport</code> / <code>PathGate</code> / <code>PathGateProperties</code> / <code>GateAdminController</code>）与 <code>core/util/GlobMatcher</code>；接入 <code>CompletableFutureCoordinator</code>（六入口共用此唯一接线点）；配置 <code>review.gate.*</code>（默认开启，safe-by-default） | <code>ls src/main/java/com/codereview/agent/core/gate/</code>；判据测试 20 例（<code>PathGateTest</code> 17 + <code>CoordinatorPathGateTest</code> 3） |
+| <strong>P0-1 确定性规则层</strong> | 新增 <code>resources/rules/</code>（<strong>19 篇规则文档</strong> + <code>index.tsv</code> <strong>78 条 pattern</strong>）；新增 <code>core/skill/RuleResolver</code>（四级链 request&gt;team&gt;global&gt;builtin）与 <code>RuleLevel</code> / <code>RuleHit</code>；接入 <code>RagContextBuilder</code> 规则分区与 <code>CompletableFutureCoordinator</code> | <code>find src/main/resources/rules -name '*.md' \| wc -l</code> → 19；判据测试 9 例（<code>RuleResolverTest</code>） |</p>
+<p><strong>三条设计约束（都是「会静默失效」的那一类，因此写成了结构性保证而不是文档约定）</strong>：</p>
+<ol>
+<li><strong>安全类闸门排在策略类之前</strong>——<code>binary</code> / <code>secret_exclude</code> 先于 <code>allow</code> / <code>include</code> 求值，用户放宽规则在结构上碰不到机密。上有专项测试 <code>userIncludeCannotOverrideSecret</code> / <code>allowOnlyOpensPolicyGates</code>。</li>
+<li><strong>内置规则层不可被覆盖为空</strong>——上三层只做叠加与同 id 覆写，任何一层缺失 / 为空 / JSON 损坏都只降级该层。上有 <code>emptiedTeamLayerStillResolvesBuiltin</code> / <code>brokenTeamJsonDoesNotKillBuiltinLayer</code>。</li>
+<li><strong>「决定了什么」必须可回读</strong>——闸门决策写进轨迹事件 <code>files.gated</code>（含按原因聚合），规则命中写进 <code>rules.resolved</code>（含层级:id 清单），并暴露 <code>GET /api/admin/gate/stats</code>。理由：闸门是本项目<strong>唯一会减少送审内容</strong>的组件，规则层是唯一会<strong>改变模型判据</strong>的组件，两者的决策若不留痕，等于装了两个看不见的静音开关。</li>
+</ol>
+<p><strong>★ P1-6 的两条诚实边界（比&quot;已落地&quot;更重要）</strong></p>
+<ol>
+<li><strong><code>ReviewReplay</code> 是&quot;重建&quot;不是&quot;接上&quot;</strong>。方案 §P1-6 第 3 步写「把 <code>ReviewReplay</code>（确定性回放）接到这套基准上」——<strong>实测该组件在 HEAD 上不存在</strong>：引入于 <code>681d70e</code>（P2-⑨），<strong>删除于 <code>ff2feb5</code></strong>（「全仓死代码清理」）。仓库里原先只剩 <code>RagEvaluator</code>（153 行，<strong>检索级</strong> hit@k/MRR），审查结论级的 precision/recall 完全没有。⇒ 方案里凡写「复用已有组件」的话都要先回源核实。</li>
+<li><strong>回放输入不是真实模型产出</strong>。<code>replayInput.origin = derived-from-ground-truth+controlled-distractors</code>：候选发现由 ground-truth 加<strong>受控干扰项</strong>派生（<code>noise</code>/<code>dup</code>/<code>conflict</code>/<code>feedback</code> 各对应链上一段可被改坏的逻辑）。因此<strong>本基准测的是确定性后处理链，不是模型质量</strong>；报告里也写死了这一条。真实模型采集（<code>origin=captured</code>）接进来后，同一套指标与门禁可直接复用。
+另：<strong>precision 的绝对值不可跨语料比较</strong>（FP 由构造的受控噪音决定），有意义的是<strong>同语料下的前后差</strong>——这正是 CI 门禁比较的对象。</li>
+</ol>
+<h3>9.2 未落地（本轮未动）</h3>
+<p><code>P0-3</code>（阻断式质量门禁）、<code>P1-4</code>（文件捆绑）、<code>P1-5</code>（定位校验 + 反思轮）、<code>P1-7</code>（CLI / MCP / Session Viewer）、<code>P1-8</code>（GitHub 平台面）、<code>P1-9</code>（AST 注入审查）、<code>P2-10</code>（Semgrep 第二道闸门）、<code>P2-11</code>（可信度材料）。（<code>P1-6</code> 已从本表移出——见 §9.1）</p>
+<p>按方案 §7.3 的依赖顺序，<code>P1-6</code> <strong>本轮已落地</strong>，因此后续那些会改变审查结论的改动（<code>P1-5</code> 定位校验 + 反思轮、<code>P1-9</code> AST 注入审查）<strong>已经有了一把可用的尺子</strong>：它们的收益与代价可以用 <code>bench/BASELINE.json</code> 前后的差来陈述，而不是靠感觉。</p>
+<h3>9.3 未验证（有判据但没有语料）</h3>
+<ul>
+<li><strong>P0-1 判据②「对 10 个真实 PR 跑一遍，规则命中率 ≥ 90%」</strong>：本轮只验证了「模式命中逻辑正确」「索引与正文一一对应」「上层清空不影响内置层」，<strong>命中率本身没有测</strong>——它需要真实 PR 语料，不能靠构造样本代替。<strong>未验证 ≠ 已验证。</strong></li>
+<li><strong>P0-2 判据③「拦掉的路径数进指标端点」</strong>：端点已实现，但<strong>未在真实运行中读取过一次</strong>（本轮没有起服务）。</li>
+<li><strong>P0-1 判据①的「规则命中清单可从轨迹读出」</strong>：事件已写入逻辑实现并有单测覆盖，同样未在真实运行中回读过。</li>
+</ul>
+<h3>9.4 全量回归的实况</h3>
+<p><code>mvn test</code>：<strong>Tests run: 396, Failures: 0, Errors: 0, Skipped: 1</strong>（BUILD SUCCESS）。</p>
+<p>上一轮记录的 1 个 Errors（<code>TokenFactoryIntegrationTest.factory_provider_reads_usage_and_actual_provider</code>）<strong>本轮已修</strong>，并顺带把它从「疑似环境问题」钉成了<strong>确凿的契约不一致</strong>：</p>
+<ol>
+<li>反编译<strong>实际生效的</strong> <code>token-factory-client-0.1.0.jar</code> 可见：<code>ChatCompletionResponse</code> 的第 7 个 record 组件是 <code>TfExtension tf</code>，而 <code>provider()</code> / <code>upstreamModel()</code> / <code>costMicros()</code> / <code>traceId()</code> / <code>latencyMs()</code> 五个访问器<strong>全部委托给 <code>tf</code></strong>；<code>requireExtension()</code> 在 <code>tf == null</code> 时抛的正是那条「响应缺少 tf 扩展块」——所以这次是<strong>客户端对的、测试桩错的</strong>；</li>
+<li>修法是<strong>只改测试桩</strong>（把扩展字段移进 <code>tf</code> 对象），不动生产代码；</li>
+<li><code>tf</code> 内部字段是 <strong>snake_case</strong>（<code>upstream_model</code> / <code>cost_micros</code> / <code>trace_id</code> / <code>latency_ms</code>）。这一条是<strong>实测得到</strong>的，不是读注解推出来的：先按「<code>TfExtension</code> 只有 <code>@JsonIgnoreProperties</code>、没有 <code>@JsonNaming</code>」推断为 camelCase，跑出来 <code>upstreamModel()</code> 为 null（回落到别名 default），说明<strong>外层的 <code>@JsonNaming(SnakeCaseStrategy)</code> 会作用到嵌套 record 的属性命名</strong>上；</li>
+</ol>
+<p>⇒ 教训：<strong>依赖 jar 的 wire format 要以「实际生效的二进制」为准，不能以 sources jar 或印象为准</strong>——本仓拿到的 <code>-sources.jar</code> 还是更早的平铺版本，照它修会继续错。
+⇒ 另：<code>Skipped: 1</code> 是<strong>显式跳过</strong>的基线刷新入口（只在 <code>-Dbench.updateBaseline=true</code> 时跑），不是漏跑。</p>
+
+</main></body></html>

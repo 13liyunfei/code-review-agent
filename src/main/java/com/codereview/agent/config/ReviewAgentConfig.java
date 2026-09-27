@@ -95,7 +95,8 @@ import java.util.regex.Pattern;
  */
 @Configuration
 @EnableConfigurationProperties({TeamProperties.class, TokenHubProperties.class,
-        EgressProperties.class, LlmGatewayProperties.class, TokenFactoryProperties.class})
+        EgressProperties.class, LlmGatewayProperties.class, TokenFactoryProperties.class,
+        com.codereview.agent.core.gate.PathGateProperties.class})
 public class ReviewAgentConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewAgentConfig.class);
@@ -663,6 +664,8 @@ public class ReviewAgentConfig {
                                   CodeReviewAiService codeReviewAiService,
                                   InjectionDetector injectionDetector,
                                   com.codereview.agent.core.analysis.index.ImpactIndexBuilder impactIndexBuilder,
+                                  com.codereview.agent.core.gate.PathGate pathGate,
+                                  com.codereview.agent.core.skill.RuleResolver ruleResolver,
                                   org.springframework.core.env.Environment environment) {
         // 任务规划织入（可选增强）：review.planning.enabled=true 时，LLM 先把审查目标拆解为
         // 子任务 DAG 再按依赖拓扑并行执行；默认关闭，行为与旧版完全一致
@@ -671,10 +674,16 @@ public class ReviewAgentConfig {
                         new com.codereview.kit.planning.TaskPlanner(llmClient),
                         new com.codereview.kit.planning.DagExecutor(agentExecutor),
                         Boolean.parseBoolean(environment.getProperty("review.planning.enabled", "false")));
-        return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,
-                historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,
-                enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector,
-                planningSupport, impactIndexBuilder);
+        CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(agents, reportGenerator,
+                feedbackStore, historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer,
+                trajectoryRecorder, enhancements, ragContextBuilder, customAgentStore, llmClient,
+                codeReviewAiService, injectionDetector, planningSupport, impactIndexBuilder);
+        // 送审闸门（P0-②）：唯一一处接线点 —— 所有入口（Gitea/GitLab/IDE/定时扫描/Demo）
+        // 都经 Coordinator 送审，因此在这里接一次即可覆盖全部通路，不存在「某个入口忘了筛」。
+        coordinator.setPathGate(pathGate);
+        // 确定性规则层：同样在 Coordinator 上接一次，覆盖全部入口
+        coordinator.setRuleResolver(ruleResolver);
+        return coordinator;
     }
 
     /**

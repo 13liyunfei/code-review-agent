@@ -1,6 +1,8 @@
 package com.codereview.agent.core.memory;
 
 import com.codereview.agent.core.model.CodeDiff;
+import com.codereview.agent.core.skill.RuleHit;
+import com.codereview.agent.core.skill.RuleResolver;
 import com.codereview.agent.core.rag.DiffQueryExtractor;
 import com.codereview.agent.core.rag.HeuristicReranker;
 import com.codereview.agent.core.rag.IdentityQueryRewriter;
@@ -80,6 +82,15 @@ public class RagContextBuilder {
     /** 查询改写器（默认恒等；由容器按配置注入 LLM 实现，无 Spring 时测试可 new 后覆写）。 */
     private ReviewQueryRewriter queryRewriter = new IdentityQueryRewriter();
 
+    /**
+     * 确定性规则解析器（可空：为 null 时不做规则注入，行为等价于改造前）。
+     *
+     * <p>与知识检索是<b>互补</b>关系而非替代：知识通道按语义相似度召回（可能漏），
+     * 规则通道按文件模式命中（绝不漏）。两者叠加才能覆盖「这个改动牵扯到什么知识」与
+     * 「这类文件必须按什么规范看」两个不同问题。
+     */
+    private RuleResolver ruleResolver;
+
     @Autowired
     public RagContextBuilder(KnowledgeStore knowledgeStore,
                              Reranker reranker,
@@ -89,6 +100,14 @@ public class RagContextBuilder {
         this.reranker = reranker;
         this.evaluator = evaluator;
         this.experienceStore = experienceStore;
+    }
+
+    /**
+     * 容器注入确定性规则解析器（可选增强，缺失时规则分区不注入，其余链路零感知）。
+     */
+    @Autowired(required = false)
+    public void setRuleResolver(RuleResolver ruleResolver) {
+        this.ruleResolver = ruleResolver;
     }
 
     /**
@@ -142,6 +161,24 @@ public class RagContextBuilder {
      * @return 检索到的相关知识文本（无则返回空串，即选择性回答 abstain）
      */
     public String buildContext(String teamId, String agentType, List<CodeDiff> diffs) {
+        // 兼容入口：自行解析适用规则（供 Demo / 定时扫描等不经过 Coordinator 的调用方使用）。
+        // Coordinator 走 4 参重载并传入自己解析好的结果——避免同一次审查解析两遍，
+        // 两遍结果不一致时「轨迹里记的规则」与「实际注入的规则」就对不上了。
+        List<RuleHit> rules = ruleResolver == null ? List.of() : ruleResolver.resolve(teamId, diffs);
+        return buildContext(teamId, agentType, diffs, rules);
+    }
+
+    /**
+     * 构建上下文（适用规则由调用方解析后传入，保证「记录的」与「注入的」是同一份）。
+     *
+     * @param teamId    团队标识
+     * @param agentType 审查 Agent 类型（仅用于日志）
+     * @param diffs     代码变更
+     * @param rules     确定性规则命中项（可为空）
+     * @return 注入提示词的上下文文本（无内容则空串）
+     */
+    public String buildContext(String teamId, String agentType, List<CodeDiff> diffs,
+                               List<RuleHit> rules) {
         long t0 = System.currentTimeMillis();
         // 1. 从代码提取查询意图（diff 形态）
         String rawQuery = extractQueryFromDiffs(diffs);
@@ -158,6 +195,8 @@ public class RagContextBuilder {
         // 3. 阈值过滤（低于 minSimilarity 的块剔除；全低于则 abstain）
         List<MemoryEntry> passed = evaluator.filterByThreshold(candidates);
         StringBuilder sb = new StringBuilder();
+        // 规则分区置顶：它按文件模式确定性命中，可靠度高于语义检索结果，理应最先被读到
+        appendRules(sb, rules);
         if (passed.isEmpty()) {
             log.info("[RAG] 无相关知识（候选 {} 条均低于阈值或为空），知识分区 abstain, 耗时 {}ms",
                     candidates.size(), System.currentTimeMillis() - t0);
@@ -322,6 +361,31 @@ public class RagContextBuilder {
      * 此处把 {@code StructuredChunker} 写入的 {@code parentExcerpt} 附在块后，
      * 同一父摘要只追加一次（多个兄弟块共享同一父章节）。
      */
+    /**
+     * 规则分区注入：把「按文件模式命中的规范文档」作为独立分区写入上下文。
+     *
+     * <p>与知识分区刻意分开标注来源层级（{@code builtin}/{@code team}/{@code global}）：
+     * 同一条规则被团队覆写过时，模型看到的是团队版，而排查问题时必须能一眼看出是<b>哪一层</b>生效，
+     * 否则「改了团队规则却没变化」会变成悬案。
+     *
+     * @param sb    上下文缓冲
+     * @param rules 命中的规则（可空）
+     */
+    private void appendRules(StringBuilder sb, List<RuleHit> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return;
+        }
+        if (!sb.isEmpty()) {
+            sb.append('\n');
+        }
+        sb.append("【适用规则（按本次改动文件模式确定性命中）】\n");
+        for (RuleHit r : rules) {
+            sb.append(r.render()).append('\n');
+        }
+        log.info("[规则] 注入适用规则 {} 条：{}", rules.size(),
+                rules.stream().map(h -> h.level().code() + ':' + h.ruleId()).toList());
+    }
+
     private void appendKnowledgeBlocks(StringBuilder sb, List<MemoryEntry> blocks) {
         java.util.Set<String> appendedParents = new java.util.HashSet<>();
         for (MemoryEntry e : blocks) {

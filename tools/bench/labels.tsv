@@ -1,0 +1,162 @@
+caseId	ruleId	file	line	verdict	severity	category	note
+cra-005380f	LOGIC-002	src/main/java/com/codereview/agent/core/planning/DagExecutor.java	80	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-005380f	LOGIC-002	src/main/java/com/codereview/agent/core/planning/TaskPlanner.java	60	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-005380f	LOGIC-002	src/main/java/com/codereview/agent/core/planning/TaskPlanner.java	76	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-005380f	LOGIC-005	src/main/java/com/codereview/agent/core/planning/TaskPlanner.java	77	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-005380f	LOGIC-002	src/main/java/com/codereview/agent/core/toolcalling/ToolCallingLoop.java	86	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-005380f	LOGIC-005	src/main/java/com/codereview/agent/core/toolcalling/ToolCallingLoop.java	114	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-005380f	LOGIC-002	src/main/java/com/codereview/agent/core/toolcalling/ToolCallingLoop.java	117	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-005380f	LOGIC-005	src/main/java/com/codereview/agent/core/toolcalling/ToolCallingLoop.java	118	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/planning/DagExecutor.java	32	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/planning/DagExecutor.java	33	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/planning/DagExecutor.java	34	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/planning/TaskPlan.java	17	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/planning/TaskPlan.java	24	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/planning/TaskPlan.java	46	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/AgentTool.java	32	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/AgentTool.java	33	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/ToolCallingLoop.java	41	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/ToolCallingLoop.java	43	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/ToolRegistry.java	22	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/ToolRegistry.java	29	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/ToolRegistry.java	33	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-005380f	DOC-001	src/main/java/com/codereview/agent/core/toolcalling/ToolRegistry.java	38	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-2a07394	DOC-001	src/main/java/com/codereview/agent/core/agent/AbstractReviewAgent.java	71	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-2a07394	DOC-001	src/main/java/com/codereview/agent/core/agent/AbstractReviewAgent.java	76	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-2a07394	DOC-001	src/main/java/com/codereview/agent/core/model/PullRequest.java	100	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	LOGIC-002	src/main/java/com/codereview/agent/core/security/SemanticInjectionDetector.java	88	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-365480a	AE-001	src/main/java/com/codereview/agent/core/security/SemanticInjectionDetector.java	90	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-365480a	LOGIC-002	src/main/java/com/codereview/agent/core/security/SemanticInjectionDetector.java	101	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-365480a	AE-001	src/main/java/com/codereview/agent/core/security/SemanticInjectionDetector.java	102	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-365480a	LOGIC-005	src/main/java/com/codereview/agent/core/security/SemanticInjectionDetector.java	103	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-365480a	LOGIC-005	src/main/java/com/codereview/agent/core/security/StegInjectionScanner.java	79	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	138	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	486	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/core/security/DiffInputGuard.java	61	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/core/security/DiffInputGuard.java	62	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/core/security/DiffInputGuard.java	66	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/core/security/DiffInputGuard.java	70	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-365480a	DOC-001	src/main/java/com/codereview/agent/core/security/StegInjectionScanner.java	34	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-49a8873	LOGIC-002	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	133	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-49a8873	AE-001	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	134	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-49a8873	DOC-001	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	606	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-49a8873	DOC-001	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	46	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java	85	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java	105	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java	154	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java	197	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java	213	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java	220	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-005	src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java	223	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-7410a93	LOGIC-002	src/main/java/com/codereview/agent/core/analysis/ScaScanner.java	139	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-7410a93	LOGIC-002	src/main/java/com/codereview/agent/core/analysis/ScaScanner.java	154	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-7410a93	DOC-001	src/main/java/com/codereview/agent/config/ScaSourceConfig.java	25	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-7410a93	DOC-001	src/main/java/com/codereview/agent/core/analysis/ScaScanner.java	60	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-7410a93	DOC-001	src/main/java/com/codereview/agent/core/analysis/ScaScanner.java	91	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-7410a93	DOC-001	src/main/java/com/codereview/agent/core/analysis/ScaScanner.java	104	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-99d27a2	LOGIC-002	src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java	91	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-99d27a2	AE-001	src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java	92	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-99d27a2	DOC-001	src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java	45	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-9ccad0e	LOGIC-002	src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java	194	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-9ccad0e	AE-001	src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java	195	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-9ccad0e	DOC-001	src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java	97	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-9ccad0e	DOC-001	src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java	173	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-9ccad0e	DOC-001	src/main/java/com/codereview/agent/core/analysis/index/RepoIndex.java	242	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-9d0a06f	AE-001	src/main/java/com/codereview/agent/core/resume/FileResumeStore.java	130	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-9d0a06f	AE-001	src/main/java/com/codereview/agent/core/resume/FileResumeStore.java	148	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-9d0a06f	AE-001	src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java	54	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-9d0a06f	DOC-001	src/main/java/com/codereview/agent/core/resume/ResumeJanitor.java	48	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-a36992d	AE-001	src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java	194	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-a36992d	LOGIC-005	src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java	223	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-a36992d	AE-001	src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java	225	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-a36992d	LOGIC-005	src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java	226	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-a36992d	LOGIC-002	src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java	66	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-a36992d	AE-001	src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java	68	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-a36992d	LOGIC-005	src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java	76	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-a36992d	LOGIC-005	src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java	90	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-a36992d	DOC-001	src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java	132	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-a36992d	DOC-001	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	94	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-a36992d	DOC-001	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	100	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-a36992d	DOC-001	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	107	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-b34e8fd	DOC-001	src/main/java/com/codereview/agent/core/i18n/ReviewMessages.java	59	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-c2a8691	LOGIC-002	src/main/java/com/codereview/agent/core/agent/AbstractReviewAgent.java	234	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-c2a8691	LOGIC-002	src/main/java/com/codereview/agent/core/llm/LoggingChatModelListener.java	149	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-c2a8691	AE-001	src/main/java/com/codereview/agent/core/llm/LoggingChatModelListener.java	150	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-c2a8691	DOC-001	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	97	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-c2a8691	DOC-001	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	116	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-e411377	SEC-002	src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java	328	keep			SQL 字符串拼接：存在注入面，应改参数化
+cra-e411377	AE-001	src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java	341	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-e411377	DOC-001	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	125	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-e411377	DOC-001	src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java	131	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-e411377	SIZE-001	src/main/java/com/codereview/agent/core/rag/DiffQueryExtractor.java	67	keep			新增方法体超过 60 行：单方法过长，需拆分或说明为何不可拆
+cra-ed966ea	LOGIC-002	docs/interview-walkthrough.md	366	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-ed966ea	LOGIC-002	src/main/java/com/codereview/agent/core/feedback/FileFeedbackStore.java	109	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-ed966ea	AE-001	src/main/java/com/codereview/agent/core/feedback/FileFeedbackStore.java	110	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-ed966ea	LOGIC-002	src/main/java/com/codereview/agent/core/feedback/InMemoryFeedbackStore.java	43	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-ed966ea	SEC-003	src/main/java/com/codereview/agent/core/llm/ModelGateway.java	126	keep			日志落敏感内容：token/口令/完整 body 不应进 INFO 日志
+cra-ed966ea	LOGIC-002	src/main/java/com/codereview/agent/core/llm/ModelGateway.java	129	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-ed966ea	AE-001	src/main/java/com/codereview/agent/core/llm/ModelGateway.java	131	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	452	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/llm/ModelGateway.java	167	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/llm/ModelGateway.java	173	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/llm/ModelUnavailableException.java	43	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/llm/ModelUnavailableException.java	48	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/model/AgentResult.java	65	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/model/ReviewReport.java	197	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-ed966ea	DOC-001	src/main/java/com/codereview/agent/core/model/ReviewReport.java	202	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/eval/LlmJudge.java	94	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/eval/LlmJudge.java	109	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-005	src/main/java/com/codereview/agent/core/eval/LlmJudge.java	110	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-f4dd917	ARCH-002	src/main/java/com/codereview/agent/core/extension/ExtensionRegistry.java	34	keep			抑制告警：会掩盖真实缺陷，需写明理由
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	79	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	95	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	103	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/memory/ReflectionService.java	63	keep	MINOR		catch 体只写 log.debug：生产默认不开 DEBUG ⇒ 实际等同静默失败
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/toolcalling/ToolEquippedAgent.java	51	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/toolcalling/ToolEquippedAgent.java	87	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/core/toolcalling/ToolEquippedAgent.java	95	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/integration/gitea/GiteaReviewService.java	179	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-f4dd917	AE-001	src/main/java/com/codereview/agent/integration/gitea/GiteaReviewService.java	180	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-f4dd917	LOGIC-002	src/main/java/com/codereview/agent/integration/gitea/GiteaReviewService.java	189	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-f4dd917	AE-001	src/main/java/com/codereview/agent/integration/gitea/GiteaReviewService.java	190	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/eval/LlmJudge.java	28	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/eval/LlmJudge.java	31	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/eval/LlmJudge.java	45	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/extension/ExtensionRegistry.java	24	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/extension/ExtensionRegistry.java	35	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/extension/ExtensionRegistry.java	49	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	33	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	70	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	85	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-f4dd917	DOC-001	src/main/java/com/codereview/agent/core/memory/ExperienceStore.java	100	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	LOGIC-005	src/main/java/com/codereview/agent/config/ReviewAgentConfig.java	181	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-fbff22c	LOGIC-005	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryClientHolder.java	35	keep	MINOR		新增 return null 且未在同处说明契约，调用方易漏判空
+cra-fbff22c	SEC-003	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryClientHolder.java	52	keep			日志落敏感内容：token/口令/完整 body 不应进 INFO 日志
+cra-fbff22c	LOGIC-002	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryUsageReporter.java	48	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-fbff22c	LOGIC-002	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryUsageReporter.java	63	keep			catch 体内既无日志也无重抛 ⇒ 失败静默，调用方无从感知
+cra-fbff22c	AE-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryUsageReporter.java	71	keep			只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因
+cra-fbff22c	LOGIC-002	src/main/java/com/codereview/agent/core/tokenfactory/UsageReportingProvider.java	63	drop			catch 体内有记录或重抛，属合法降级，不构成缺陷
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/llm/UsageAwareModelProvider.java	30	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/llm/UsageAwareModelProvider.java	35	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/llm/UsageAwareModelProvider.java	39	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/llm/UsageAwareModelProvider.java	43	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryClientHolder.java	33	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	66	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	70	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	74	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	78	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	82	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	86	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	90	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	94	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	98	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	102	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	106	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	110	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	114	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	118	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	122	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	126	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	130	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	134	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）
+cra-fbff22c	DOC-001	src/main/java/com/codereview/agent/core/tokenfactory/TokenFactoryProperties.java	139	keep			同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）

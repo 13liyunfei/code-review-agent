@@ -48,7 +48,8 @@ import java.util.Map;
  *   <li><b>稀疏 BM25</b>：{@code search_vector}（tsvector）+ {@code ts_rank}，
  *       对代码标识符 / 专有名词 / 精确术语友好；</li>
  *   <li><b>RRF 融合</b>：两路按 {@code 1/(k+rank)} 融合（默认向量 0.7 + BM25 0.3），k=60；</li>
- *   <li>结果归一化为 {@code similarity} 元数据，供 {@link RagEvaluator} 阈值过滤。</li>
+ *   <li>{@code similarity} 元数据恒为<b>真实余弦</b>（RRF 归一化分另存 {@code rrfScore}，
+ *       仅供排序与观测），供 {@link RagEvaluator} 阈值过滤。</li>
  * </ul>
  */
 public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {

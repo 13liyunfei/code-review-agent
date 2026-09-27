@@ -1,0 +1,172 @@
+{
+  "addedLines": 98,
+  "baseSha": "31950454f389d1acc001176988eb5987131dbcb8",
+  "changedFileCount": 4,
+  "changedFiles": [
+    "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/main/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParser.java",
+    "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+    "langchain4j-vertex-ai-anthropic/src/main/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapper.java",
+    "langchain4j-vertex-ai-anthropic/src/test/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapperLocaleTest.java"
+  ],
+  "committedAt": "2026-09-16T07:52:53Z",
+  "deletedLines": 3,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+      "labelSource": "manual",
+      "lineEnd": 45,
+      "lineStart": 45,
+      "note": "测试直接改 JVM 全局 Locale.setDefault()：即使标了 @Isolated，该注解也只在 junit.jupiter.execution.parallel.enabled=true 时才生效，默认配置下等于没标，任何并行执行的其它测试都会读到被改过的默认 Locale。更稳的做法是给 SqlFilterParser 注入 Locale，测试只改实例（本 PR 修的就是\"不要依赖默认 Locale\"，测试自己却又依赖了它）",
+      "ruleId": "SEM-003",
+      "severity": "MAJOR"
+    },
+    {
+      "category": "logic",
+      "file": "langchain4j-vertex-ai-anthropic/src/test/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapperLocaleTest.java",
+      "labelSource": "manual",
+      "lineEnd": 36,
+      "lineStart": 36,
+      "note": "与 SqlFilterParserLocaleTest.java:45 是同一个问题（测试改全局 Locale）在第二个文件里的复制；同一个 PR 里出现了两份一字不差的 withDefaultLocale 实现，说明这段逻辑该抽到共用测试工具类，而不是复制——否则将来只修其中一份就会留下一个仍然改全局 Locale 的测试",
+      "ruleId": "SEM-004",
+      "severity": "MAJOR"
+    }
+  ],
+  "headSha": "efd1a828c6d9ac590b622fb457123273ea1e82e5",
+  "id": "oss-langchain4j-6424",
+  "labelCandidates": [],
+  "labeling": {
+    "candidates": 0,
+    "confirmed": 2,
+    "manual": 2,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "mergeCommitSha": "2211a2d6b0c8a7f4d9580b2051c4c8f6a83ed595",
+  "mergedAt": "2026-09-16T07:52:53Z",
+  "parent": "31950454f389d1acc001176988eb5987131dbcb8",
+  "patch": "diff --git a/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/main/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParser.java b/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/main/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParser.java\nindex 6ac5d2acd4c..24dfdcd30f3 100644\n--- a/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/main/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParser.java\n+++ b/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/main/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParser.java\n@@ -16,6 +16,7 @@\n import java.time.LocalDateTime;\n import java.util.ArrayList;\n import java.util.Collection;\n+import java.util.Locale;\n import net.sf.jsqlparser.JSQLParserException;\n import net.sf.jsqlparser.expression.*;\n import net.sf.jsqlparser.expression.operators.arithmetic.Addition;\n@@ -109,7 +110,7 @@ public SqlFilterParser(Clock clock) {\n     @Override\n     public Filter parse(String sql) {\n \n-        if (!sql.toUpperCase().startsWith(\"SELECT\")) {\n+        if (!sql.toUpperCase(Locale.ROOT).startsWith(\"SELECT\")) {\n             sql = \"SELECT * FROM fake_table WHERE \" + sql;\n         }\n \n@@ -302,7 +303,7 @@ private Comparable<?> getValue(Expression expression) {\n                 if (timeKeyExpression.getStringValue().equalsIgnoreCase(\"CURRENT_DATE\")\n                         || timeKeyExpression.getStringValue().equalsIgnoreCase(\"CURRENT_TIME\")\n                         || timeKeyExpression.getStringValue().equalsIgnoreCase(\"CURRENT_TIMESTAMP\")) {\n-                    String field = extractExpression.getName().toUpperCase();\n+                    String field = extractExpression.getName().toUpperCase(Locale.ROOT);\n                     switch (field) {\n                         case \"YEAR\":\n                             return currentYear();\ndiff --git a/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java b/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java\nnew file mode 100644\nindex 00000000000..f024151c43c\n--- /dev/null\n+++ b/embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java\n@@ -0,0 +1,51 @@\n+package dev.langchain4j.store.embedding.filter.parser.sql;\n+\n+import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;\n+import static java.time.ZoneOffset.UTC;\n+import static org.assertj.core.api.Assertions.assertThat;\n+\n+import dev.langchain4j.store.embedding.filter.FilterParser;\n+import java.time.Clock;\n+import java.time.Instant;\n+import java.time.LocalTime;\n+import java.util.Locale;\n+import org.junit.jupiter.api.parallel.Execution;\n+import org.junit.jupiter.api.parallel.ExecutionMode;\n+import org.junit.jupiter.api.parallel.Isolated;\n+import org.junit.jupiter.params.ParameterizedTest;\n+import org.junit.jupiter.params.provider.ValueSource;\n+\n+/**\n+ * These tests mutate the JVM default {@link Locale}, so the whole class runs {@link Isolated}\n+ * and single-threaded to avoid races with the otherwise parallel test suite.\n+ */\n+@Isolated\n+@Execution(ExecutionMode.SAME_THREAD)\n+class SqlFilterParserLocaleTest {\n+\n+    Clock clock = Clock.fixed(Instant.now(), UTC);\n+    FilterParser parser = new SqlFilterParser(clock);\n+\n+    @ParameterizedTest\n+    @ValueSource(strings = {\"en-US\", \"tr-TR\", \"az-AZ\"})\n+    void should_support_EXTRACT_independently_of_default_locale(String languageTag) {\n+        withDefaultLocale(\n+                languageTag,\n+                () -> assertThat(parser.parse(\"minute = EXTRACT(minute FROM CURRENT_TIMESTAMP)\"))\n+                        .isEqualTo(metadataKey(\"minute\").isEqualTo(currentMinute())));\n+    }\n+\n+    private long currentMinute() {\n+        return LocalTime.now(clock).getMinute();\n+    }\n+\n+    private static void withDefaultLocale(String languageTag, Runnable action) {\n+        Locale previousDefault = Locale.getDefault();\n+        try {\n+            Locale.setDefault(Locale.forLanguageTag(languageTag));\n+            action.run();\n+        } finally {\n+            Locale.setDefault(previousDefault);\n+        }\n+    }\n+}\ndiff --git a/langchain4j-vertex-ai-anthropic/src/main/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapper.java b/langchain4j-vertex-ai-anthropic/src/main/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapper.java\nindex dae1926ced4..a203d9c6b1b 100644\n--- a/langchain4j-vertex-ai-anthropic/src/main/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapper.java\n+++ b/langchain4j-vertex-ai-anthropic/src/main/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapper.java\n@@ -23,6 +23,7 @@\n import java.util.ArrayList;\n import java.util.LinkedHashMap;\n import java.util.List;\n+import java.util.Locale;\n import java.util.Map;\n \n public class AnthropicRequestMapper {\n@@ -215,7 +216,7 @@ public static AnthropicTool toAnthropicTool(ToolSpecification toolSpecification)\n             description = toolSpecification.description();\n         } else {\n             // Provide intelligent default descriptions based on tool name\n-            description = switch (toolSpecification.name().toLowerCase()) {\n+            description = switch (toolSpecification.name().toLowerCase(Locale.ROOT)) {\n                 case \"get_current_time\", \"current_time\", \"time\" -> \"Gets the current time\";\n                 case \"get_weather\", \"weather\" -> \"Gets weather information\";\n                 case \"calculator\", \"calculate\" -> \"Performs mathematical calculations\";\ndiff --git a/langchain4j-vertex-ai-anthropic/src/test/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapperLocaleTest.java b/langchain4j-vertex-ai-anthropic/src/test/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapperLocaleTest.java\nnew file mode 100644\nindex 00000000000..03ecd7e47d0\n--- /dev/null\n+++ b/langchain4j-vertex-ai-anthropic/src/test/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapperLocaleTest.java\n@@ -0,0 +1,42 @@\n+package dev.langchain4j.model.vertexai.anthropic.internal.mapper;\n+\n+import static org.assertj.core.api.Assertions.assertThat;\n+\n+import dev.langchain4j.agent.tool.ToolSpecification;\n+import dev.langchain4j.model.vertexai.anthropic.internal.api.AnthropicTool;\n+import java.util.Locale;\n+import org.junit.jupiter.api.parallel.Execution;\n+import org.junit.jupiter.api.parallel.ExecutionMode;\n+import org.junit.jupiter.api.parallel.Isolated;\n+import org.junit.jupiter.params.ParameterizedTest;\n+import org.junit.jupiter.params.provider.ValueSource;\n+\n+/**\n+ * These tests mutate the JVM default {@link Locale}, so the whole class runs {@link Isolated}\n+ * and single-threaded to avoid races with the otherwise parallel test suite.\n+ */\n+@Isolated\n+@Execution(ExecutionMode.SAME_THREAD)\n+class AnthropicRequestMapperLocaleTest {\n+\n+    @ParameterizedTest\n+    @ValueSource(strings = {\"en-US\", \"tr-TR\", \"az-AZ\"})\n+    void should_derive_default_description_independently_of_default_locale(String languageTag) {\n+        withDefaultLocale(languageTag, () -> {\n+            AnthropicTool tool = AnthropicRequestMapper.toAnthropicTool(\n+                    ToolSpecification.builder().name(\"TIME\").build());\n+\n+            assertThat(tool.description).isEqualTo(\"Gets the current time\");\n+        });\n+    }\n+\n+    private static void withDefaultLocale(String languageTag, Runnable action) {\n+        Locale previousDefault = Locale.getDefault();\n+        try {\n+            Locale.setDefault(Locale.forLanguageTag(languageTag));\n+            action.run();\n+        } finally {\n+            Locale.setDefault(previousDefault);\n+        }\n+    }\n+}\n",
+  "patchBytes": 8145,
+  "patchSha256": "f2cb10ec4cde03b907b2f9edc6ef0c5e11f5575889665798d189cddfc4dc6643",
+  "prNumber": 6424,
+  "prUrl": "https://github.com/langchain4j/langchain4j/pull/6424",
+  "provenance": "github-pr",
+  "provenanceNote": "Java：让 SQL EXTRACT 与工具名的大小写转换不受 locale 影响",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+            "lineEnd": 45,
+            "lineStart": 45,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "测试直接改 JVM 全局 Locale.setDefault()：即使标了 @Isolated，该注解也只在 junit.jupiter.execution.parallel.enabled=true 时才生效，默认配置下等于没标，任何并行执行的其它测试都会读到被改过的默认 Locale。更稳的做法是给 SqlFilterParser 注入 Locale，测试只改实例（本 PR 修的就是\"不要依赖默认 Locale\"，测试自己却又依赖了它）",
+            "file": "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+            "lineEnd": 45,
+            "lineStart": 45,
+            "ruleId": "SEM-003",
+            "severity": "MAJOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "测试直接改 JVM 全局 Locale.setDefault()：即使标了 @Isolated，该注解也只在 junit"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "与 SqlFilterParserLocaleTest.java:45 是同一个问题（测试改全局 Locale）在第二个文件里的复制；同一个 PR 里出现了两份一字不差的 withDefaultLocale 实现，说明这段逻辑该抽到共用测试工具类，而不是复制——否则将来只修其中一份就会留下一个仍然改全局 Locale 的测试",
+            "file": "langchain4j-vertex-ai-anthropic/src/test/java/dev/langchain4j/model/vertexai/anthropic/internal/mapper/AnthropicRequestMapperLocaleTest.java",
+            "lineEnd": 36,
+            "lineStart": 36,
+            "ruleId": "SEM-004",
+            "severity": "MAJOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "与 SqlFilterParserLocaleTest.java:45 是同一个问题（测试改全局 Locale）在第二个"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+            "lineEnd": 45,
+            "lineStart": 45,
+            "ruleId": "SEM-003",
+            "severity": "MAJOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）SEM-003"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+            "lineEnd": 545,
+            "lineStart": 545,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "embedding-store-filter-parsers/langchain4j-embedding-store-filter-parser-sql/src/test/java/dev/langchain4j/store/embedding/filter/parser/sql/SqlFilterParserLocaleTest.java",
+            "lineEnd": 562,
+            "lineStart": 562,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "langchain4j/langchain4j",
+  "repoUrl": "https://github.com/langchain4j/langchain4j",
+  "sha": "2211a2d6b0c8a7f4d9580b2051c4c8f6a83ed595",
+  "shaShort": "2211a2d",
+  "subject": "fix: make SQL EXTRACT and tool name case conversions locale-independent"
+}

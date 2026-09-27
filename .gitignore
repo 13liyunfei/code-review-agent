@@ -34,3 +34,7 @@ scripts/dump.rdb
 site/node_modules/
 site/.vitepress/dist/
 site/.vitepress/cache/
+
+# ===================== code-review Skill 运行产物 =====================
+# `code-review` skill 落盘的 diff 快照，属本地运行产物，不入库
+.code-review/

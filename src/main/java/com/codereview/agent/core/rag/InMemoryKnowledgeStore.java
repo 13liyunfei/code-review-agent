@@ -27,7 +27,8 @@ import java.util.stream.Collectors;
  *   <li><b>团队隔离</b>：与 {@link com.codereview.agent.core.memory.PgVectorMemoryStore} 一致，
  *       RAG 检索含全局基线（{@code __global__}）。</li>
  * </ul>
- * 所有结果写入 {@code similarity} 元数据（取融合分归一化），供 {@link RagEvaluator} 阈值过滤。
+ * 所有结果写入 {@code similarity} 元数据，恒为<b>真实余弦相似度</b>（RRF 融合分另存
+ * {@code rrfScore}，仅供排序，绝不参与阈值判断），供 {@link RagEvaluator} 阈值过滤。
  *
  * <p>本类仅实现 {@link KnowledgeStore}（RAG 专属语义），不复用 {@code MemoryStore} 契约，
  * 与记忆库在类型层面严格隔离。</p>

@@ -9,6 +9,8 @@ import com.codereview.agent.core.analysis.index.ImpactIndexBuilder;
 import com.codereview.agent.core.analysis.index.RepoIndex;
 import com.codereview.agent.core.coordinator.Coordinator;
 import com.codereview.agent.core.enhance.ReviewEnhancements;
+import com.codereview.agent.core.gate.GateReport;
+import com.codereview.agent.core.gate.PathGate;
 import com.codereview.agent.core.impact.ImpactAnalyzer;
 import com.codereview.agent.core.permission.VetoPolicy;
 import com.codereview.agent.core.profile.ReviewProfile;
@@ -37,6 +39,8 @@ import com.codereview.agent.core.report.AgentDegradation;
 import com.codereview.agent.core.report.ReportGenerator;
 import com.codereview.agent.core.report.VerificationResult;
 import com.codereview.agent.core.security.InjectionDetector;
+import com.codereview.agent.core.skill.RuleHit;
+import com.codereview.agent.core.skill.RuleResolver;
 import com.codereview.agent.core.trace.TraceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,6 +122,32 @@ public class CompletableFutureCoordinator implements Coordinator {
      * 分析器本身再准，没有完整文件内容也无从下手。
      */
     private final ImpactIndexBuilder indexBuilder;
+
+    /**
+     * 送审闸门（P0-② 文件筛选，可空：为 null 时不做任何筛选，等价于改造前行为）。
+     *
+     * <p>用 setter 注入而非构造器参数：本类已有 8 个套娃构造器，再加一个参数会让
+     * 「只想改一处」的调用方被迫补一堆 {@code null}；同时可空语义让既有单测零改动。
+     */
+    private PathGate pathGate;
+
+    /** 装配送审闸门（缺省不装配 = 保持改造前行为）。 */
+    public void setPathGate(PathGate pathGate) {
+        this.pathGate = pathGate;
+    }
+
+    /**
+     * 确定性规则解析器（可空：为 null 时不做模式规则注入，等价于改造前行为）。
+     *
+     * <p>由 Coordinator 持有并在送审后解析，而不是交给 {@code RagContextBuilder} 内部解析：
+     * 这样同一次审查只解析一遍，「写进轨迹的规则清单」与「实际注入提示词的规则」必然是同一份。
+     */
+    private RuleResolver ruleResolver;
+
+    /** 装配确定性规则解析器（缺省不装配）。 */
+    public void setRuleResolver(RuleResolver ruleResolver) {
+        this.ruleResolver = ruleResolver;
+    }
 
     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,
                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,
@@ -291,7 +321,15 @@ public class CompletableFutureCoordinator implements Coordinator {
     @Override
     public ReviewReport review(PullRequest pr) {
         ReviewContext ctx = pr.toContext();
-        List<CodeDiff> diffs = pr.diffs();
+        List<CodeDiff> rawDiffs = pr.diffs();
+        // 送审闸门（P0-②）：在「登记送审清单」之前先过滤，保证轨迹里记的是**实际送审**的输入，
+        // 而不是「拿到手的全部变更」——后者会让人误以为模型看过那些被拦掉的文件。
+        GateReport gate = pathGate == null ? null : pathGate.apply(rawDiffs);
+        final List<CodeDiff> diffs = gate == null ? rawDiffs : gate.admitted();
+        if (gate != null && !gate.blocked().isEmpty()) {
+            log.info("[Coordinator] 送审闸门拦下 {} 个文件（{}），实际送审 {} 个",
+                    gate.blocked().size(), gate.summaryLine(), diffs.size());
+        }
         // 断点续跑幂等键（关键修正）：
         // 旧实现直接取 TraceContext.ensure()——那是每次请求随机生成的 traceId。
         // 崩溃后「同 PR 重试」是新的 HTTP 请求，拿到的是另一串随机 traceId，
@@ -318,6 +356,30 @@ public class CompletableFutureCoordinator implements Coordinator {
             long javaFiles = diffs.stream().filter(d -> "java".equals(d.language())).count();
             recorder.append(runId, "context.diff-loaded", Map.of(
                     "files", diffs.size(), "addedLines", added, "delLines", del, "javaFiles", javaFiles));
+            // 送审闸门决策登记：被拦路径与原因必须可回读——闸门是本项目唯一会「让送审内容变少」
+            // 的组件，它的每一次决策若不留痕，就等于装了一个看不见的静音开关
+            if (gate != null) {
+                recorder.append(runId, "files.gated", gate.toEventPayload());
+            }
+        }
+
+        // 闸门把全部文件都拦下 → 没有任何可送审内容：短路返回，不发起一次 LLM 调用。
+        // 这里刻意要求 rawDiffs 非空：区分「闸门清空了清单」与「本来就没有变更」，后者是旧行为。
+        if (gate != null && !rawDiffs.isEmpty() && diffs.isEmpty()) {
+            long durationMs = System.currentTimeMillis() - start;
+            log.warn("[Coordinator] PR#{} 送审清单被闸门清空（{}），跳过审查（节省全部 LLM 调用）",
+                    pr.id(), gate.summaryLine());
+            ReviewReport skipped = reportGenerator.aggregate(pr.id(), pr.repo(), List.of(),
+                    feedbackStore, runId, durationMs, teamId);
+            if (resumeStore != null) {
+                resumeStore.complete(runId, teamId);
+            }
+            if (recorder != null) {
+                recorder.append(runId, "review.completed", Map.of(
+                        "totalFindings", 0, "durationMs", durationMs, "skipped", "gate-blocked-all"));
+                recorder.close(runId);
+            }
+            return skipped;
         }
 
         // 断点续跑（对齐 codex suspend/recover）：同 runId 已有未完成审查 → 恢复已完成 Agent，只重跑剩余
@@ -351,7 +413,18 @@ public class CompletableFutureCoordinator implements Coordinator {
         if (ragContextBuilder != null) {
             String built;
             try {
-                built = ragContextBuilder.buildContext(teamId, "MULTI-AGENT", diffs);
+                // 确定性规则层：按文件模式命中适用规范，与 RAG 互补——语义召回可能漏，
+                // 「这个文件是 *Mapper.xml」这种事实不会漏。
+                List<RuleHit> rules = ruleResolver == null
+                        ? List.of() : ruleResolver.resolve(teamId, diffs);
+                built = ragContextBuilder.buildContext(teamId, "MULTI-AGENT", diffs, rules);
+                if (recorder != null && !rules.isEmpty()) {
+                    // 命中清单必须可回读：验收判据要求「命中清单能从轨迹里读出」
+                    recorder.append(runId, "rules.resolved", Map.of(
+                            "count", rules.size(),
+                            "rules", rules.stream()
+                                    .map(h -> h.level().code() + ":" + h.ruleId()).toList()));
+                }
             } catch (Exception e) {
                 log.warn("[Coordinator] RAG 上下文构建失败，跳过注入（不影响主审查）：{}", e.getMessage());
                 built = "";

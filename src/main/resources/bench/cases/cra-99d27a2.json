@@ -1,0 +1,197 @@
+{
+  "addedLines": 269,
+  "changedFileCount": 4,
+  "changedFiles": [
+    "src/main/java/com/codereview/agent/config/ReviewAgentConfig.java",
+    "src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java",
+    "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+    "src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java"
+  ],
+  "committedAt": "2026-08-27T23:11:05+08:00",
+  "deletedLines": 6,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 92,
+      "lineStart": 92,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 45,
+      "lineStart": 45,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    }
+  ],
+  "id": "cra-99d27a2",
+  "labelCandidates": [
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "} catch (Exception e) {",
+      "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+      "line": 91,
+      "ruleId": "LOGIC-002",
+      "severity": "MAJOR",
+      "why": "宽泛捕获 Exception/Throwable：会连带吞掉不该处理的异常（需确认是否只 log 不重抛）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[Planning] 规划执行异常，降级固定路径：{}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+      "line": 92,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public boolean active() {",
+      "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+      "line": 45,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    }
+  ],
+  "labeling": {
+    "candidates": 3,
+    "confirmed": 2,
+    "manual": 0,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "parent": "005380f1e939a6ea9ec4836ee66259675755c104",
+  "patch": "diff --git a/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java b/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\nindex eeb6d48..706f884 100644\n--- a/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\n+++ b/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\n@@ -437,9 +437,18 @@ public class ReviewAgentConfig {\n                                   CustomAgentStore customAgentStore,\n                                   LlmClient llmClient,\n                                   CodeReviewAiService codeReviewAiService,\n-                                  InjectionDetector injectionDetector) {\n+                                  InjectionDetector injectionDetector,\n+                                  org.springframework.core.env.Environment environment) {\n+        // 任务规划织入（可选增强）：review.planning.enabled=true 时，LLM 先把审查目标拆解为\n+        // 子任务 DAG 再按依赖拓扑并行执行；默认关闭，行为与旧版完全一致\n+        com.codereview.agent.core.planning.TaskPlanningSupport planningSupport =\n+                new com.codereview.agent.core.planning.TaskPlanningSupport(\n+                        new com.codereview.agent.core.planning.TaskPlanner(llmClient),\n+                        new com.codereview.agent.core.planning.DagExecutor(agentExecutor),\n+                        Boolean.parseBoolean(environment.getProperty(\"review.planning.enabled\", \"false\")));\n         return new CompletableFutureCoordinator(agents, reportGenerator, feedbackStore,\n                 historyStore, advancedAnalyzer, agentExecutor, impactAnalyzer, trajectoryRecorder,\n-                enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector);\n+                enhancements, ragContextBuilder, customAgentStore, llmClient, codeReviewAiService, injectionDetector,\n+                planningSupport);\n     }\n }\ndiff --git a/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java b/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java\nindex d5632e3..c10d00c 100644\n--- a/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java\n+++ b/src/main/java/com/codereview/agent/core/coordinator/impl/CompletableFutureCoordinator.java\n@@ -26,6 +26,7 @@ import com.codereview.agent.core.model.AgentType;\n import com.codereview.agent.core.model.CodeDiff;\n import com.codereview.agent.core.model.Finding;\n import com.codereview.agent.core.model.PullRequest;\n+import com.codereview.agent.core.planning.TaskPlanningSupport;\n import com.codereview.agent.core.model.ReviewContext;\n import com.codereview.agent.core.model.ReviewReport;\n import com.codereview.agent.core.memory.RagContextBuilder;\n@@ -101,6 +102,8 @@ public class CompletableFutureCoordinator implements Coordinator {\n     private final CodeReviewAiService aiService;\n     /** Prompt 注入检测器（自定义 Agent 防御用，可空）。 */\n     private final InjectionDetector injectionDetector;\n+    /** 任务规划织入支撑（可空：为 null 或未启用时走固定并行路径）。 */\n+    private final TaskPlanningSupport planningSupport;\n \n     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,\n                                        FeedbackStore feedbackStore, ReviewHistoryStore historyStore,\n@@ -140,7 +143,7 @@ public class CompletableFutureCoordinator implements Coordinator {\n                                        ReviewEnhancements enhancements,\n                                        RagContextBuilder ragContextBuilder) {\n         this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, agentExecutor,\n-                impactAnalyzer, recorder, enhancements, ragContextBuilder, null, null, null, null);\n+                impactAnalyzer, recorder, enhancements, ragContextBuilder, null, null, null, null, null);\n     }\n \n     public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,\n@@ -153,6 +156,22 @@ public class CompletableFutureCoordinator implements Coordinator {\n                                        LlmClient llmClient,\n                                        CodeReviewAiService aiService,\n                                        InjectionDetector injectionDetector) {\n+        this(agents, reportGenerator, feedbackStore, historyStore, advancedAnalyzer, agentExecutor,\n+                impactAnalyzer, recorder, enhancements, ragContextBuilder, customAgentStore,\n+                llmClient, aiService, injectionDetector, null);\n+    }\n+\n+    public CompletableFutureCoordinator(List<ReviewAgent> agents, ReportGenerator reportGenerator,\n+                                       FeedbackStore feedbackStore, ReviewHistoryStore historyStore,\n+                                       AdvancedAnalyzer advancedAnalyzer, Executor agentExecutor,\n+                                       ImpactAnalyzer impactAnalyzer, ReviewTrajectoryRecorder recorder,\n+                                       ReviewEnhancements enhancements,\n+                                       RagContextBuilder ragContextBuilder,\n+                                       CustomAgentStore customAgentStore,\n+                                       LlmClient llmClient,\n+                                       CodeReviewAiService aiService,\n+                                       InjectionDetector injectionDetector,\n+                                       TaskPlanningSupport planningSupport) {\n         this.agents = agents;\n         this.reportGenerator = reportGenerator;\n         this.feedbackStore = feedbackStore;\n@@ -169,6 +188,7 @@ public class CompletableFutureCoordinator implements Coordinator {\n         this.llmClient = llmClient;\n         this.aiService = aiService;\n         this.injectionDetector = injectionDetector;\n+        this.planningSupport = planningSupport;\n     }\n \n     /** 生效的审查强度 Profile（未配置 / 非法时回退 ADVISORY）。 */\n@@ -294,8 +314,22 @@ public class CompletableFutureCoordinator implements Coordinator {\n         ReviewHistoryEntry previous = historyStore == null ? null\n                 : historyStore.getLatest(teamId, pr.repo() + \"#\" + pr.id()).orElse(null);\n \n-        // 1. 为每个 Agent 创建 Future，并行审查（TraceContext.wrap 保证 traceId 跨线程传播）\n-        List<CompletableFuture<AgentResult>> futures = effectiveAgents.stream()\n+        // 0.9 任务拆解规划（可选增强，review.planning.enabled=true 生效）：LLM 把审查目标拆解为\n+        //     子任务 DAG，按依赖拓扑并行执行；空结果 = 未启用 / 规划失败，自动降级固定并行路径\n+        List<AgentResult> plannedResults = planningSupport == null ? List.of()\n+                : planningSupport.planAndExecute(\"审查 PR #\" + pr.id() + \"：\" + pr.title(),\n+                        diffs, enrichedCtx, effectiveAgents, pr.id(), recorder, runId);\n+\n+        List<AgentResult> mainResults = new ArrayList<>();\n+        if (!plannedResults.isEmpty()) {\n+            mainResults.addAll(plannedResults);\n+        }\n+\n+        // 1. 为每个 Agent 创建 Future，并行审查（TraceContext.wrap 保证 traceId 跨线程传播）；\n+        //    规划路径已产出结果时跳过固定并行\n+        List<CompletableFuture<AgentResult>> futures = List.of();\n+        if (plannedResults.isEmpty()) {\n+            futures = effectiveAgents.stream()\n                 .map(agent -> CompletableFuture.supplyAsync(TraceContext.wrap(() -> {\n                     long a0 = System.currentTimeMillis();\n                     if (recorder != null) {\n@@ -308,6 +342,7 @@ public class CompletableFutureCoordinator implements Coordinator {\n                     return new AgentResult(pr.id(), agent.getType(), findings);\n                 }), agentExecutor))\n                 .toList();\n+        }\n \n         // 1.1 高级静态分析（AST 结构 / 调用图影响面 / SCA 依赖）并行运行\n         CompletableFuture<List<AgentResult>> advancedFuture = advancedAnalyzer == null ? null\n@@ -333,7 +368,6 @@ public class CompletableFutureCoordinator implements Coordinator {\n                 });\n \n         // 3. 收集结果（个别失败 / 超时以空结果占位，保证整体可用）；每个 Agent 完成即保存断点\n-        List<AgentResult> mainResults = new ArrayList<>();\n         for (CompletableFuture<AgentResult> future : futures) {\n             try {\n                 mainResults.add(future.join());\ndiff --git a/src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java b/src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java\nnew file mode 100644\nindex 0000000..2b4d726\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java\n@@ -0,0 +1,96 @@\n+package com.codereview.agent.core.planning;\n+\n+import com.codereview.agent.core.model.AgentResult;\n+import com.codereview.agent.core.model.CodeDiff;\n+import com.codereview.agent.core.model.Finding;\n+import com.codereview.agent.core.model.ReviewContext;\n+import com.codereview.agent.core.agent.ReviewAgent;\n+import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;\n+import com.codereview.agent.core.trace.TraceContext;\n+import org.slf4j.Logger;\n+import org.slf4j.LoggerFactory;\n+\n+import java.util.ArrayList;\n+import java.util.HashMap;\n+import java.util.List;\n+import java.util.Map;\n+import java.util.concurrent.ConcurrentLinkedQueue;\n+\n+/**\n+ * 任务规划织入支撑（可选增强，对应「Workflow 编排与任务拆解」能力）。\n+ *\n+ * <p>启用后，Coordinator 在固定并行路径之前先经 LLM 把审查目标拆解为子任务 DAG，\n+ * 按 assignee 路由到对应 Agent 并行执行（依赖拓扑由 {@link DagExecutor} 保证）。\n+ * 语义约定：\n+ * <ul>\n+ *   <li>任一节点产出 findings 即采用规划结果（部分失败容忍）；</li>\n+ *   <li>规划失败 / 全部节点失败 / 组件未启用 → 返回空列表，调用方**降级固定并行路径**；</li>\n+ *   <li>每个节点执行经 {@link TraceContext#wrap} 保持 traceId 跨线程传播。</li>\n+ * </ul>\n+ */\n+public class TaskPlanningSupport {\n+\n+    private static final Logger log = LoggerFactory.getLogger(TaskPlanningSupport.class);\n+\n+    private final TaskPlanner planner;\n+    private final DagExecutor dagExecutor;\n+    private final boolean enabled;\n+\n+    public TaskPlanningSupport(TaskPlanner planner, DagExecutor dagExecutor, boolean enabled) {\n+        this.planner = planner;\n+        this.dagExecutor = dagExecutor;\n+        this.enabled = enabled;\n+    }\n+\n+    public boolean active() {\n+        return enabled && planner != null && dagExecutor != null;\n+    }\n+\n+    /**\n+     * 规划并执行。返回空列表表示「未启用 / 规划失败 / 全部节点失败」，调用方应降级固定路径。\n+     */\n+    public List<AgentResult> planAndExecute(String goal, List<CodeDiff> diffs, ReviewContext ctx,\n+                                            List<ReviewAgent> agents, long prId,\n+                                            ReviewTrajectoryRecorder recorder, String runId) {\n+        if (!active()) {\n+            return List.of();\n+        }\n+        try {\n+            String available = agents.stream().map(a -> a.getType().name()).distinct()\n+                    .reduce((a, b) -> a + \",\" + b).orElse(\"默认Agent\");\n+            TaskPlan plan = planner.plan(goal, available);\n+            if (recorder != null) {\n+                recorder.append(runId, \"plan.created\", Map.of(\"tasks\", plan.tasks().size()));\n+            }\n+            Map<String, ReviewAgent> byType = new HashMap<>();\n+            agents.forEach(a -> byType.putIfAbsent(a.getType().name(), a));\n+\n+            ConcurrentLinkedQueue<AgentResult> collected = new ConcurrentLinkedQueue<>();\n+            Map<String, DagExecutor.TaskResult> results = dagExecutor.execute(plan, node -> {\n+                ReviewAgent agent = byType.get(node.assignee());\n+                if (agent == null) {\n+                    return DagExecutor.TaskResult.fail(node.id(), \"无执行者: \" + node.assignee());\n+                }\n+                List<Finding> findings = TraceContext.wrap(() -> agent.review(diffs, ctx)).get();\n+                collected.add(new AgentResult(prId, agent.getType(), findings));\n+                if (recorder != null) {\n+                    recorder.append(runId, \"plan.task.completed\", Map.of(\n+                            \"task\", node.id(), \"agentType\", agent.getType().name(),\n+                            \"findingCount\", findings.size()));\n+                }\n+                return DagExecutor.TaskResult.ok(node.id(), findings.size() + \" findings\");\n+            });\n+            long ok = results.values().stream().filter(DagExecutor.TaskResult::success).count();\n+            if (collected.isEmpty()) {\n+                log.warn(\"[Planning] 计划无任何产出（成功节点 {}），降级固定路径\", ok);\n+                return List.of();\n+            }\n+            log.info(\"[Planning] 规划路径完成：{} 子任务，成功 {}，产出 {} 条发现\",\n+                    plan.tasks().size(), ok, collected.size());\n+            return new ArrayList<>(collected);\n+        } catch (Exception e) {\n+            log.warn(\"[Planning] 规划执行异常，降级固定路径：{}\", e.getMessage());\n+            return List.of();\n+        }\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java\nnew file mode 100644\nindex 0000000..9b22325\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/coordinator/impl/CoordinatorPlanningTest.java\n@@ -0,0 +1,124 @@\n+package com.codereview.agent.core.coordinator.impl;\n+\n+import com.codereview.agent.core.agent.ReviewAgent;\n+import com.codereview.agent.core.analysis.AdvancedAnalyzer;\n+import com.codereview.agent.core.feedback.InMemoryFeedbackStore;\n+import com.codereview.agent.core.history.InMemoryReviewHistoryStore;\n+import com.codereview.agent.core.impact.ImpactAnalyzer;\n+import com.codereview.agent.core.llm.LlmClient;\n+import com.codereview.agent.core.model.AgentType;\n+import com.codereview.agent.core.model.CodeDiff;\n+import com.codereview.agent.core.model.Finding;\n+import com.codereview.agent.core.model.PullRequest;\n+import com.codereview.agent.core.model.ReviewContext;\n+import com.codereview.agent.core.model.ReviewReport;\n+import com.codereview.agent.core.model.Severity;\n+import com.codereview.agent.core.planning.TaskPlanningSupport;\n+import com.codereview.agent.core.planning.TaskPlanner;\n+import com.codereview.agent.core.report.ReportGenerator;\n+import com.codereview.agent.core.trajectory.ReviewTrajectoryRecorder;\n+import org.junit.jupiter.api.Test;\n+import org.junit.jupiter.api.io.TempDir;\n+\n+import java.nio.file.Files;\n+import java.nio.file.Path;\n+import java.util.List;\n+import java.util.concurrent.atomic.AtomicInteger;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 任务规划织入集成测试：验证 Planning 路径真正接入 Coordinator，\n+ * 以及未启用时行为与旧版完全一致（可选增强原则）。\n+ */\n+class CoordinatorPlanningTest {\n+\n+    static final String PLAN_JSON = \"\"\"\n+            {\"tasks\":[\n+              {\"id\":\"t1\",\"description\":\"逻辑审查\",\"dependsOn\":[],\"assignee\":\"LOGIC\"},\n+              {\"id\":\"t2\",\"description\":\"安全审查\",\"dependsOn\":[\"t1\"],\"assignee\":\"SECURITY\"}]}\"\"\";\n+\n+    static class ScriptLlm implements LlmClient {\n+        private final String response;\n+        ScriptLlm(String response) { this.response = response; }\n+        @Override public String chat(String prompt) { return response; }\n+    }\n+\n+    /** 可计数的假 Agent：每次 review 记一笔，固定返回一条 finding。 */\n+    static class FakeAgent implements ReviewAgent {\n+        private final AgentType type;\n+        final AtomicInteger calls = new AtomicInteger();\n+        FakeAgent(AgentType type) { this.type = type; }\n+        @Override public AgentType getType() { return type; }\n+        @Override public List<Finding> review(List<CodeDiff> diffs, ReviewContext ctx) {\n+            calls.incrementAndGet();\n+            return List.of(new Finding(type, \"Pay.java\", 1, 1, Severity.MAJOR,\n+                    type.name().toLowerCase(), type.name() + \"-001\",\n+                    type.name() + \" 问题\", \"描述\", \"建议\", 0.9, \"test\"));\n+        }\n+    }\n+\n+    private static CodeDiff diff() {\n+        return new CodeDiff(\"Pay.java\", \"+void pay() {}\", \"java\", 1, 0);\n+    }\n+\n+    @Test\n+    void 启用规划时走DAG路径且各Agent仅执行一次(@TempDir Path tmp) throws Exception {\n+        Files.createDirectories(tmp);\n+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());\n+        FakeAgent logic = new FakeAgent(AgentType.LOGIC);\n+        FakeAgent security = new FakeAgent(AgentType.SECURITY);\n+\n+        TaskPlanningSupport planning = new TaskPlanningSupport(\n+                new TaskPlanner(new ScriptLlm(PLAN_JSON)),\n+                new com.codereview.agent.core.planning.DagExecutor(java.util.concurrent.ForkJoinPool.commonPool()),\n+                true);\n+\n+        CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(\n+                List.of(logic, security), new ReportGenerator(), new InMemoryFeedbackStore(),\n+                new InMemoryReviewHistoryStore(), new AdvancedAnalyzer(),\n+                java.util.concurrent.ForkJoinPool.commonPool(), new ImpactAnalyzer(), recorder,\n+                com.codereview.agent.core.enhance.ReviewEnhancements.none(), null,\n+                null, null, null, null, planning);\n+\n+        ReviewReport report = coordinator.review(new PullRequest(\n+                9201, \"demo/pay\", \"规划路径验证\", \"@alice\", \"main\", List.of(diff())));\n+\n+        // DAG 路径：每个 Agent 恰好被规划调用一次（固定并行路径被跳过）\n+        assertEquals(1, logic.calls.get());\n+        assertEquals(1, security.calls.get());\n+        assertTrue(report.getFindings().stream().anyMatch(f -> f.agentType() == AgentType.LOGIC));\n+        assertTrue(report.getFindings().stream().anyMatch(f -> f.agentType() == AgentType.SECURITY));\n+        // 轨迹含规划事件\n+        String traj = Files.readString(Path.of(tmp.toString(), \"default\", \"trajectories\")\n+                .resolve(listFirst(tmp))).contains(\"plan.created\") ? \"y\" : \"\";\n+        assertEquals(\"y\", traj);\n+    }\n+\n+    private static String listFirst(Path tmp) throws Exception {\n+        try (var s = Files.list(Path.of(tmp.toString(), \"default\", \"trajectories\"))) {\n+            return s.findFirst().orElseThrow().getFileName().toString();\n+        }\n+    }\n+\n+    @Test\n+    void 未启用规划时行为与旧版一致(@TempDir Path tmp) {\n+        ReviewTrajectoryRecorder recorder = new ReviewTrajectoryRecorder(tmp.toString());\n+        FakeAgent logic = new FakeAgent(AgentType.LOGIC);\n+\n+        // 14 参构造（planningSupport=null）→ 走固定并行路径\n+        CompletableFutureCoordinator coordinator = new CompletableFutureCoordinator(\n+                List.of(logic), new ReportGenerator(), new InMemoryFeedbackStore(),\n+                new InMemoryReviewHistoryStore(), new AdvancedAnalyzer(),\n+                java.util.concurrent.ForkJoinPool.commonPool(), new ImpactAnalyzer(), recorder,\n+                com.codereview.agent.core.enhance.ReviewEnhancements.none(), null,\n+                null, null, null, null);\n+\n+        ReviewReport report = coordinator.review(new PullRequest(\n+                9202, \"demo/pay\", \"固定路径验证\", \"@alice\", \"main\", List.of(diff())));\n+\n+        assertEquals(1, logic.calls.get());\n+        assertTrue(report.getFindings().stream().anyMatch(f -> f.agentType() == AgentType.LOGIC));\n+    }\n+}\n",
+  "patchBytes": 20119,
+  "patchSha256": "80095178888e3b97a793a4b89f1f602be6491af058199e5af1ae4dc07ff44968",
+  "provenance": "git-history",
+  "provenanceNote": "feat：Planning 接入 Coordinator 主链路（默认关闭）",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+            "lineEnd": 92,
+            "lineStart": 92,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+            "lineEnd": 92,
+            "lineStart": 92,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+            "lineEnd": 92,
+            "lineStart": 92,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）AE-001"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+            "lineEnd": 45,
+            "lineStart": 45,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+            "lineEnd": 592,
+            "lineStart": 592,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/planning/TaskPlanningSupport.java",
+            "lineEnd": 609,
+            "lineStart": 609,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "code-review-agent",
+  "repoUrl": "https://github.com/13liyunfei/code-review-agent",
+  "sha": "99d27a27c13f0fb870084e1bd4a06527dca79141",
+  "shaShort": "99d27a2",
+  "subject": "feat: Planning 接入 Coordinator 主链路（可选增强，默认关闭）"
+}

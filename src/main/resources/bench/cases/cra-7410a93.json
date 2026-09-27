@@ -1,0 +1,519 @@
+{
+  "addedLines": 854,
+  "changedFileCount": 10,
+  "changedFiles": [
+    "src/main/java/com/codereview/agent/config/ScaSourceConfig.java",
+    "src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java",
+    "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+    "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+    "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+    "src/main/java/com/codereview/agent/core/analysis/ScaVulnSource.java",
+    "src/main/resources/application.yml",
+    "src/test/java/com/codereview/agent/core/analysis/EnterpriseFeaturesTest.java",
+    "src/test/java/com/codereview/agent/core/analysis/OsvVulnSourceTest.java",
+    "src/test/java/com/codereview/agent/core/analysis/ScaScannerTest.java"
+  ],
+  "committedAt": "2026-09-07T00:25:24+08:00",
+  "deletedLines": 94,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 85,
+      "lineStart": 85,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 105,
+      "lineStart": 105,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 154,
+      "lineStart": 154,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 197,
+      "lineStart": 197,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 213,
+      "lineStart": 213,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 220,
+      "lineStart": 220,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 223,
+      "lineStart": 223,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/config/ScaSourceConfig.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 25,
+      "lineStart": 25,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 60,
+      "lineStart": 60,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 91,
+      "lineStart": 91,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 104,
+      "lineStart": 104,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    }
+  ],
+  "id": "cra-7410a93",
+  "labelCandidates": [
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+      "line": 85,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+      "line": 105,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "line": 154,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "line": 197,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "line": 213,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "line": 220,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null; // 含 range/通配/变量，无法精确查询",
+      "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+      "line": 223,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "} catch (Exception e) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "line": 139,
+      "ruleId": "LOGIC-002",
+      "severity": "MAJOR",
+      "why": "宽泛捕获 Exception/Throwable：会连带吞掉不该处理的异常（需确认是否只 log 不重抛）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "} catch (Exception e) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "line": 154,
+      "ruleId": "LOGIC-002",
+      "severity": "MAJOR",
+      "why": "宽泛捕获 Exception/Throwable：会连带吞掉不该处理的异常（需确认是否只 log 不重抛）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public ScaScanner scaScanner(Environment env) {",
+      "file": "src/main/java/com/codereview/agent/config/ScaSourceConfig.java",
+      "line": 25,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public static ScaScanner builtinOnly() {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "line": 60,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public boolean isEmpty() {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "line": 91,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public ScaReport analyze(List<CodeDiff> diffs) {",
+      "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+      "line": 104,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    }
+  ],
+  "labeling": {
+    "candidates": 13,
+    "confirmed": 11,
+    "manual": 0,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "parent": "e8b71f2870e253096f15d523bd3bcbfe64e3fe1c",
+  "patch": "diff --git a/src/main/java/com/codereview/agent/config/ScaSourceConfig.java b/src/main/java/com/codereview/agent/config/ScaSourceConfig.java\nnew file mode 100644\nindex 0000000..4b366ac\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/config/ScaSourceConfig.java\n@@ -0,0 +1,37 @@\n+package com.codereview.agent.config;\n+\n+import com.codereview.agent.core.analysis.BuiltinVulnSource;\n+import com.codereview.agent.core.analysis.OsvVulnSource;\n+import com.codereview.agent.core.analysis.ScaScanner;\n+import org.springframework.context.annotation.Bean;\n+import org.springframework.context.annotation.Configuration;\n+import org.springframework.core.env.Environment;\n+\n+import java.time.Duration;\n+\n+/**\n+ * SCA 数据源装配：把「开发/测试/生产都要查真实漏洞库」落到配置。\n+ *\n+ * <p>默认 {@code sca.source=auto} = OSV 优先、网络失败降级内置样本（报告标注 degraded）——\n+ * 这样 dev/test 日常跑的是 OSV 真实数据，不是内置假样本；纯离线或 CI 断网也不崩。\n+ *\n+ * <p>OSV 经可配置代理出站（仅本数据源的 HttpClient 走代理，不影响内网直连的其它调用）。\n+ * 本机（Clash）开发代理端口见 application-dev.yml 覆盖（.gitignore，不进版本库）。\n+ */\n+@Configuration\n+public class ScaSourceConfig {\n+\n+    @Bean\n+    public ScaScanner scaScanner(Environment env) {\n+        String source = env.getProperty(\"sca.source\", \"auto\");\n+        String proxyHost = env.getProperty(\"sca.osv.proxy-host\", \"\");\n+        int proxyPort = Integer.parseInt(env.getProperty(\"sca.osv.proxy-port\", \"0\"));\n+        long timeoutMs = Long.parseLong(env.getProperty(\"sca.osv.timeout-ms\", \"5000\"));\n+        OsvVulnSource osv = new OsvVulnSource(proxyHost, proxyPort, Duration.ofMillis(timeoutMs));\n+        return switch (source) {\n+            case \"osv\" -> new ScaScanner(osv, null);\n+            case \"builtin\" -> new ScaScanner(new BuiltinVulnSource(), null);\n+            default -> new ScaScanner(osv, new BuiltinVulnSource());\n+        };\n+    }\n+}\ndiff --git a/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java b/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java\nindex a0e89f7..263a68e 100644\n--- a/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java\n+++ b/src/main/java/com/codereview/agent/core/analysis/AdvancedAnalyzer.java\n@@ -69,11 +69,18 @@ public class AdvancedAnalyzer {\n     private final RepoSourceLocator locator;\n     private final AnalysisEngines engines;\n     private final IndexScope scope;\n+    private final ScaScanner scaScanner;\n \n-    /** 生产装配：注入源码定位器，开启「完整源码」模式。 */\n+    /** 生产装配：注入源码定位器（完整源码模式）+ SCA 扫描器（OSV 真实数据源链）。 */\n     @Autowired\n+    public AdvancedAnalyzer(RepoSourceLocator locator, ScaScanner scaScanner) {\n+        this(locator, scaScanner == null ? ScaScanner.builtinOnly() : scaScanner,\n+                AnalysisEngines.defaults(), IndexScope.DEFAULT);\n+    }\n+\n+    /** 测试/无 SCA 装配场景：内置样本扫描器（离线确定性，避免测试依赖网络）。 */\n     public AdvancedAnalyzer(RepoSourceLocator locator) {\n-        this(locator, AnalysisEngines.defaults(), IndexScope.DEFAULT);\n+        this(locator, ScaScanner.builtinOnly());\n     }\n \n     /** 便于测试（无定位器 → 回落 diff 片段模式）。 */\n@@ -81,8 +88,10 @@ public class AdvancedAnalyzer {\n         this(null);\n     }\n \n-    private AdvancedAnalyzer(RepoSourceLocator locator, AnalysisEngines engines, IndexScope scope) {\n+    private AdvancedAnalyzer(RepoSourceLocator locator, ScaScanner scaScanner,\n+                             AnalysisEngines engines, IndexScope scope) {\n         this.locator = locator;\n+        this.scaScanner = scaScanner;\n         this.engines = engines == null ? AnalysisEngines.defaults() : engines;\n         this.scope = scope == null ? IndexScope.DEFAULT : scope;\n     }\n@@ -149,8 +158,8 @@ public class AdvancedAnalyzer {\n             }\n         }\n \n-        // 2. SCA 依赖扫描\n-        ScaScanner.ScaReport sca = ScaScanner.analyze(diffs);\n+        // 2. SCA 依赖扫描（数据源链由配置装配：默认 OSV 真实库，失败降级内置）\n+        ScaScanner.ScaReport sca = scaScanner.analyze(diffs);\n         for (ScaScanner.Vulnerability v : sca.vulnerabilities()) {\n             security.add(new Finding(AgentType.SECURITY, v.component().name() + \"@\" + v.component().version(),\n                     0, 0, toSeverity(v.severity()), \"security\", \"SCA-\" + v.cve(),\ndiff --git a/src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java b/src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java\nnew file mode 100644\nindex 0000000..d0e43a1\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java\n@@ -0,0 +1,109 @@\n+package com.codereview.agent.core.analysis;\n+\n+import java.util.ArrayList;\n+import java.util.List;\n+\n+/**\n+ * 离线内置漏洞样本数据源。\n+ *\n+ * <p>仅覆盖少量高频 CVE（Log4Shell / Spring4Shell / 反序列化链等），用于：\n+ * <ul>\n+ *   <li><b>无网兜底</b>：OSV 不可达时降级到这里，保证 SCA 块不空、不拖垮审查；</li>\n+ *   <li><b>确定性单测 fixture</b>：内置规则稳定，可作固定断言。</li>\n+ * </ul>\n+ *\n+ * <p><b>它不是真实漏洞库</b>——样本之外的真实漏洞一律不命中。因此任何\n+ * 依赖此源的报告都会在 {@code sourceUsed=builtin} 上被标注，调用方应据此\n+ * 区分「内置样本扫描」与「真实 OSV 扫描」，绝不可把两者混为一谈。\n+ *\n+ * <p>数据源语义与原 {@code ScaScanner} 静态内置规则完全一致（按 artifact 名\n+ * 匹配 + 数值版本区间判断），迁移不改变行为。\n+ */\n+public final class BuiltinVulnSource implements ScaVulnSource {\n+\n+    private record CveRule(String artifact, int maxMajor, int maxMinor, int maxPatch,\n+                           String cve, String severity, String description) {\n+    }\n+\n+    private static final List<CveRule> CVE_RULES = List.of(\n+            new CveRule(\"log4j-core\", 2, 14, 1, \"CVE-2021-44228\", \"BLOCKER\",\n+                    \"Log4j 2.x < 2.15.0 存在 JNDI 远程代码执行（Log4Shell）。\"),\n+            new CveRule(\"spring-core\", 5, 3, 17, \"CVE-2022-22965\", \"BLOCKER\",\n+                    \"Spring Framework < 5.3.18 存在 Spring4Shell RCE。\"),\n+            new CveRule(\"spring-beans\", 5, 3, 17, \"CVE-2022-22965\", \"BLOCKER\",\n+                    \"Spring Framework < 5.3.18 存在 Spring4Shell RCE。\"),\n+            new CveRule(\"commons-collections\", 3, 2, 1, \"CVE-2015-7501\", \"MAJOR\",\n+                    \"Commons Collections < 3.2.2 存在反序列化 RCE。\"),\n+            new CveRule(\"jackson-databind\", 2, 9, 7, \"CVE-2018-7489\", \"MAJOR\",\n+                    \"jackson-databind < 2.9.8 存在反序列化漏洞。\"),\n+            new CveRule(\"lodash\", 4, 17, 20, \"CVE-2021-23337\", \"MAJOR\",\n+                    \"lodash < 4.17.21 存在命令注入/原型污染。\"),\n+            new CveRule(\"minimist\", 1, 2, 5, \"CVE-2021-44906\", \"MAJOR\",\n+                    \"minimist < 1.2.6 存在原型污染。\"),\n+            new CveRule(\"axios\", 0, 21, 0, \"CVE-2020-28168\", \"MINOR\",\n+                    \"axios < 0.21.1 存在 SSRF 代理绕过。\")\n+    );\n+\n+    @Override\n+    public String id() {\n+        return \"builtin\";\n+    }\n+\n+    @Override\n+    public List<ScaScanner.Vulnerability> lookupAll(List<ScaScanner.Component> components) {\n+        List<ScaScanner.Vulnerability> out = new ArrayList<>();\n+        if (components == null) {\n+            return out;\n+        }\n+        for (ScaScanner.Component c : components) {\n+            for (CveRule r : CVE_RULES) {\n+                if (r.artifact().equals(c.name()) && r.maxMajor() >= 0) {\n+                    int[] v = parseVersion(c.version());\n+                    if (v != null && withinRange(v, r)) {\n+                        out.add(new ScaScanner.Vulnerability(c, r.cve(), r.severity(), r.description()));\n+                    }\n+                }\n+            }\n+        }\n+        return out;\n+    }\n+\n+    private static boolean withinRange(int[] v, CveRule r) {\n+        int major = v[0], minor = v.length > 1 ? v[1] : 0, patch = v.length > 2 ? v[2] : 0;\n+        if (major != r.maxMajor()) {\n+            return major < r.maxMajor();\n+        }\n+        if (minor != r.maxMinor()) {\n+            return minor < r.maxMinor();\n+        }\n+        return patch <= r.maxPatch();\n+    }\n+\n+    /** 只解析数字与点号前缀（如 {@code 2.14.1-RC1} → {@code [2,14,1]}），失败返回 null。 */\n+    static int[] parseVersion(String v) {\n+        if (v == null) {\n+            return null;\n+        }\n+        StringBuilder digits = new StringBuilder();\n+        List<Integer> parts = new ArrayList<>();\n+        for (char c : v.toCharArray()) {\n+            if (Character.isDigit(c)) {\n+                digits.append(c);\n+            } else if (c == '.') {\n+                if (digits.length() > 0) {\n+                    parts.add(Integer.parseInt(digits.toString()));\n+                    digits.setLength(0);\n+                }\n+            } else {\n+                break; // 遇到非数字非点（如 -RC1）停止\n+            }\n+        }\n+        if (digits.length() > 0) {\n+            parts.add(Integer.parseInt(digits.toString()));\n+        }\n+        if (parts.isEmpty()) {\n+            return null;\n+        }\n+        return parts.stream().mapToInt(Integer::intValue).toArray();\n+    }\n+}\ndiff --git a/src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java b/src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java\nnew file mode 100644\nindex 0000000..00150b9\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java\n@@ -0,0 +1,231 @@\n+package com.codereview.agent.core.analysis;\n+\n+import com.fasterxml.jackson.databind.JsonNode;\n+import com.fasterxml.jackson.databind.ObjectMapper;\n+import org.slf4j.Logger;\n+import org.slf4j.LoggerFactory;\n+\n+import java.net.InetSocketAddress;\n+import java.net.ProxySelector;\n+import java.net.URI;\n+import java.net.http.HttpClient;\n+import java.net.http.HttpRequest;\n+import java.net.http.HttpResponse;\n+import java.time.Duration;\n+import java.util.ArrayList;\n+import java.util.List;\n+import java.util.regex.Pattern;\n+\n+/**\n+ * OSV（Google Open Source Vulnerabilities）真实漏洞库数据源。\n+ *\n+ * <p>逐组件 POST {@code https://api.osv.dev/v1/query}（请求带精确版本，服务端判断\n+ * 是否落在受影响区间），返回完整漏洞对象（含 aliases / database_specific.severity）。\n+ *\n+ * <p><b>为什么不用 querybatch</b>：实测 querybatch 的 vulns 条目只含\n+ * {@code {id, modified}} 摘要，拿不到 summary/severity/aliases，仍须逐个回查，\n+ * 反而多一轮网络往返；PR diff 的组件数通常有限，逐组件 /v1/query 一次到位。\n+ *\n+ * <p><b>协议事实（2026-09 实测）</b>：\n+ * <ul>\n+ *   <li>Maven 的包名必须是<b>全限定 {@code groupId:artifactId}</b>（如\n+ *       {@code org.apache.logging.log4j:log4j-core}），短名 {@code log4j-core} 查不中；</li>\n+ *   <li>ecosystem 为 {@code Maven} / {@code npm}（首字母大写）；</li>\n+ *   <li>severity 最稳的来源是 {@code database_specific.severity}\n+ *       （CRITICAL/HIGH/MODERATE/LOW），severity[] 的 score 是 CVSS vector 字符串不含数值。</li>\n+ * </ul>\n+ *\n+ * <p><b>代理</b>：OSV 为 Google 托管，本机（Clash 代理）才可达；构造参数可指定\n+ * 代理 host/port，仅本数据源的 HttpClient 走代理，不影响内网直连的其它出站调用。\n+ * 网络失败以异常上抛，由 {@link ScaScanner} 决定降级——此处绝不吞掉假装「无漏洞」。\n+ */\n+public final class OsvVulnSource implements ScaVulnSource {\n+\n+    private static final Logger log = LoggerFactory.getLogger(OsvVulnSource.class);\n+\n+    private static final URI OSV_QUERY_URI = URI.create(\"https://api.osv.dev/v1/query\");\n+    private static final ObjectMapper MAPPER = new ObjectMapper();\n+    private static final Pattern CVE = Pattern.compile(\"^CVE-\\\\d{4}-\\\\d{4,}$\");\n+\n+    /** 无 CVSS 可读时的保守档位：有漏洞记录但无法定级，按 MINOR 提示而非 INFO 过滤掉。 */\n+    private static final String FALLBACK_SEVERITY = \"MINOR\";\n+\n+    private final URI endpoint;\n+    private final HttpClient client;\n+    private final Duration timeout;\n+\n+    /**\n+     * @param proxyHost 代理主机（如 {@code 127.0.0.1}）；空/空白 = 直连（部署环境能直连 OSV 时）\n+     * @param proxyPort 代理端口\n+     * @param timeout   单次请求超时\n+     */\n+    public OsvVulnSource(String proxyHost, int proxyPort, Duration timeout) {\n+        this(OSV_QUERY_URI.toString(), proxyHost, proxyPort, timeout);\n+    }\n+\n+    /** 测试专用：endpoint 可指向本地桩服务器（默认构造指向真实 OSV）。 */\n+    OsvVulnSource(String endpoint, String proxyHost, int proxyPort, Duration timeout) {\n+        this.endpoint = URI.create(endpoint);\n+        this.timeout = timeout == null ? Duration.ofSeconds(5) : timeout;\n+        HttpClient.Builder b = HttpClient.newBuilder()\n+                .version(HttpClient.Version.HTTP_1_1) // 代理链路 HTTP/2 CONNECT 常出 framing 错\n+                .connectTimeout(this.timeout);\n+        if (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0) {\n+            b.proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)));\n+        }\n+        this.client = b.build();\n+    }\n+\n+    @Override\n+    public String id() {\n+        return \"osv\";\n+    }\n+\n+    @Override\n+    public List<ScaScanner.Vulnerability> lookupAll(List<ScaScanner.Component> components) throws Exception {\n+        List<ScaScanner.Vulnerability> out = new ArrayList<>();\n+        if (components == null) {\n+            return out;\n+        }\n+        for (ScaScanner.Component c : components) {\n+            String eco = osvEcosystem(c.ecosystem());\n+            String ver = normalizeVersion(c.version());\n+            if (eco == null || ver == null) {\n+                continue; // 不认识的生态 / 非精确版本（range/变量）——OSV 无法按名查，跳过\n+            }\n+            String name = (c.osvName() == null || c.osvName().isBlank()) ? c.name() : c.osvName();\n+            out.addAll(queryOne(c, eco, name, ver));\n+        }\n+        return out;\n+    }\n+\n+    // ===================== 单组件查询 =====================\n+\n+    private List<ScaScanner.Vulnerability> queryOne(ScaScanner.Component component,\n+                                                    String ecosystem, String name, String version)\n+            throws Exception {\n+        String body = String.format(\n+                \"{\\\"package\\\":{\\\"name\\\":%s,\\\"ecosystem\\\":%s},\\\"version\\\":%s}\",\n+                quote(name), quote(ecosystem), quote(version));\n+        HttpRequest req = HttpRequest.newBuilder(endpoint)\n+                .timeout(timeout)\n+                .header(\"Content-Type\", \"application/json\")\n+                .POST(HttpRequest.BodyPublishers.ofString(body))\n+                .build();\n+\n+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());\n+        if (resp.statusCode() < 200 || resp.statusCode() >= 300) {\n+            throw new java.io.IOException(\n+                    \"OSV 查询失败 HTTP \" + resp.statusCode() + \" (\" + name + \"@\" + version + \")\");\n+        }\n+\n+        JsonNode root = MAPPER.readTree(resp.body());\n+        JsonNode vulns = root.path(\"vulns\");\n+        if (!vulns.isArray()) {\n+            return List.of();\n+        }\n+        List<ScaScanner.Vulnerability> hits = new ArrayList<>();\n+        for (JsonNode v : vulns) {\n+            String id = v.path(\"id\").asText(null);\n+            if (id == null || id.isBlank()) {\n+                continue;\n+            }\n+            String cveId = firstCve(v.path(\"aliases\"));\n+            String description = describe(v);\n+            hits.add(new ScaScanner.Vulnerability(\n+                    component, cveId != null ? cveId : id, severityOf(v), description));\n+        }\n+        log.debug(\"[SCA-osv] {}@{}（{}）命中 {} 条\", name, version, ecosystem, hits.size());\n+        return hits;\n+    }\n+\n+    // ===================== 响应解析 =====================\n+\n+    /** aliases 里优先取 CVE 号（比 GHSA id 对用户更有辨识度）；无 CVE 用原 id。 */\n+    private static String firstCve(JsonNode aliases) {\n+        if (aliases != null && aliases.isArray()) {\n+            for (JsonNode a : aliases) {\n+                String s = a.asText(\"\");\n+                if (CVE.matcher(s).matches()) {\n+                    return s;\n+                }\n+            }\n+        }\n+        return null;\n+    }\n+\n+    /**\n+     * 严重度归一：BLOCKER/MAJOR/MINOR/INFO（对齐 {@code Severity} 档位）。\n+     *\n+     * <p>来源优先级：{@code database_specific.severity}（GitHub Advisory 四档文本）\n+     * → 无则保守 MINOR（有漏洞记录但无定级信息）。OSV 的 severity[] 里 score 是\n+     * CVSS vector 字符串（不含 base score），无法直接算分，故不采用。\n+     */\n+    static String severityOf(JsonNode v) {\n+        JsonNode db = v.path(\"database_specific\").path(\"severity\");\n+        if (db.isTextual()) {\n+            String s = switch (db.asText().toUpperCase()) {\n+                case \"CRITICAL\" -> \"BLOCKER\";\n+                case \"HIGH\" -> \"MAJOR\";\n+                case \"MODERATE\", \"MEDIUM\" -> \"MINOR\";\n+                case \"LOW\" -> \"MINOR\";\n+                default -> FALLBACK_SEVERITY;\n+            };\n+            return s;\n+        }\n+        return FALLBACK_SEVERITY;\n+    }\n+\n+    /** summary 优先，空则截取 details 前 200 字符。 */\n+    private static String describe(JsonNode v) {\n+        String summary = v.path(\"summary\").asText(\"\");\n+        if (!summary.isBlank()) {\n+            return summary;\n+        }\n+        String details = v.path(\"details\").asText(\"\");\n+        if (!details.isBlank()) {\n+            return details.length() <= 200 ? details : details.substring(0, 200) + \"…\";\n+        }\n+        return \"(无描述)\";\n+    }\n+\n+    // ===================== 协议映射 =====================\n+\n+    /** 内部生态名 → OSV ecosystem（大小写敏感，实测确认）。 */\n+    private static String osvEcosystem(String ecosystem) {\n+        if (ecosystem == null) {\n+            return null;\n+        }\n+        return switch (ecosystem.toLowerCase()) {\n+            case \"maven\" -> \"Maven\";\n+            case \"npm\" -> \"npm\";\n+            default -> null;\n+        };\n+    }\n+\n+    /**\n+     * 版本规范化：剥掉 npm semver 前缀（{@code ^1.2.3 / ~1.2.3 → 1.2.3}），\n+     * 以声明的下界版本送查——命中即保守提示，不会把已修复版本误报。\n+     * range（含空格、&gt;、&lt;、星号、x）、变量、空值一律返回 null（OSV 只接受具体版本）。\n+     */\n+    static String normalizeVersion(String version) {\n+        if (version == null) {\n+            return null;\n+        }\n+        String v = version.trim();\n+        if (v.startsWith(\"^\") || v.startsWith(\"~\")) {\n+            v = v.substring(1);\n+        }\n+        if (v.isEmpty()) {\n+            return null;\n+        }\n+        if (!v.matches(\"[0-9]+(\\\\.[0-9]+){0,3}([-+][0-9A-Za-z.\\\\-]+)?\")) {\n+            return null; // 含 range/通配/变量，无法精确查询\n+        }\n+        return v;\n+    }\n+\n+    private static String quote(String s) {\n+        return \"\\\"\" + s.replace(\"\\\\\", \"\\\\\\\\\").replace(\"\\\"\", \"\\\\\\\"\") + \"\\\"\";\n+    }\n+}\ndiff --git a/src/main/java/com/codereview/agent/core/analysis/ScaScanner.java b/src/main/java/com/codereview/agent/core/analysis/ScaScanner.java\nindex a9a16b1..4375b76 100644\n--- a/src/main/java/com/codereview/agent/core/analysis/ScaScanner.java\n+++ b/src/main/java/com/codereview/agent/core/analysis/ScaScanner.java\n@@ -4,6 +4,8 @@ import com.codereview.agent.core.model.CodeDiff;\n import com.fasterxml.jackson.databind.ObjectMapper;\n import com.fasterxml.jackson.databind.node.ArrayNode;\n import com.fasterxml.jackson.databind.node.ObjectNode;\n+import org.slf4j.Logger;\n+import org.slf4j.LoggerFactory;\n \n import java.util.ArrayList;\n import java.util.List;\n@@ -11,18 +13,29 @@ import java.util.regex.Matcher;\n import java.util.regex.Pattern;\n \n /**\n- * SCA（软件组成分析）依赖漏洞扫描器（无外部网络依赖）。\n+ * SCA（软件组成分析）依赖漏洞扫描器。\n  *\n- * <p>从 PR diff 中识别新增的 Maven / npm 依赖，匹配内置 CVE 样本库与许可证黑名单，\n- * 生成 SBOM（CycloneDX-lite JSON）。目标契合「大厂 P1」诉求：CVE 扫描 + SBOM + 许可证合规。\n+ * <p>从 PR diff 中识别新增的 Maven / npm 依赖，交给可插拔的 {@link ScaVulnSource}\n+ * 查询已知漏洞，并做许可证黑名单检查、生成 SBOM（CycloneDX-lite JSON）。\n  *\n- * <p>说明：生产环境应对接 OSV / NVD / 私有漏洞库；此处内置少量高频 CVE 样本用于离线演示，\n- * 结构（组件模型 + SBOM 输出 + 漏洞/许可结果）可直接替换为真实数据源。\n+ * <p><b>数据源</b>：生产 / 开发 / 测试默认走 {@link OsvVulnSource}（OSV 真实漏洞库），\n+ * 由 {@code ScaSourceConfig} 按配置装配：\n+ * <ul>\n+ *   <li>{@code sca.source=auto}（默认）——OSV 优先，网络不可用时降级\n+ *       {@link BuiltinVulnSource} 内置样本，并在报告标注 {@code sourceUsed/degraded}；</li>\n+ *   <li>{@code sca.source=osv}——强制真实 OSV，失败不降级（报告如实标注 failed）；</li>\n+ *   <li>{@code sca.source=builtin}——仅离线内置样本（单测 / 纯离线环境）。</li>\n+ * </ul>\n+ * 内置样本<b>不是真实漏洞库</b>，任何依赖它的报告都必须被 {@code sourceUsed=builtin}\n+ * 标注出来，杜绝把「样本演示」当成「真实扫描」。\n+ *\n+ * <p>降级/失败一律可观测：打 WARN 日志 + 报告标注，绝不在「查不了」时假装「没有」。\n  */\n public final class ScaScanner {\n \n-    private static final ObjectMapper MAPPER = new ObjectMapper();\n+    private static final Logger log = LoggerFactory.getLogger(ScaScanner.class);\n \n+    private static final Pattern POM_GROUP = Pattern.compile(\"<groupId>([^<]+)</groupId>\");\n     private static final Pattern POM_ARTIFACT = Pattern.compile(\"<artifactId>([^<]+)</artifactId>\");\n     private static final Pattern POM_VERSION = Pattern.compile(\"<version>([^<]+)</version>\");\n     private static final Pattern NPM_DEP = Pattern.compile(\"\\\"([@a-zA-Z][\\\\w./@\\\\-]*)\\\"\\\\s*:\\\\s*\\\"([\\\\^~]?[0-9][^\\\"]{0,30})\\\"\");\n@@ -31,55 +44,65 @@ public final class ScaScanner {\n     private static final java.util.Set<String> LICENSE_BLACKLIST = java.util.Set.of(\n             \"GPL-2.0\", \"GPL-3.0\", \"AGPL-3.0\", \"EUPL-1.2\");\n \n-    private ScaScanner() {\n+    private final ScaVulnSource primary;\n+    private final ScaVulnSource fallback;\n+\n+    /**\n+     * @param primary  首选数据源（auto=osv）\n+     * @param fallback 降级数据源（auto=builtin；强制模式传 null 表示不降级）\n+     */\n+    public ScaScanner(ScaVulnSource primary, ScaVulnSource fallback) {\n+        this.primary = primary;\n+        this.fallback = fallback;\n+    }\n+\n+    /** 纯内置样本扫描器（离线兜底 / 确定性单测）。 */\n+    public static ScaScanner builtinOnly() {\n+        return new ScaScanner(new BuiltinVulnSource(), null);\n     }\n \n-    /** 被扫描出的组件。 */\n-    public record Component(String ecosystem, String name, String version) {\n+    // ===================== 组件模型 =====================\n+\n+    /**\n+     * 被扫描出的组件。\n+     *\n+     * @param osvName OSV 查询用全限定名：Maven 为 {@code groupId:artifactId}（OSV 用全限定名\n+     *                索引，短名查不中）；npm 与 name 相同。无法解析出 groupId 时退回短名。\n+     */\n+    public record Component(String ecosystem, String name, String version, String osvName) {\n+        public Component(String ecosystem, String name, String version) {\n+            this(ecosystem, name, version, name);\n+        }\n     }\n \n     /** 命中漏洞。 */\n     public record Vulnerability(Component component, String cve, String severity, String description) {\n     }\n \n-    /** SCA 报告。 */\n+    /**\n+     * SCA 报告。\n+     *\n+     * @param sourceUsed   实际使用的数据源（{@code osv} / {@code builtin} / {@code osv(failed)} / {@code none}）\n+     * @param degraded     是否发生降级（OSV 不可用回退内置样本 = true；强制模式失败也置 true 并标 failed）\n+     */\n     public record ScaReport(List<Component> components, List<Vulnerability> vulnerabilities,\n-                            List<String> licenseIssues, String sbomJson) {\n-    }\n-\n-    // 内置 CVE 样本（artifactId -> 受影响版本上限 + CVE 信息）\n-    private record CveRule(String artifact, int maxMajor, int maxMinor, int maxPatch,\n-                           String cve, String severity, String description) {\n+                            List<String> licenseIssues, String sbomJson,\n+                            String sourceUsed, boolean degraded) {\n+        public boolean isEmpty() {\n+            return components.isEmpty();\n+        }\n     }\n \n-    private static final List<CveRule> CVE_RULES = List.of(\n-            new CveRule(\"log4j-core\", 2, 14, 1, \"CVE-2021-44228\", \"BLOCKER\",\n-                    \"Log4j 2.x < 2.15.0 存在 JNDI 远程代码执行（Log4Shell）。\"),\n-            new CveRule(\"spring-core\", 5, 3, 17, \"CVE-2022-22965\", \"BLOCKER\",\n-                    \"Spring Framework < 5.3.18 存在 Spring4Shell RCE。\"),\n-            new CveRule(\"spring-beans\", 5, 3, 17, \"CVE-2022-22965\", \"BLOCKER\",\n-                    \"Spring Framework < 5.3.18 存在 Spring4Shell RCE。\"),\n-            new CveRule(\"commons-collections\", 3, 2, 1, \"CVE-2015-7501\", \"MAJOR\",\n-                    \"Commons Collections < 3.2.2 存在反序列化 RCE。\"),\n-            new CveRule(\"jackson-databind\", 2, 9, 7, \"CVE-2018-7489\", \"MAJOR\",\n-                    \"jackson-databind < 2.9.8 存在反序列化漏洞。\"),\n-            new CveRule(\"lodash\", 4, 17, 20, \"CVE-2021-23337\", \"MAJOR\",\n-                    \"lodash < 4.17.21 存在命令注入/原型污染。\"),\n-            new CveRule(\"minimist\", 1, 2, 5, \"CVE-2021-44906\", \"MAJOR\",\n-                    \"minimist < 1.2.6 存在原型污染。\"),\n-            new CveRule(\"axios\", 0, 21, 0, \"CVE-2020-28168\", \"MINOR\",\n-                    \"axios < 0.21.1 存在 SSRF 代理绕过。\")\n-    );\n+    // ===================== 主入口 =====================\n \n     /**\n-     * 扫描 diff 中的依赖变更。\n+     * 扫描 diff 中的依赖变更（走配置装配的数据源链）。\n      *\n      * @param diffs 代码变更列表\n-     * @return SCA 报告（含组件、漏洞、许可问题、SBOM）\n+     * @return SCA 报告（组件、漏洞、许可问题、SBOM、实际数据源标注）\n      */\n-    public static ScaReport analyze(List<CodeDiff> diffs) {\n+    public ScaReport analyze(List<CodeDiff> diffs) {\n         List<Component> components = new ArrayList<>();\n-        List<Vulnerability> vulns = new ArrayList<>();\n         List<String> licenseIssues = new ArrayList<>();\n \n         for (CodeDiff d : diffs) {\n@@ -92,30 +115,72 @@ public final class ScaScanner {\n             }\n         }\n \n-        for (Component c : components) {\n-            for (CveRule r : CVE_RULES) {\n-                if (r.artifact().equals(c.name()) && r.maxMajor() >= 0) {\n-                    int[] v = parseVersion(c.version());\n-                    if (v != null && withinRange(v, r)) {\n-                        vulns.add(new Vulnerability(c, r.cve(), r.severity(), r.description()));\n-                    }\n-                }\n+        VulnQueryResult vq = queryVulnerabilities(components);\n+        String sbom = buildSbom(components, vq.vulnerabilities(), vq.sourceUsed());\n+        return new ScaReport(components, vq.vulnerabilities(), licenseIssues,\n+                sbom, vq.sourceUsed(), vq.degraded());\n+    }\n+\n+    // ===================== 漏洞查询（带降级链） =====================\n+\n+    private record VulnQueryResult(List<ScaScanner.Vulnerability> vulnerabilities,\n+                                   String sourceUsed, boolean degraded) {\n+    }\n+\n+    private VulnQueryResult queryVulnerabilities(List<Component> components) {\n+        if (components.isEmpty()) {\n+            return new VulnQueryResult(List.of(), \"none\", false);\n+        }\n+        try {\n+            List<Vulnerability> hits = primary.lookupAll(components);\n+            log.info(\"[SCA] 数据源 {} 完成：{} 个组件，命中 {} 个漏洞\",\n+                    primary.id(), components.size(), hits.size());\n+            return new VulnQueryResult(hits, primary.id(), false);\n+        } catch (Exception e) {\n+            if (fallback != null) {\n+                log.warn(\"[SCA] 数据源 {} 查询失败（{}），降级内置样本 {}——报告已标注 degraded\",\n+                        primary.id(), e.getMessage(), fallback.id());\n+                return new VulnQueryResult(safeLookup(fallback, components), fallback.id(), true);\n             }\n+            log.warn(\"[SCA] 数据源 {} 查询失败且为强制模式（不降级）：{}——报告标注 sourceUsed=failed\",\n+                    primary.id(), e.getMessage());\n+            return new VulnQueryResult(List.of(), primary.id() + \"(failed)\", true);\n         }\n+    }\n \n-        return new ScaReport(components, vulns, licenseIssues, buildSbom(components, vulns));\n+    private static List<Vulnerability> safeLookup(ScaVulnSource source, List<Component> components) {\n+        try {\n+            return source.lookupAll(components);\n+        } catch (Exception e) {\n+            log.error(\"[SCA] 降级数据源 {} 也失败：{}\", source.id(), e.getMessage());\n+            return List.of();\n+        }\n     }\n \n     // ===================== 内部提取 =====================\n \n+    /**\n+     * 提取 Maven 新增依赖。\n+     *\n+     * <p>groupId 与 artifactId 来自 diff 新增行，按行序把最近的 {@code <groupId>}\n+     * 配对到后续 {@code <artifactId>}（dependency 块内 group 恒先于 artifact）。\n+     * OSV 用全限定名 {@code groupId:artifactId} 索引，故 name 之外保留 osvName。\n+     */\n     private static void extractMaven(CodeDiff d, List<Component> out) {\n-        List<String> added = addedLines(d.patch());\n+        List<String> groups = new ArrayList<>();\n         List<String> artifacts = new ArrayList<>();\n         List<String> versions = new ArrayList<>();\n-        for (String line : added) {\n+        String lastGroup = null;\n+        for (String line : addedLines(d.patch())) {\n+            Matcher gm = POM_GROUP.matcher(line);\n+            if (gm.find()) {\n+                lastGroup = gm.group(1).trim();\n+                continue; // groupId 先到，配给后续 artifact\n+            }\n             Matcher am = POM_ARTIFACT.matcher(line);\n             if (am.find()) {\n                 artifacts.add(am.group(1).trim());\n+                groups.add(lastGroup);\n             }\n             Matcher vm = POM_VERSION.matcher(line);\n             if (vm.find()) {\n@@ -123,8 +188,11 @@ public final class ScaScanner {\n             }\n         }\n         for (int i = 0; i < artifacts.size(); i++) {\n+            String art = artifacts.get(i);\n             String ver = i < versions.size() ? versions.get(i) : \"unknown\";\n-            out.add(new Component(\"maven\", artifacts.get(i), ver));\n+            String group = groups.get(i);\n+            String osvName = group == null || group.isBlank() ? art : group + \":\" + art;\n+            out.add(new Component(\"maven\", art, ver, osvName));\n         }\n     }\n \n@@ -168,51 +236,18 @@ public final class ScaScanner {\n         return r;\n     }\n \n-    private static boolean withinRange(int[] v, CveRule r) {\n-        int major = v[0], minor = v.length > 1 ? v[1] : 0, patch = v.length > 2 ? v[2] : 0;\n-        if (major != r.maxMajor()) {\n-            return major < r.maxMajor();\n-        }\n-        if (minor != r.maxMinor()) {\n-            return minor < r.maxMinor();\n-        }\n-        return patch <= r.maxPatch();\n-    }\n+    // ===================== SBOM =====================\n \n-    private static int[] parseVersion(String v) {\n-        if (v == null) {\n-            return null;\n-        }\n-        StringBuilder digits = new StringBuilder();\n-        List<Integer> parts = new ArrayList<>();\n-        for (char c : v.toCharArray()) {\n-            if (Character.isDigit(c)) {\n-                digits.append(c);\n-            } else if (c == '.') {\n-                if (digits.length() > 0) {\n-                    parts.add(Integer.parseInt(digits.toString()));\n-                    digits.setLength(0);\n-                }\n-            } else {\n-                break; // 遇到非数字非点（如 -RC1）停止\n-            }\n-        }\n-        if (digits.length() > 0) {\n-            parts.add(Integer.parseInt(digits.toString()));\n-        }\n-        if (parts.isEmpty()) {\n-            return null;\n-        }\n-        return parts.stream().mapToInt(Integer::intValue).toArray();\n-    }\n+    private static final ObjectMapper MAPPER = new ObjectMapper();\n \n-    /** 生成 CycloneDX-lite SBOM JSON。 */\n-    private static String buildSbom(List<Component> components, List<Vulnerability> vulns) {\n+    /** 生成 CycloneDX-lite SBOM JSON（带 scanSource 标注，便于事后追溯数据来源）。 */\n+    private static String buildSbom(List<Component> components, List<Vulnerability> vulns, String sourceUsed) {\n         try {\n             ObjectNode root = MAPPER.createObjectNode();\n             root.put(\"bomFormat\", \"CycloneDX\");\n             root.put(\"specVersion\", \"1.5\");\n             root.put(\"generatedBy\", \"code-review-agent-sca\");\n+            root.put(\"scanSource\", sourceUsed);\n             ArrayNode comps = root.putArray(\"components\");\n             for (Component c : components) {\n                 ObjectNode cn = comps.addObject();\ndiff --git a/src/main/java/com/codereview/agent/core/analysis/ScaVulnSource.java b/src/main/java/com/codereview/agent/core/analysis/ScaVulnSource.java\nnew file mode 100644\nindex 0000000..31676a8\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/analysis/ScaVulnSource.java\n@@ -0,0 +1,30 @@\n+package com.codereview.agent.core.analysis;\n+\n+import java.util.List;\n+\n+/**\n+ * SCA 漏洞数据源抽象：把「组件 → 已知漏洞」的查询与具体数据源解耦。\n+ *\n+ * <p>生产/开发/测试环境默认走 {@link OsvVulnSource}（OSV 真实漏洞库）；\n+ * {@link BuiltinVulnSource} 只是离线内置样本，仅作网络不可用时的兜底\n+ * 与确定性单测 fixture——**绝不允许把内置样本当作真实扫描结果**，\n+ * 报告会通过 {@link ScaScanner.ScaReport#sourceUsed()} 标注实际数据源。\n+ *\n+ * <p>失败语义：网络/解析失败由实现抛出异常，由上层（扫描器）决定\n+ * 降级策略，实现不得吞掉异常假装「无漏洞」——那正是本组件要根治的\n+ * 「查不了」伪装成「没有」的静默失效。\n+ */\n+public interface ScaVulnSource {\n+\n+    /** 数据源标识：{@code osv} / {@code builtin}（写入报告与日志，用于诊断）。 */\n+    String id();\n+\n+    /**\n+     * 批量查询组件漏洞。\n+     *\n+     * @param components 待查组件（来自 diff 依赖识别）\n+     * @return 命中漏洞（含组件引用）；无命中返回空列表，不抛异常\n+     * @throws Exception 整批查询失败（网络不通 / 响应不可解析等），交上层降级\n+     */\n+    List<ScaScanner.Vulnerability> lookupAll(List<ScaScanner.Component> components) throws Exception;\n+}\ndiff --git a/src/main/resources/application.yml b/src/main/resources/application.yml\nindex c029982..e89b230 100644\n--- a/src/main/resources/application.yml\n+++ b/src/main/resources/application.yml\n@@ -267,3 +267,15 @@ spring:\n # ===== 健康检查端点 =====\n # 零依赖实现：GET /health 与 /actuator/health 返回 200(UP)/503(DOWN)，\n # 供容器编排（k8s/Docker）做存活/就绪探针。状态聚合 PG(pgvector) 与 Redis 连通性。\n+\n+# ===== SCA 漏洞扫描数据源 =====\n+# source: auto=OSV 真实库优先、失败降级内置样本（推荐）；osv=强制真实（失败不降级，报告标注 failed）；builtin=仅内置样本\n+# OSV 为 Google 托管，本机经 Clash 等代理才可达——proxy-host/port 配好后仅 SCA 出站走代理，\n+# 不影响 tokenhub/内网直连。部署环境能直连 OSV 时留空即直连。\n+sca:\n+  source: auto\n+  osv:\n+    proxy-host: \"\"\n+    proxy-port: 0\n+    timeout-ms: 5000\n+\ndiff --git a/src/test/java/com/codereview/agent/core/analysis/EnterpriseFeaturesTest.java b/src/test/java/com/codereview/agent/core/analysis/EnterpriseFeaturesTest.java\nindex d8cba5d..61fac51 100644\n--- a/src/test/java/com/codereview/agent/core/analysis/EnterpriseFeaturesTest.java\n+++ b/src/test/java/com/codereview/agent/core/analysis/EnterpriseFeaturesTest.java\n@@ -82,7 +82,8 @@ class EnterpriseFeaturesTest {\n                 + \"  <version>2.14.0</version>\\n\"\n                 + \"</dependency>\\n\";\n         CodeDiff cd = javaDiff(\"pom.xml\", pom);\n-        ScaScanner.ScaReport report = ScaScanner.analyze(List.of(cd));\n+        // 内置样本数据源 = 离线确定性 fixture（生产/开发走 OSV 真实库，见 ScaSourceConfig）\n+        ScaScanner.ScaReport report = ScaScanner.builtinOnly().analyze(List.of(cd));\n         assertTrue(report.vulnerabilities().stream()\n                 .anyMatch(v -> v.cve().equals(\"CVE-2021-44228\")), \"应检出 Log4Shell\");\n         assertNotNull(report.sbomJson(), \"应生成 SBOM\");\ndiff --git a/src/test/java/com/codereview/agent/core/analysis/OsvVulnSourceTest.java b/src/test/java/com/codereview/agent/core/analysis/OsvVulnSourceTest.java\nnew file mode 100644\nindex 0000000..b4d1a52\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/analysis/OsvVulnSourceTest.java\n@@ -0,0 +1,143 @@\n+package com.codereview.agent.core.analysis;\n+\n+import com.sun.net.httpserver.HttpServer;\n+import org.junit.jupiter.api.AfterEach;\n+import org.junit.jupiter.api.BeforeEach;\n+import org.junit.jupiter.api.Test;\n+\n+import java.io.IOException;\n+import java.io.OutputStream;\n+import java.net.InetSocketAddress;\n+import java.nio.charset.StandardCharsets;\n+import java.time.Duration;\n+import java.util.List;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertThrows;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * OSV 数据源的协议层验证——用 JDK HttpServer 桩住 OSV 响应（不依赖外网），\n+ * 断言真实响应结构（2026-09 实测）到内部模型的映射：\n+ * ecosystem 大小写 / Maven 全限定名透传 / database_specific.severity 归一 /\n+ * aliases 里提取 CVE 号 / 非 2xx 抛异常 / npm semver 前缀剥离。\n+ */\n+class OsvVulnSourceTest {\n+\n+    private HttpServer server;\n+    private int port;\n+    private volatile String lastRequestBody = \"\";\n+    private volatile int statusToReturn = 200;\n+    private volatile String bodyToReturn = \"{\\\"vulns\\\":[]}\";\n+\n+    @BeforeEach\n+    void startServer() throws IOException {\n+        server = HttpServer.create(new InetSocketAddress(\"127.0.0.1\", 0), 0);\n+        server.createContext(\"/v1/query\", exchange -> {\n+            lastRequestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);\n+            byte[] resp = bodyToReturn.getBytes(StandardCharsets.UTF_8);\n+            exchange.sendResponseHeaders(statusToReturn, resp.length);\n+            try (OutputStream os = exchange.getResponseBody()) {\n+                os.write(resp);\n+            }\n+        });\n+        server.start();\n+        port = server.getAddress().getPort();\n+    }\n+\n+    @AfterEach\n+    void stopServer() {\n+        server.stop(0);\n+    }\n+\n+    private OsvVulnSource source() {\n+        return new OsvVulnSource(\"http://127.0.0.1:\" + port + \"/v1/query\", \"\", 0,\n+                Duration.ofSeconds(5));\n+    }\n+\n+    @Test\n+    void sendsMavenQualifiedNameAndEcosystem() throws Exception {\n+        bodyToReturn = \"{\\\"vulns\\\":[]}\";\n+        source().lookupAll(List.of(new ScaScanner.Component(\"maven\", \"log4j-core\", \"2.14.1\",\n+                \"org.apache.logging.log4j:log4j-core\")));\n+\n+        assertTrue(lastRequestBody.contains(\"\\\"name\\\":\\\"org.apache.logging.log4j:log4j-core\\\"\"),\n+                \"Maven 应送全限定名: \" + lastRequestBody);\n+        assertTrue(lastRequestBody.contains(\"\\\"ecosystem\\\":\\\"Maven\\\"\"), \"ecosystem 应为 Maven 大写: \" + lastRequestBody);\n+        assertTrue(lastRequestBody.contains(\"\\\"version\\\":\\\"2.14.1\\\"\"), \"应带精确版本: \" + lastRequestBody);\n+    }\n+\n+    @Test\n+    void stripsNpmSemverPrefixBeforeQuery() throws Exception {\n+        bodyToReturn = \"{\\\"vulns\\\":[]}\";\n+        source().lookupAll(List.of(new ScaScanner.Component(\"npm\", \"lodash\", \"^4.17.20\")));\n+        assertTrue(lastRequestBody.contains(\"\\\"version\\\":\\\"4.17.20\\\"\"),\n+                \"npm semver 前缀应剥离: \" + lastRequestBody);\n+    }\n+\n+    @Test\n+    void mapsDatabaseSpecificSeverityToTiers() throws Exception {\n+        bodyToReturn = \"{\\\"vulns\\\":[\"\n+                + \"{\\\"id\\\":\\\"GHSA-1\\\",\\\"aliases\\\":[\\\"CVE-2021-44228\\\"],\\\"summary\\\":\\\"s1\\\",\"\n+                + \"\\\"database_specific\\\":{\\\"severity\\\":\\\"CRITICAL\\\"}},\"\n+                + \"{\\\"id\\\":\\\"GHSA-2\\\",\\\"aliases\\\":[\\\"CVE-2022-00001\\\"],\\\"summary\\\":\\\"s2\\\",\"\n+                + \"\\\"database_specific\\\":{\\\"severity\\\":\\\"MODERATE\\\"}}\"\n+                + \"]}\";\n+        List<ScaScanner.Vulnerability> hits = source().lookupAll(\n+                List.of(new ScaScanner.Component(\"maven\", \"log4j-core\", \"2.14.1\",\n+                        \"org.apache.logging.log4j:log4j-core\")));\n+\n+        assertEquals(2, hits.size());\n+        assertEquals(\"BLOCKER\", hits.get(0).severity(), \"CRITICAL → BLOCKER\");\n+        assertEquals(\"CVE-2021-44228\", hits.get(0).cve(), \"应从 aliases 提取 CVE\");\n+        assertEquals(\"MINOR\", hits.get(1).severity(), \"MODERATE → MINOR\");\n+    }\n+\n+    @Test\n+    void fallsBackToGhsaIdWhenNoCveAlias() throws Exception {\n+        bodyToReturn = \"{\\\"vulns\\\":[{\\\"id\\\":\\\"GHSA-abc-xyz\\\",\\\"aliases\\\":[],\"\n+                + \"\\\"database_specific\\\":{\\\"severity\\\":\\\"LOW\\\"}}]}\";\n+        List<ScaScanner.Vulnerability> hits = source().lookupAll(\n+                List.of(new ScaScanner.Component(\"npm\", \"pkg-x\", \"1.0.0\")));\n+        assertEquals(1, hits.size());\n+        assertEquals(\"GHSA-abc-xyz\", hits.get(0).cve(), \"无 CVE alias 时保留原 id\");\n+    }\n+\n+    @Test\n+    void missingSeverityFallsBackToMinor() throws Exception {\n+        bodyToReturn = \"{\\\"vulns\\\":[{\\\"id\\\":\\\"GHSA-1\\\",\\\"summary\\\":\\\"x\\\"}]}\";\n+        List<ScaScanner.Vulnerability> hits = source().lookupAll(\n+                List.of(new ScaScanner.Component(\"npm\", \"pkg-x\", \"1.0.0\")));\n+        assertEquals(\"MINOR\", hits.get(0).severity(), \"无定级信息时保守 MINOR 而非 INFO\");\n+    }\n+\n+    @Test\n+    void httpErrorThrowsNotSilentEmpty() {\n+        statusToReturn = 500;\n+        OsvVulnSource s = source();\n+        assertThrows(IOException.class, () -> s.lookupAll(\n+                        List.of(new ScaScanner.Component(\"npm\", \"pkg-x\", \"1.0.0\"))),\n+                \"HTTP 失败必须抛异常交由上层降级，不得假装无漏洞\");\n+    }\n+\n+    @Test\n+    void unknownEcosystemSkipped() throws Exception {\n+        List<ScaScanner.Vulnerability> hits = source().lookupAll(\n+                List.of(new ScaScanner.Component(\"rust\", \"crate-x\", \"1.0.0\")));\n+        assertTrue(hits.isEmpty());\n+        assertEquals(\"\", lastRequestBody, \"未知生态不应发请求\");\n+    }\n+\n+    // ---- 纯函数 ----\n+\n+    @Test\n+    void normalizeVersionRules() {\n+        assertEquals(\"1.2.3\", OsvVulnSource.normalizeVersion(\"^1.2.3\"));\n+        assertEquals(\"1.2.3\", OsvVulnSource.normalizeVersion(\"~1.2.3\"));\n+        assertEquals(\"2.14.1-RC1\", OsvVulnSource.normalizeVersion(\"2.14.1-RC1\"), \"预发布后缀保留\");\n+        assertEquals(null, OsvVulnSource.normalizeVersion(\">=1.0.0 <2.0.0\"), \"range 不可查\");\n+        assertEquals(null, OsvVulnSource.normalizeVersion(\"1.x\"), \"通配不可查\");\n+        assertEquals(null, OsvVulnSource.normalizeVersion(\"${revision}\"), \"变量不可查\");\n+        assertEquals(null, OsvVulnSource.normalizeVersion(null));\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/core/analysis/ScaScannerTest.java b/src/test/java/com/codereview/agent/core/analysis/ScaScannerTest.java\nnew file mode 100644\nindex 0000000..3c64f3e\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/analysis/ScaScannerTest.java\n@@ -0,0 +1,153 @@\n+package com.codereview.agent.core.analysis;\n+\n+import com.codereview.agent.core.model.CodeDiff;\n+import org.junit.jupiter.api.Test;\n+\n+import java.util.List;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertFalse;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * ScaScanner 降级链与组件提取的确定性验证。\n+ *\n+ * <p>核心语义：数据源失败时「如实降级 + 报告标注」，绝不在查不了时假装没有；\n+ * 组件提取要为 OSV 拼出全限定名（Maven group:artifact）。\n+ */\n+class ScaScannerTest {\n+\n+    private static CodeDiff pomDiff(String addedXml) {\n+        StringBuilder patch = new StringBuilder(\"@@ -1,3 +1,10 @@\\n package p;\\n\");\n+        for (String line : addedXml.split(\"\\n\")) {\n+            patch.append('+').append(line).append('\\n');\n+        }\n+        return new CodeDiff(\"pom.xml\", patch.toString(), \"xml\", 1, 7);\n+    }\n+\n+    // ---- 组件提取 ----\n+\n+    @Test\n+    void mavenDependencyYieldsQualifiedOsvName() {\n+        String added = \"<dependency>\\n\"\n+                + \"  <groupId>org.apache.logging.log4j</groupId>\\n\"\n+                + \"  <artifactId>log4j-core</artifactId>\\n\"\n+                + \"  <version>2.14.1</version>\\n\"\n+                + \"</dependency>\";\n+        ScaScanner scanner = ScaScanner.builtinOnly();\n+        ScaScanner.ScaReport report = scanner.analyze(List.of(pomDiff(added)));\n+\n+        assertEquals(1, report.components().size());\n+        ScaScanner.Component c = report.components().get(0);\n+        assertEquals(\"log4j-core\", c.name());\n+        assertEquals(\"org.apache.logging.log4j:log4j-core\", c.osvName(), \"Maven 应产出全限定名供 OSV\");\n+        assertEquals(\"2.14.1\", c.version());\n+        assertEquals(\"builtin\", report.sourceUsed(), \"builtinOnly 数据源标注\");\n+        assertFalse(report.degraded());\n+    }\n+\n+    @Test\n+    void mavenWithoutGroupIdKeepsShortName() {\n+        String added = \"<artifactId>log4j-core</artifactId>\\n<version>2.14.1</version>\";\n+        ScaScanner.ScaReport report = ScaScanner.builtinOnly().analyze(List.of(pomDiff(added)));\n+        assertEquals(\"log4j-core\", report.components().get(0).osvName(), \"无 groupId 退回短名\");\n+    }\n+\n+    @Test\n+    void npmDependencyExtracted() {\n+        String added = \"\\\"dependencies\\\": {\\n  \\\"lodash\\\": \\\"^4.17.20\\\"\\n}\";\n+        StringBuilder patch = new StringBuilder(\"@@ -1,2 +1,5 @@\\n\");\n+        for (String line : added.split(\"\\n\")) {\n+            patch.append('+').append(line).append('\\n');\n+        }\n+        CodeDiff cd = new CodeDiff(\"package.json\", patch.toString(), \"json\", 1, 4);\n+        ScaScanner.ScaReport report = ScaScanner.builtinOnly().analyze(List.of(cd));\n+        assertEquals(1, report.components().size());\n+        assertEquals(\"lodash\", report.components().get(0).name());\n+        assertEquals(\"^4.17.20\", report.components().get(0).version());\n+    }\n+\n+    // ---- 降级链 ----\n+\n+    @Test\n+    void primaryFailureDegradesToBuiltinAndMarksReport() {\n+        ScaVulnSource failing = new ScaVulnSource() {\n+            @Override\n+            public String id() {\n+                return \"osv\";\n+            }\n+\n+            @Override\n+            public List<ScaScanner.Vulnerability> lookupAll(List<ScaScanner.Component> components) throws Exception {\n+                throw new java.io.IOException(\"network down\");\n+            }\n+        };\n+        // auto 模式：osv 失败 → 内置兜底\n+        ScaScanner scanner = new ScaScanner(failing, new BuiltinVulnSource());\n+        String added = \"<artifactId>log4j-core</artifactId>\\n<version>2.14.1</version>\";\n+        ScaScanner.ScaReport report = scanner.analyze(List.of(pomDiff(added)));\n+\n+        assertTrue(report.degraded(), \"降级应被标注\");\n+        assertEquals(\"builtin\", report.sourceUsed(), \"实际数据源应标注为 builtin\");\n+        assertTrue(report.vulnerabilities().stream()\n+                        .anyMatch(v -> v.cve().equals(\"CVE-2021-44228\")),\n+                \"降级后内置样本应命中 Log4Shell\");\n+        assertTrue(report.sbomJson().contains(\"\\\"scanSource\\\" : \\\"builtin\\\"\"),\n+                \"SBOM 也应标注数据源\");\n+    }\n+\n+    @Test\n+    void forcedModeFailureMarksFailedWithoutFakeData() {\n+        ScaVulnSource failing = new ScaVulnSource() {\n+            @Override\n+            public String id() {\n+                return \"osv\";\n+            }\n+\n+            @Override\n+            public List<ScaScanner.Vulnerability> lookupAll(List<ScaScanner.Component> components) throws Exception {\n+                throw new java.io.IOException(\"network down\");\n+            }\n+        };\n+        // 强制 osv 模式：不降级 → 报告空漏洞但标注 failed，杜绝假样本冒充\n+        ScaScanner scanner = new ScaScanner(failing, null);\n+        String added = \"<artifactId>log4j-core</artifactId>\\n<version>2.14.1</version>\";\n+        ScaScanner.ScaReport report = scanner.analyze(List.of(pomDiff(added)));\n+\n+        assertTrue(report.degraded(), \"强制模式失败也应置 degraded 提示异常\");\n+        assertEquals(\"osv(failed)\", report.sourceUsed(), \"sourceUsed 应如实标注 failed\");\n+        assertTrue(report.vulnerabilities().isEmpty(), \"不得用内置样本冒充真实扫描结果\");\n+    }\n+\n+    @Test\n+    void primaryHitReportedWithoutDegradation() throws Exception {\n+        ScaVulnSource osv = new ScaVulnSource() {\n+            @Override\n+            public String id() {\n+                return \"osv\";\n+            }\n+\n+            @Override\n+            public List<ScaScanner.Vulnerability> lookupAll(List<ScaScanner.Component> components) {\n+                ScaScanner.Component c = components.get(0);\n+                return List.of(new ScaScanner.Vulnerability(c, \"CVE-2021-44228\", \"BLOCKER\", \"Log4Shell\"));\n+            }\n+        };\n+        ScaScanner scanner = new ScaScanner(osv, new BuiltinVulnSource());\n+        String added = \"<artifactId>log4j-core</artifactId>\\n<version>2.14.1</version>\";\n+        ScaScanner.ScaReport report = scanner.analyze(List.of(pomDiff(added)));\n+\n+        assertFalse(report.degraded());\n+        assertEquals(\"osv\", report.sourceUsed());\n+        assertEquals(1, report.vulnerabilities().size());\n+        assertEquals(\"CVE-2021-44228\", report.vulnerabilities().get(0).cve());\n+    }\n+\n+    @Test\n+    void licenseBlacklistStillChecked() {\n+        String added = \"<license>GPL-3.0</license>\\n<artifactId>x</artifactId>\\n<version>1.0</version>\";\n+        ScaScanner.ScaReport report = ScaScanner.builtinOnly().analyze(List.of(pomDiff(added)));\n+        assertTrue(report.licenseIssues().stream().anyMatch(s -> s.contains(\"GPL-3.0\")),\n+                \"应检出黑名单许可证\");\n+    }\n+}\n",
+  "patchBytes": 52023,
+  "patchSha256": "fcebc0d5b2b99e00572a356ade742d89edc5c9797a44d02f1887d0f5cd26c8c9",
+  "provenance": "git-history",
+  "provenanceNote": "feat：接入 OSV 真实漏洞库",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+            "lineEnd": 85,
+            "lineStart": 85,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+            "lineEnd": 85,
+            "lineStart": 85,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+            "lineEnd": 105,
+            "lineStart": 105,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+            "lineEnd": 154,
+            "lineStart": 154,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+            "lineEnd": 197,
+            "lineStart": 197,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+            "lineEnd": 213,
+            "lineStart": 213,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+            "lineEnd": 220,
+            "lineStart": 220,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/analysis/OsvVulnSource.java",
+            "lineEnd": 223,
+            "lineStart": 223,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+            "lineEnd": 85,
+            "lineStart": 85,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）LOGIC-005"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/config/ScaSourceConfig.java",
+            "lineEnd": 25,
+            "lineStart": 25,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+            "lineEnd": 60,
+            "lineStart": 60,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+            "lineEnd": 91,
+            "lineStart": 91,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/ScaScanner.java",
+            "lineEnd": 104,
+            "lineStart": 104,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+            "lineEnd": 723,
+            "lineStart": 723,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/analysis/BuiltinVulnSource.java",
+            "lineEnd": 740,
+            "lineStart": 740,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "code-review-agent",
+  "repoUrl": "https://github.com/13liyunfei/code-review-agent",
+  "sha": "7410a93c1c37da4279f7e168e30c524a9da3b041",
+  "shaShort": "7410a93",
+  "subject": "feat(sca): 接入 OSV 真实漏洞库，dev/test 与生产同源"
+}

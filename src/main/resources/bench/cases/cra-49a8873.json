@@ -1,0 +1,236 @@
+{
+  "addedLines": 209,
+  "changedFileCount": 9,
+  "changedFiles": [
+    "src/main/java/com/codereview/agent/DemoRunner.java",
+    "src/main/java/com/codereview/agent/config/ReviewAgentConfig.java",
+    "src/main/java/com/codereview/agent/core/memory/ExperienceStore.java",
+    "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+    "src/test/java/com/codereview/agent/core/AgentCapabilitiesTest.java",
+    "src/test/java/com/codereview/agent/core/memory/ExperienceLifecycleTest.java",
+    "src/test/java/com/codereview/agent/core/rag/RagContextBuilderTest.java",
+    "src/test/java/com/codereview/agent/core/rag/RagContextExperienceInjectionTest.java",
+    "src/test/java/com/codereview/agent/core/rag/RagRecallBaselineTest.java"
+  ],
+  "committedAt": "2026-09-07T13:50:39+08:00",
+  "deletedLines": 58,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 134,
+      "lineStart": 134,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/config/ReviewAgentConfig.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 606,
+      "lineStart": 606,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/memory/ExperienceStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 46,
+      "lineStart": 46,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    }
+  ],
+  "id": "cra-49a8873",
+  "labelCandidates": [
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "} catch (Exception e) {",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "line": 133,
+      "ruleId": "LOGIC-002",
+      "severity": "MAJOR",
+      "why": "宽泛捕获 Exception/Throwable：会连带吞掉不该处理的异常（需确认是否只 log 不重抛）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[RAG] 经验检索失败，跳过注入（不影响主审查）：{}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "line": 134,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public ExperienceStore experienceStore(ExperienceLibrary experienceLibrary) {",
+      "file": "src/main/java/com/codereview/agent/config/ReviewAgentConfig.java",
+      "line": 606,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public String getRelevantExperiences(String teamId, String text) {",
+      "file": "src/main/java/com/codereview/agent/core/memory/ExperienceStore.java",
+      "line": 46,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    }
+  ],
+  "labeling": {
+    "candidates": 4,
+    "confirmed": 3,
+    "manual": 0,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "parent": "d87b6586ecbe7974e2ea979ae2760eb239257467",
+  "patch": "diff --git a/src/main/java/com/codereview/agent/DemoRunner.java b/src/main/java/com/codereview/agent/DemoRunner.java\nindex 4ffa652..b211545 100644\n--- a/src/main/java/com/codereview/agent/DemoRunner.java\n+++ b/src/main/java/com/codereview/agent/DemoRunner.java\n@@ -283,7 +283,7 @@ public class DemoRunner implements CommandLineRunner {\n                 new ReviewFeedback(\"LOGIC-001\", \"LOGIC\", false, \"确为有效问题\"));\n         reflectionAgent.reflect(DEMO_TEAM, feedbacks).forEach(memoryStore::save);\n \n-        String exp = experienceStore.getRelevantExperiences(DEMO_TEAM, \"SECURITY\",\n+        String exp = experienceStore.getRelevantExperiences(DEMO_TEAM,\n                 \"SELECT * FROM users 是否安全\");\n         System.out.println(\"\\n【长期经验参考】\\n\" + (exp.isBlank() ? \"(空)\" : exp));\n     }\ndiff --git a/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java b/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\nindex 281b728..a1f636a 100644\n--- a/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\n+++ b/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\n@@ -598,12 +598,13 @@ public class ReviewAgentConfig {\n     }\n \n     /**\n-     * 经验库门面（反思沉淀 + 检索注入）：向量通道（{@link MemoryStore}）与条目通道\n-     * （{@link ExperienceLibrary}，生产 PG）合一；供反思服务 / 反馈证据登记使用。\n+     * 经验库门面（反思沉淀 + 检索注入）：生产为 PostgreSQL 条目通道\n+     * （{@link ExperienceLibrary}，PG 关闭时 InMemory 回退）；供反思服务沉淀 /\n+     * 反馈证据登记 / RAG 上下文检索注入使用。\n      */\n     @Bean\n-    public ExperienceStore experienceStore(MemoryStore memoryStore, ExperienceLibrary experienceLibrary) {\n-        return new ExperienceStore(memoryStore, experienceLibrary);\n+    public ExperienceStore experienceStore(ExperienceLibrary experienceLibrary) {\n+        return new ExperienceStore(experienceLibrary);\n     }\n \n     /**\ndiff --git a/src/main/java/com/codereview/agent/core/memory/ExperienceStore.java b/src/main/java/com/codereview/agent/core/memory/ExperienceStore.java\nindex 220c169..4297ac1 100644\n--- a/src/main/java/com/codereview/agent/core/memory/ExperienceStore.java\n+++ b/src/main/java/com/codereview/agent/core/memory/ExperienceStore.java\n@@ -12,18 +12,16 @@ import java.util.Set;\n /**\n  * 经验库（长期记忆的检索门面）。\n  *\n- * <p>两段能力（重构后均为共享存储，替代改造前的「PG 向量 + experience.json 文件」双通道）：\n- * <ul>\n- *   <li><b>向量检索</b>：封装 {@link MemoryStore} 检索团队经验（metadata type=experience），\n- *       格式化注入提示词【历史经验参考】区块（{@link #getRelevantExperiences}）；</li>\n- *   <li><b>经验条目</b>（{@link ExperienceLibrary}，生产为 PostgreSQL）：沉淀「问题模式 →\n- *       有效建议」条目，带生命周期（{@link ExperienceStage}：复现证据升级 ACTIVE、\n- *       人工误报降级 ARCHIVED、TTL 遗忘），由 {@code ReflectionService} 反思写入、\n- *       {@code MemoryMaintenanceScheduler} 定时维护。</li>\n- * </ul>\n+ * <p><b>生产唯一通道为经验条目</b>（{@link ExperienceLibrary}，生产为 PostgreSQL）：\n+ * 沉淀「问题模式 → 有效建议」条目，带生命周期（{@link ExperienceStage}：复现证据升级 ACTIVE、\n+ * 人工误报降级 ARCHIVED、TTL 遗忘），由 {@code ReflectionService} 反思写入、\n+ * {@code MemoryMaintenanceScheduler} 定时维护；检索侧由 {@code RagContextBuilder} 在生产审查链路\n+ * 调用（{@link #getRelevantExperiences} 命中即 {@code recordHit}，spaced repetition 反遗忘）。\n  *\n- * <p>检索 = 向量命中 + 条目命中合并；条目命中即 {@code recordHit}（spaced repetition：\n- * 常用经验刷新遗忘时钟，不因 TTL 被误删）。\n+ * <p><b>历史说明</b>：早期版本还保留一条「向量通道」（{@code MemoryStore} 中\n+ * {@code metadata.type=experience} 的向量），但唯一写入方 {@code ReflectionAgent}\n+ * 未接生产主链路（主链路零调用），向量经验无生产数据源，故该通道已废弃，\n+ * 检索一律走条目通道。\n  */\n public class ExperienceStore {\n \n@@ -32,28 +30,21 @@ public class ExperienceStore {\n     /** 检索注入的条目上限。 */\n     private static final int TOP_N = 3;\n \n-    private final MemoryStore memoryStore; // 可空（纯条目模式）\n     private final ExperienceLibrary library;\n \n-    public ExperienceStore(MemoryStore memoryStore, ExperienceLibrary library) {\n-        this.memoryStore = memoryStore;\n+    public ExperienceStore(ExperienceLibrary library) {\n         this.library = library == null ? new InMemoryExperienceLibrary() : library;\n     }\n \n     /**\n      * 获取与当前审查相关的历史经验文本（团队自有经验，不含全局基线）。\n-     * 向量命中 + 条目关键词命中合并输出；被选中的条目刷新命中（反遗忘）。\n+     * 条目关键词命中输出；被选中的条目刷新命中（反遗忘）。\n+     *\n+     * @param teamId 团队标识（应已净化，与写入侧同口径）\n+     * @param text   查询文本（通常为 diff 摘要，供关键词重合匹配）\n      */\n-    public String getRelevantExperiences(String teamId, String agentType, String text) {\n+    public String getRelevantExperiences(String teamId, String text) {\n         StringBuilder sb = new StringBuilder();\n-        if (memoryStore != null) {\n-            List<MemoryEntry> entries = memoryStore.search(text, agentType, 5, teamId, false);\n-            for (MemoryEntry e : entries) {\n-                if (\"experience\".equals(e.metadata().get(\"type\"))) {\n-                    sb.append(\"- \").append(e.content()).append('\\n');\n-                }\n-            }\n-        }\n         for (ExperienceEntry e : top(teamId, text, TOP_N)) {\n             sb.append(\"- \").append(e.pattern()).append(\" → \").append(e.advice()).append('\\n');\n             try {\ndiff --git a/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java b/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java\nindex 1cbd1d3..70374b4 100644\n--- a/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java\n+++ b/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java\n@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;\n import java.util.List;\n \n /**\n- * RAG 上下文构建器（见文档“RAG 的使用位置”）。\n+ * RAG 上下文构建器（见文档\"RAG 的使用位置\"）。\n  *\n  * <p>审查前检索规范文档 / 历史 PR / 安全 Wiki，将相关内容作为【相关历史知识】注入提示词。\n  * 内部链路对标业界最佳实践：\n@@ -27,7 +27,11 @@ import java.util.List;\n  *   <li>重排：{@link Reranker}（{@link HeuristicReranker} 默认，可配 {@code ApiReranker}）；</li>\n  *   <li>评估 / 可观测：{@link RagEvaluator}（记录命中、相似度、trace）。</li>\n  * </ul>\n- * 检索时始终纳入团队自身内容 + 全局基线（编码规范手册），实现“全局基线 + 团队叠加”。\n+ * 检索时始终纳入团队自身内容 + 全局基线（编码规范手册），实现\"全局基线 + 团队叠加\"。\n+ *\n+ * <p><b>历史经验回流</b>：知识块之外，同时把 {@link ExperienceStore}（反思沉淀的「问题模式 →\n+ * 建议」条目）命中项以【历史经验参考】分区注入——闭合记忆闭环的\"读\"侧\n+ * （写侧由 ReflectionService 在审查完成后执行）。经验命中即刷新遗忘时钟（spaced repetition）。\n  */\n @Component\n public class RagContextBuilder {\n@@ -37,6 +41,7 @@ public class RagContextBuilder {\n     private final KnowledgeStore knowledgeStore;\n     private final Reranker reranker;\n     private final RagEvaluator evaluator;\n+    private final ExperienceStore experienceStore;\n \n     /** 初检召回数（重排前）。 */\n     private static final int CANDIDATE_K = 10;\n@@ -46,10 +51,12 @@ public class RagContextBuilder {\n     @org.springframework.beans.factory.annotation.Autowired\n     public RagContextBuilder(KnowledgeStore knowledgeStore,\n                              Reranker reranker,\n-                             RagEvaluator evaluator) {\n+                             RagEvaluator evaluator,\n+                             ExperienceStore experienceStore) {\n         this.knowledgeStore = knowledgeStore;\n         this.reranker = reranker;\n         this.evaluator = evaluator;\n+        this.experienceStore = experienceStore;\n     }\n \n     /**\n@@ -69,32 +76,63 @@ public class RagContextBuilder {\n                 Teams.sanitize(teamId), true);\n         // 3. 阈值过滤（低于 minSimilarity 的块剔除；全低于则 abstain）\n         List<MemoryEntry> passed = evaluator.filterByThreshold(candidates);\n+        StringBuilder sb = new StringBuilder();\n         if (passed.isEmpty()) {\n-            log.info(\"[RAG] 无相关知识（候选 {} 条均低于阈值或为空），选择性跳过注入, 耗时 {}ms\",\n+            log.info(\"[RAG] 无相关知识（候选 {} 条均低于阈值或为空），知识分区 abstain, 耗时 {}ms\",\n                     candidates.size(), System.currentTimeMillis() - t0);\n-            return \"\";\n+        } else {\n+            // 4. Cross-Encoder 重排 → Top-5\n+            List<MemoryEntry> reranked = reranker.rerank(query, passed, INJECT_TOP_N);\n+            // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）\n+            List<MemoryEntry> deduped = dedupeByContent(reranked);\n+            if (deduped.size() < reranked.size()) {\n+                log.info(\"[RAG] 去重：注入前剔除 {} 个重复块（重叠切块导致），{} → {}\",\n+                        reranked.size() - deduped.size(), reranked.size(), deduped.size());\n+            }\n+            // 6. 评估指标 + 格式化\n+            RagEvaluator.RagMetrics metrics = evaluator.evaluate(deduped, null);\n+            for (MemoryEntry e : deduped) {\n+                sb.append(\"- [\").append(e.metadata().getOrDefault(\"source\", \"knowledge\"))\n+                        .append(\"] \").append(e.content()).append('\\n');\n+            }\n+            log.info(\"[RAG] 上下文构建：team={}, agent={}, 查询={}字符, 候选 {} → 放行 {} → 注入 Top-{} (maxSim={}), 耗时 {}ms\",\n+                    Teams.sanitize(teamId), agentType, query.length(), candidates.size(),\n+                    passed.size(), deduped.size(),\n+                    String.format(\"%.4f\", metrics.maxSimilarity()),\n+                    System.currentTimeMillis() - t0);\n         }\n-        // 4. Cross-Encoder 重排 → Top-5\n-        List<MemoryEntry> reranked = reranker.rerank(query, passed, INJECT_TOP_N);\n-        // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）\n-        List<MemoryEntry> deduped = dedupeByContent(reranked);\n-        if (deduped.size() < reranked.size()) {\n-            log.info(\"[RAG] 去重：注入前剔除 {} 个重复块（重叠切块导致），{} → {}\",\n-                    reranked.size() - deduped.size(), reranked.size(), deduped.size());\n+        // 7. 历史经验回流（记忆闭环读侧；独立于知识 abstain——经验命中仍注入）\n+        appendExperience(sb, teamId, agentType, query);\n+        String result = sb.toString().trim();\n+        if (!result.isBlank()) {\n+            log.info(\"[RAG] 注入上下文合计 {} 字符（知识分区 + 历史经验参考）, 总耗时 {}ms\",\n+                    result.length(), System.currentTimeMillis() - t0);\n         }\n-        // 6. 评估指标 + 格式化\n-        RagEvaluator.RagMetrics metrics = evaluator.evaluate(deduped, null);\n-        StringBuilder sb = new StringBuilder();\n-        for (MemoryEntry e : deduped) {\n-            sb.append(\"- [\").append(e.metadata().getOrDefault(\"source\", \"knowledge\"))\n-                    .append(\"] \").append(e.content()).append('\\n');\n+        return result;\n+    }\n+\n+    /**\n+     * 经验条目通道注入：反思沉淀的「问题模式 → 建议」命中项以【历史经验参考】分区回流审查提示词。\n+     * 命中即由 {@link ExperienceStore} 刷新 recordHit（spaced repetition 反遗忘）。\n+     * 失败只 WARN 不阻断主链路（与知识通道同级的降级策略）。\n+     */\n+    private void appendExperience(StringBuilder sb, String teamId, String agentType, String query) {\n+        if (experienceStore == null || query == null || query.isBlank()) {\n+            return;\n+        }\n+        try {\n+            String exp = experienceStore.getRelevantExperiences(Teams.sanitize(teamId), query);\n+            if (!exp.isBlank()) {\n+                if (!sb.isEmpty()) {\n+                    sb.append('\\n');\n+                }\n+                sb.append(\"【历史经验参考】\\n\").append(exp).append('\\n');\n+                log.info(\"[RAG] 历史经验注入：team={}, agent={}, 命中 {} 字符\",\n+                        Teams.sanitize(teamId), agentType, exp.length());\n+            }\n+        } catch (Exception e) {\n+            log.warn(\"[RAG] 经验检索失败，跳过注入（不影响主审查）：{}\", e.getMessage());\n         }\n-        log.info(\"[RAG] 上下文构建：team={}, agent={}, 查询={}字符, 候选 {} → 放行 {} → 注入 Top-{} (maxSim={}), 耗时 {}ms\",\n-                Teams.sanitize(teamId), agentType, query.length(), candidates.size(),\n-                passed.size(), deduped.size(),\n-                String.format(\"%.4f\", metrics.maxSimilarity()),\n-                System.currentTimeMillis() - t0);\n-        return sb.toString().trim();\n     }\n \n     /**\ndiff --git a/src/test/java/com/codereview/agent/core/AgentCapabilitiesTest.java b/src/test/java/com/codereview/agent/core/AgentCapabilitiesTest.java\nindex 0deadbb..34b8e02 100644\n--- a/src/test/java/com/codereview/agent/core/AgentCapabilitiesTest.java\n+++ b/src/test/java/com/codereview/agent/core/AgentCapabilitiesTest.java\n@@ -102,7 +102,7 @@ class AgentCapabilitiesTest {\n \n     @Test\n     void experienceStoreWriteRetrieveAndTeamIsolation() {\n-        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());\n+        ExperienceStore store = new ExperienceStore(new InMemoryExperienceLibrary());\n         store.add(\"teamA\", \"sql-injection 拼接漏洞\", \"使用参数化查询\");\n         store.add(\"teamA\", \"system-out 调试输出\", \"改用 SLF4J 日志\");\n         store.add(\"teamB\", \"other 经验\", \"其他建议\");\n@@ -117,7 +117,7 @@ class AgentCapabilitiesTest {\n \n     @Test\n     void reflectionServiceDistillsMajorExperienceFromReport() {\n-        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());\n+        ExperienceStore store = new ExperienceStore(new InMemoryExperienceLibrary());\n         ReflectionService service = new ReflectionService(store, null);\n         ReviewReport report = new ReportGenerator().aggregate(1, \"r\", List.of(\n                 new com.codereview.agent.core.model.AgentResult(1, AgentType.SECURITY, List.of(\ndiff --git a/src/test/java/com/codereview/agent/core/memory/ExperienceLifecycleTest.java b/src/test/java/com/codereview/agent/core/memory/ExperienceLifecycleTest.java\nindex f6a6fa2..f49b743 100644\n--- a/src/test/java/com/codereview/agent/core/memory/ExperienceLifecycleTest.java\n+++ b/src/test/java/com/codereview/agent/core/memory/ExperienceLifecycleTest.java\n@@ -141,7 +141,7 @@ class ExperienceLifecycleTest {\n     @Test\n     void activeExperienceIsRankedAboveCandidateForSameQuery() {\n         // ExperienceStore.top：检索注入时 ACTIVE 优先于 CANDIDATE\n-        ExperienceStore store = new ExperienceStore(null, new InMemoryExperienceLibrary());\n+        ExperienceStore store = new ExperienceStore(new InMemoryExperienceLibrary());\n         store.add(TEAM, \"LOGIC-1 sql 拼接 常见\", \"方式A\");          // CANDIDATE（1 次）\n         for (int i = 0; i < 3; i++) {\n             store.add(TEAM, \"LOGIC-2 sql 拼接 高频\", \"方式B\");       // 复现 3 次 → ACTIVE\ndiff --git a/src/test/java/com/codereview/agent/core/rag/RagContextBuilderTest.java b/src/test/java/com/codereview/agent/core/rag/RagContextBuilderTest.java\nindex 95f46f5..cd6a231 100644\n--- a/src/test/java/com/codereview/agent/core/rag/RagContextBuilderTest.java\n+++ b/src/test/java/com/codereview/agent/core/rag/RagContextBuilderTest.java\n@@ -1,6 +1,8 @@\n package com.codereview.agent.core.rag;\n \n import com.codereview.agent.core.llm.SimpleHashEmbeddingClient;\n+import com.codereview.agent.core.memory.ExperienceStore;\n+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;\n import com.codereview.agent.core.memory.MemoryEntry;\n import com.codereview.agent.core.memory.MemoryLevel;\n import com.codereview.agent.core.memory.RagContextBuilder;\n@@ -27,7 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;\n class RagContextBuilderTest {\n \n     private RagContextBuilder builderWith(InMemoryKnowledgeStore store) {\n-        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(0.0, false));\n+        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(0.0, false),\n+                new ExperienceStore(new InMemoryExperienceLibrary()));\n     }\n \n     private CodeDiff diff(String patch) {\ndiff --git a/src/test/java/com/codereview/agent/core/rag/RagContextExperienceInjectionTest.java b/src/test/java/com/codereview/agent/core/rag/RagContextExperienceInjectionTest.java\nnew file mode 100644\nindex 0000000..a71bcbc\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/rag/RagContextExperienceInjectionTest.java\n@@ -0,0 +1,115 @@\n+package com.codereview.agent.core.rag;\n+\n+import com.codereview.agent.core.llm.SimpleHashEmbeddingClient;\n+import com.codereview.agent.core.memory.ExperienceEntry;\n+import com.codereview.agent.core.memory.ExperienceLibrary;\n+import com.codereview.agent.core.memory.ExperienceStage;\n+import com.codereview.agent.core.memory.ExperienceStore;\n+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;\n+import com.codereview.agent.core.memory.RagContextBuilder;\n+import com.codereview.agent.core.model.CodeDiff;\n+import org.junit.jupiter.api.Test;\n+\n+import java.util.List;\n+\n+import static org.junit.jupiter.api.Assertions.assertFalse;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 历史经验回流（记忆闭环「读」侧）端到端测试：\n+ * {@code RagContextBuilder} 在审查链路把反思沉淀的经验条目以【历史经验参考】分区注入。\n+ *\n+ * <p>覆盖：\n+ *  - 知识 abstain 但经验命中时仍注入（经验通道独立于知识阈值）；\n+ *  - 命中即刷新 recordHit（spaced-repetition 反遗忘在生产生效）；\n+ *  - 无匹配经验 / 归档经验不注入（不污染上下文）；\n+ *  - 团队隔离（teamB 查不到 teamA 的经验）。\n+ *\n+ * <p>与 {@link RagContextBuilderTest}（知识通道）互补；知识侧用空 {@link InMemoryKnowledgeStore} 隔离。\n+ */\n+class RagContextExperienceInjectionTest {\n+\n+    private final InMemoryKnowledgeStore emptyKnowledge() {\n+        return new InMemoryKnowledgeStore(new SimpleHashEmbeddingClient());\n+    }\n+\n+    private RagContextBuilder builderWith(ExperienceLibrary lib) {\n+        return new RagContextBuilder(emptyKnowledge(), new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), new ExperienceStore(lib));\n+    }\n+\n+    private CodeDiff diff(String patch) {\n+        return new CodeDiff(\"Demo.java\", patch);\n+    }\n+\n+    @Test\n+    void knowledgeAbstainButExperienceHitStillInjected() {\n+        InMemoryExperienceLibrary lib = new InMemoryExperienceLibrary();\n+        ExperienceStore store = new ExperienceStore(lib);\n+        // 复现 3 次 → ACTIVE（同 pattern 证据升级）\n+        for (int i = 0; i < 3; i++) {\n+            store.add(\"teamA\", \"sql 拼接 注入 风险\", \"改用 PreparedStatement 参数绑定\");\n+        }\n+        RagContextBuilder builder = builderWith(lib);\n+\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"String sql = \\\"select * from user where id=\\\" + id; // sql 拼接\")));\n+        assertFalse(ctx.isBlank(), \"知识 abstain 时经验命中仍应注入，实际为空\");\n+        assertTrue(ctx.contains(\"【历史经验参考】\"), \"应带历史经验分区标题\");\n+        assertTrue(ctx.contains(\"PreparedStatement\"), \"命中经验的 advice 应进入上下文\");\n+        assertTrue(ctx.contains(\"sql 拼接 注入 风险\"), \"经验 pattern 应可读\");\n+    }\n+\n+    @Test\n+    void injectedHitRefreshesSpacedRepetitionClock() {\n+        InMemoryExperienceLibrary lib = new InMemoryExperienceLibrary();\n+        ExperienceStore store = new ExperienceStore(lib);\n+        store.add(\"teamA\", \"sec hardcode 密钥\", \"密钥放配置中心\");\n+        RagContextBuilder builder = builderWith(lib);\n+\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"String password = \\\"p@ss\\\"; // hardcode 密钥\")));\n+        assertTrue(ctx.contains(\"密钥放配置中心\"), \"经验应命中注入\");\n+\n+        ExperienceEntry hit = store.get(\"teamA\", 1L).orElseThrow();\n+        assertTrue(hit.hitCount() >= 1, \"注入命中应刷新 hit_count（反遗忘）\");\n+        assertTrue(hit.lastHitAt() > 0, \"命中应刷新 lastHitAt\");\n+    }\n+\n+    @Test\n+    void noMatchingExperienceStaysBlankWhenKnowledgeAbsent() {\n+        RagContextBuilder builder = builderWith(new InMemoryExperienceLibrary());\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"some unrelated refactor rename\")));\n+        assertTrue(ctx.isBlank(), \"知识空且无经验命中时应 abstain（返回空串）\");\n+    }\n+\n+    @Test\n+    void experienceDoesNotLeakAcrossTeams() {\n+        InMemoryExperienceLibrary lib = new InMemoryExperienceLibrary();\n+        ExperienceStore store = new ExperienceStore(lib);\n+        store.add(\"teamA\", \"sql 拼接 注入 风险\", \"teamA 专属建议 PreparedStatement\");\n+        RagContextBuilder builder = builderWith(lib);\n+\n+        String ctx = builder.buildContext(\"teamB\", \"SecurityAgent\",\n+                List.of(diff(\"String sql = \\\"...\\\" + id; // sql 拼接\")));\n+        assertTrue(ctx.isBlank(), \"teamB 不应看到 teamA 的经验\");\n+        assertFalse(ctx.contains(\"teamA 专属建议\"));\n+    }\n+\n+    @Test\n+    void archivedExperienceIsNotInjected() {\n+        InMemoryExperienceLibrary lib = new InMemoryExperienceLibrary();\n+        ExperienceStore store = new ExperienceStore(lib);\n+        store.add(\"teamA\", \"R1 sql 拼接 误报样本\", \"历史建议\");\n+        // 人工误报 2 次 → ARCHIVED（不再参与检索）\n+        store.recordFeedback(\"teamA\", \"R1\", true);\n+        store.recordFeedback(\"teamA\", \"R1\", true);\n+        assertTrue(store.get(\"teamA\", 1L).orElseThrow().stage() == ExperienceStage.ARCHIVED);\n+\n+        RagContextBuilder builder = builderWith(lib);\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"String sql = \\\"...\\\" + id; // sql 拼接\")));\n+        assertTrue(ctx.isBlank(), \"归档经验不得再注入检索\");\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/core/rag/RagRecallBaselineTest.java b/src/test/java/com/codereview/agent/core/rag/RagRecallBaselineTest.java\nindex a9bb11a..a5847e4 100644\n--- a/src/test/java/com/codereview/agent/core/rag/RagRecallBaselineTest.java\n+++ b/src/test/java/com/codereview/agent/core/rag/RagRecallBaselineTest.java\n@@ -1,5 +1,7 @@\n package com.codereview.agent.core.rag;\n \n+import com.codereview.agent.core.memory.ExperienceStore;\n+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;\n import com.codereview.agent.core.memory.MemoryEntry;\n import com.codereview.agent.core.memory.MemoryLevel;\n import com.codereview.agent.core.memory.RagContextBuilder;\n@@ -53,7 +55,8 @@ class RagRecallBaselineTest {\n     }\n \n     private RagContextBuilder builderWith(StubKnowledgeStore store) {\n-        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(MIN_SIM, true));\n+        return new RagContextBuilder(store, new HeuristicReranker(), new RagEvaluator(MIN_SIM, true),\n+                new ExperienceStore(new InMemoryExperienceLibrary()));\n     }\n \n     @Test\n",
+  "patchBytes": 24630,
+  "patchSha256": "72f3c25487fee8c4561e04f41254e4491e8256c2721f6729aed8d7144e41293d",
+  "provenance": "git-history",
+  "provenanceNote": "feat：经验检索注入接入生产审查链路",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 134,
+            "lineStart": 134,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 134,
+            "lineStart": 134,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 134,
+            "lineStart": 134,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）AE-001"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/config/ReviewAgentConfig.java",
+            "lineEnd": 606,
+            "lineStart": 606,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/memory/ExperienceStore.java",
+            "lineEnd": 46,
+            "lineStart": 46,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 1106,
+            "lineStart": 1106,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 1123,
+            "lineStart": 1123,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "code-review-agent",
+  "repoUrl": "https://github.com/13liyunfei/code-review-agent",
+  "sha": "49a8873761a72546ff621b5d573fa62c53f686e7",
+  "shaShort": "49a8873",
+  "subject": "feat(memory): 经验检索注入接入生产审查链路，闭合记忆闭环读侧"
+}

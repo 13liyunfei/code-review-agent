@@ -259,6 +259,27 @@ review:
       # 仅 mode=proxy 时生效；开发机经 Clash 出网可设 RERANK_PROXY=http://127.0.0.1:52320
       proxy-url: ${RERANK_PROXY:}
 
+  # ===== 送审闸门（文件筛选 + 密钥保护，safe-by-default）=====
+  # 八道判据按固定顺序短路求值：
+  #   binary → secret → allow → user-exclude → include → unsupported-ext → default-path → too-large
+  # 安全类闸门（binary / secret）永远排在策略类之前，因此**用户 include / exclude / allow
+  # 无法放行密钥与二进制文件** —— 「为了少被拦几次而放宽规则」这个动作在结构上碰不到机密。
+  # 被拦路径与原因会写进审查轨迹（事件 files.gated）并可经 /api/admin/gate/stats 按原因聚合。
+  gate:
+    enabled: ${REVIEW_GATE_ENABLED:true}
+    # 追加排除规则（gitignore 风格 glob；不含 / 的规则自动匹配任意深度，如 *.jar）
+    exclude: []
+    # 非空时成为白名单：不在其中的文件一律不送审（原因 not_included）
+    include: []
+    # 显式放行：只能放开策略类闸门（噪声目录 / 用户排除 / 扩展名白名单），放不开密钥与二进制
+    allow: []
+    # 追加密钥路径规则（**只增不减**：无法用它放行内置清单里的路径）
+    extra-secret-patterns: []
+    # 单文件 diff 字符上限；0 = 关闭。这是成本闸门而非安全闸门 —— 拦下即漏审，默认不开
+    max-diff-chars: ${REVIEW_GATE_MAX_DIFF_CHARS:0}
+    # 扩展名白名单模式：默认关闭。打开后团队引入新语言会「静默不被审查」，属于要显式承担的风险
+    allow-list-enabled: ${REVIEW_GATE_ALLOW_LIST_ENABLED:false}
+
 # ===== 演示模式 =====
 # 设为 true 时启动后执行硬编码样例审查（不走 Webhook）；默认关闭
 demo:
@@ -295,4 +316,16 @@ sca:
     proxy-host: ""
     proxy-port: 0
     timeout-ms: 5000
+
+# ===== 审查级评测基准（P1-6）=====
+# ⚠️ 这一节**必须留在文件末尾**：本书（书稿）按 HEAD 的**行号**引用本文件的多个位置
+#    （如 timeout-per-shutdown-phase、sca.osv.proxy-host），在中间插入内容会让其后
+#    所有行号位移、把书里那些引用静默变成错的。**新增配置一律追加到文件末尾。**
+# run=true 时才启动基准跑分入口（默认关闭，避免每次启动都跑一遍）。
+bench:
+  run: ${BENCH_RUN:false}
+  # report=只打印报告；check=与基线比较（回归即红）；update-baseline=显式更新基线
+  mode: ${BENCH_MODE:report}
+  # 基线文件路径（默认取 classpath 里的 bench/BASELINE.json；update-baseline 时写这里）
+  baseline-path: ${BENCH_BASELINE_PATH:src/main/resources/bench/BASELINE.json}
 

@@ -1,0 +1,518 @@
+{
+  "addedLines": 1140,
+  "changedFileCount": 19,
+  "changedFiles": [
+    "README.md",
+    "README.zh-CN.md",
+    "src/main/java/com/codereview/agent/config/InfrastructureConfig.java",
+    "src/main/java/com/codereview/agent/config/ReviewAgentConfig.java",
+    "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+    "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+    "src/main/java/com/codereview/agent/core/rag/IdentityQueryRewriter.java",
+    "src/main/java/com/codereview/agent/core/rag/InMemoryKnowledgeStore.java",
+    "src/main/java/com/codereview/agent/core/rag/KnowledgeStore.java",
+    "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+    "src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java",
+    "src/main/java/com/codereview/agent/core/rag/RagEvaluator.java",
+    "src/main/java/com/codereview/agent/core/rag/ReviewQueryRewriter.java",
+    "src/main/resources/application.yml",
+    "src/test/java/com/codereview/agent/core/rag/RagContextBuilderHardeningTest.java",
+    "src/test/java/com/codereview/agent/core/rag/RagEvaluatorTest.java",
+    "src/test/java/com/codereview/agent/core/rag/ReviewQueryRewriterTest.java",
+    "src/test/java/com/codereview/agent/e2e/PgHnswIndexE2eTest.java",
+    "src/test/java/com/codereview/agent/e2e/PgRagFreshnessE2eTest.java"
+  ],
+  "committedAt": "2026-09-08T14:40:34+08:00",
+  "deletedLines": 51,
+  "groundTruth": [
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 194,
+      "lineStart": 194,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 223,
+      "lineStart": 223,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 225,
+      "lineStart": 225,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 226,
+      "lineStart": 226,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 68,
+      "lineStart": 68,
+      "note": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+      "ruleId": "AE-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 76,
+      "lineStart": 76,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "logic",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 90,
+      "lineStart": 90,
+      "note": "新增 return null 且未在同处说明契约，调用方易漏判空",
+      "ruleId": "LOGIC-005",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 132,
+      "lineStart": 132,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 94,
+      "lineStart": 94,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 100,
+      "lineStart": 100,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    },
+    {
+      "category": "style",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "labelSource": "human-confirmed-machine-candidate",
+      "lineEnd": 107,
+      "lineStart": 107,
+      "note": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+      "ruleId": "DOC-001",
+      "severity": "MINOR"
+    }
+  ],
+  "id": "cra-a36992d",
+  "labelCandidates": [
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[PgVector] HNSW 索引创建失败（pgvector < 0.5?），回退 IVFFlat：{}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "line": 194,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "line": 223,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[PgVector] 查询现有向量索引类型失败（按不存在处理）: {}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "line": 225,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "line": 226,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "} catch (Exception e) {",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "line": 66,
+      "ruleId": "LOGIC-002",
+      "severity": "MAJOR",
+      "why": "宽泛捕获 Exception/Throwable：会连带吞掉不该处理的异常（需确认是否只 log 不重抛）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "log.warn(\"[RagRewrite] 改写失败，回退原查询: {}\", e.getMessage());",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "line": 68,
+      "ruleId": "AE-001",
+      "severity": "MINOR",
+      "why": "日志只打 e.getMessage()：丢了堆栈与异常类型，线上无法定位"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "line": 76,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "logic",
+      "confirmed": false,
+      "evidence": "return null;",
+      "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+      "line": 90,
+      "ruleId": "LOGIC-005",
+      "severity": "MAJOR",
+      "why": "新增 return null：调用方需判空，否则 NPE（需确认是否已有契约约定）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public void init() {",
+      "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+      "line": 132,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public RagContextBuilder withQueryRewriter(ReviewQueryRewriter rewriter) {",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "line": 94,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public RagContextBuilder withRetrievalWindow(int retrieveK, int injectTopN) {",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "line": 100,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    },
+    {
+      "category": "style",
+      "confirmed": false,
+      "evidence": "public RagContextBuilder withMaxAgeDays(long days) {",
+      "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+      "line": 107,
+      "ruleId": "DOC-001",
+      "severity": "MINOR",
+      "why": "新增 public 方法缺 Javadoc：本项目规范要求对外方法写明用途（对照同文件其它方法）"
+    }
+  ],
+  "labeling": {
+    "candidates": 12,
+    "confirmed": 11,
+    "manual": 0,
+    "method": "rule-classified+sampled-review",
+    "pending": "逐条人工复核（当前为规则裁决 + 每类抽样读 hunk）",
+    "rules": "见 tools/bench/label_assist.py 的 classify() 文档"
+  },
+  "parent": "2a07394ce94582adbcad1a80ea2fa2e6dcf00310",
+  "patch": "diff --git a/README.md b/README.md\nindex 9631621..4129b3a 100644\n--- a/README.md\n+++ b/README.md\n@@ -353,6 +353,11 @@ review:\n       api-key: ${RERANK_API_KEY:}   # leave empty → offline heuristic rerank\n       model: ${RERANK_MODEL:rerank-english-v3.0}\n       timeout-ms: 5000\n+    retrieve-k: ${RAG_RETRIEVE_K:50}           # hybrid pre-rerank candidates (recall window)\n+    inject-top-n: ${RAG_INJECT_TOP_N:5}        # final top-N injected after rerank\n+    max-age-days: ${RAG_MAX_AGE_DAYS:0}        # freshness cutoff: 0 = no filter (backward compat)\n+    query-rewrite:\n+      enabled: ${RAG_QUERY_REWRITE_ENABLED:false}  # LLM rewrite of diff-style query; auto-fallback to identity\n     min-similarity: ${RAG_MIN_SIMILARITY:0.3}   # 0.0 = no gate\n     eval-enabled: ${RAG_EVAL_ENABLED:true}\n   # Egress: explicit per-dependency egress control (does NOT hijack localhost PG/Redis/Gitea)\ndiff --git a/README.zh-CN.md b/README.zh-CN.md\nindex b8744ae..e9e3b22 100644\n--- a/README.zh-CN.md\n+++ b/README.zh-CN.md\n@@ -347,12 +347,16 @@ primaryChatModel（取 models[0]）→ CodeReviewAiService(AiServices 结构化\n ```\n 源文档 ─▶ StructuredChunker（按标题/代码围栏切分） ─▶ 向量化 ─▶ KnowledgeStore\n                                                                   │\n-查询 ─▶ 混合召回（向量 ∪ BM25，top-K） ─▶ Reranker（cross-encoder） ─▶ min-similarity 闸门 ─▶ prompt\n+查询 ─▶（查询改写，失败自动回退） ─▶ 混合召回（向量 ∪ BM25，top-K，freshness 截断） ─▶ Reranker（cross-encoder） ─▶ min-similarity 闸门 ─▶ prompt\n ```\n \n - **`StructuredChunker`**：保留 Markdown 结构（标题 + 围栏代码块），让召回返回语义完整、自洽的片段，而非任意字符切片。\n - **`Reranker`** 接口两种实现：`ApiReranker`（Cohere/Jina cross-encoder）与 `HeuristicReranker`（离线词法/位置打分）。**API Key 缺失时 `ApiReranker` 自动降级到 `HeuristicReranker`**——审查链路永不因重排而阻塞。\n-- **`RagEvaluator`**：在携带 ground-truth `expectedId` 元数据时可选记录 precision/recall，便于检索质量做回归测试。\n+- **`RagEvaluator`**：在携带 ground-truth `expectedId` 元数据时可选记录 precision/recall 与**排序指标（`hit@k` / `MRR`，由 `firstHitRank` 计算）**，便于检索质量做回归测试。\n+- **查询改写**（`ReviewQueryRewriter`，默认 `IdentityQueryRewriter`，可选用 `LlmQueryRewriter`）：弥合「代码 diff 形态查询 ↔ 规范文档」的语义鸿沟。开启 `review.rag.query-rewrite.enabled=true` 后由大模型改写查询；任何失败/空/超长输出**回退恒等改写**——绝不劣化检索。\n+- **检索窗口扩宽**：`retrieve-k`（默认 `50`，原为 `10`）扩大混合检索的预重排候选池（业界先召回 Top-50~200 再精排）；`inject-top-n`（默认 `5`）限制重排后最终注入 prompt 的块数。\n+- **Freshness**（`max-age-days`，默认 `0`=不过滤）：在 SQL / 内存层按 `created_at` 截断超过 N 天的陈旧知识块，过期规范、历史 PR 复盘不再参与召回。\n+- **HNSW ANN 索引**（默认 `hnsw`）：`pgvector.index-type` 作用于 `memory_store` 向量列，pgvector ≥ 0.5 下召回精度/构建速度优于 ivfflat；存量 ivfflat 索引自动迁移（DROP 重建），HNSW 创建失败自动 WARN 回退 ivfflat。\n - **`min-similarity`**（默认 `0.3`）：在候选进入 prompt 前丢弃低于阈值的片段，实现\"选择性 abstain\"以保持上下文干净。\n \n ### 配置（`application.yml` 的 `review.rag` / `review.egress`）\n@@ -367,6 +371,11 @@ review:\n       api-key: ${RERANK_API_KEY:}   # 留空 → 离线 heuristic 重排\n       model: ${RERANK_MODEL:rerank-english-v3.0}\n       timeout-ms: 5000\n+    retrieve-k: ${RAG_RETRIEVE_K:50}           # 混合检索预重排候选数（召回窗）\n+    inject-top-n: ${RAG_INJECT_TOP_N:5}        # 重排后最终注入 top-N\n+    max-age-days: ${RAG_MAX_AGE_DAYS:0}        # freshness 截断：0 = 不过滤（向后兼容）\n+    query-rewrite:\n+      enabled: ${RAG_QUERY_REWRITE_ENABLED:false}  # LLM 改写 diff 形态查询；失败自动降级恒等\n     min-similarity: ${RAG_MIN_SIMILARITY:0.3}   # 0.0 = 不拦截\n     eval-enabled: ${RAG_EVAL_ENABLED:true}\n   # Egress：按依赖显式出口管控（绝不劫持 localhost 的 PG/Redis/Gitea）\n@@ -841,7 +850,7 @@ src/main/java/com/codereview/agent/\n     ├── memory/       # MemoryEntry / MemoryStore / InMemoryVectorStore / ReflectionAgent / RAG / ExperienceStore（团队隔离文件经验条目）/ ReflectionService（审查后反思沉淀）\n     ├── toolcalling/  # AgentTool / ToolRegistry / ToolCallingLoop（思考→决策→调用→观察→推理）+ ToolEquippedAgent 装饰器 + BuiltinTools\n     ├── planning/     # TaskPlanner（LLM 任务拆解）/ TaskPlan（DAG 校验）/ DagExecutor（拓扑并行）/ TaskPlanningSupport（织入 Coordinator）\n-    ├── rag/          # RAG 检索重构：KnowledgeStore（内存/Pg）/ StructuredChunker / Reranker（ApiReranker+HeuristicReranker）/ RagEvaluator / RagContextBuilder\n+    ├── rag/          # RAG 检索重构：KnowledgeStore（内存/Pg）/ StructuredChunker / Reranker（ApiReranker+HeuristicReranker）/ 查询改写（Review/Identity/LlmQueryRewriter）/ RagEvaluator（hit@k/MRR）/ RagContextBuilder\n     ├── llm/          # LlmClient / ModelGateway（多供应商路由+配额+failover）/ LangChain4jChatProvider / CircuitBreakerProvider / BackoffPolicy / TokenUsageRecorder / LoggingChatModelListener / EmbeddingClient / aiservice/（CodeReviewAiService 结构化输出 + ChatMemory）— 无 Mock\n     ├── trace/        # TraceContext（SLF4J MDC traceId，跨线程 wrap 传播，全链路追踪）\n     ├── trajectory/   # ReviewEvent / ReviewEventLog / ReviewTrajectoryRecorder（事件源审查轨迹，JSONL 落盘）\ndiff --git a/src/main/java/com/codereview/agent/config/InfrastructureConfig.java b/src/main/java/com/codereview/agent/config/InfrastructureConfig.java\nindex 45fb16c..ddbdf75 100644\n--- a/src/main/java/com/codereview/agent/config/InfrastructureConfig.java\n+++ b/src/main/java/com/codereview/agent/config/InfrastructureConfig.java\n@@ -46,9 +46,10 @@ public class InfrastructureConfig {\n                                            @Value(\"${pgvector.database:codereview}\") String database,\n                                            @Value(\"${pgvector.username:}\") String username,\n                                            @Value(\"${pgvector.password:}\") String password,\n-                                           @Value(\"${pgvector.vector-dim:256}\") int vectorDim) {\n-        log.info(\"已启用 PgVector 记忆存储（{}:{}/{}, dim={}）\", host, port, database, vectorDim);\n-        return new PgVectorMemoryStore(embeddingClient, host, port, database, username, password, vectorDim);\n+                                           @Value(\"${pgvector.vector-dim:256}\") int vectorDim,\n+                                           @Value(\"${pgvector.index-type:hnsw}\") String indexType) {\n+        log.info(\"已启用 PgVector 记忆存储（{}:{}/{}, dim={}, ANN 索引={}）\", host, port, database, vectorDim, indexType);\n+        return new PgVectorMemoryStore(embeddingClient, host, port, database, username, password, vectorDim, indexType);\n     }\n \n     /**\ndiff --git a/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java b/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\nindex 038a584..251f0f8 100644\n--- a/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\n+++ b/src/main/java/com/codereview/agent/config/ReviewAgentConfig.java\n@@ -74,6 +74,7 @@ import org.slf4j.Logger;\n import org.slf4j.LoggerFactory;\n import org.springframework.beans.factory.annotation.Value;\n import org.springframework.boot.context.properties.EnableConfigurationProperties;\n+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;\n import org.springframework.context.annotation.Bean;\n import org.springframework.context.annotation.Configuration;\n import org.springframework.context.annotation.Primary;\n@@ -331,6 +332,21 @@ public class ReviewAgentConfig {\n         return new com.codereview.agent.core.rag.RagEvaluator(minSimilarity, evalEnabled);\n     }\n \n+    /**\n+     * RAG 检索查询改写器（业界 query rewrite，弥合代码 diff ↔ 规范文档语义鸿沟）。\n+     *\n+     * <p>{@code review.rag.query-rewrite.enabled=true} 时装配 {@link LlmQueryRewriter}\n+     * （复用统一模型网关，失败/超时自动降级恒等改写，绝不劣化检索）；\n+     * 默认关闭 → 容器无此 bean → {@code RagContextBuilder} 使用恒等改写（离线可用）。\n+     */\n+    @Bean\n+    @ConditionalOnProperty(name = \"review.rag.query-rewrite.enabled\", havingValue = \"true\")\n+    public com.codereview.agent.core.rag.ReviewQueryRewriter reviewQueryRewriter(\n+            LlmClient llmClient) {\n+        log.info(\"已启用 RAG 查询改写（LLM 驱动，失败自动降级恒等）\");\n+        return new com.codereview.agent.core.rag.LlmQueryRewriter(llmClient);\n+    }\n+\n     /**\n      * 构造 LangChain4j 的 HTTP 客户端构造器（大模型网关出口）。\n      *\ndiff --git a/src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java b/src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java\nindex c0079ea..5df3fe3 100644\n--- a/src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java\n+++ b/src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java\n@@ -57,6 +57,8 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {\n     private final HikariDataSource hikari;\n     private final DataSource dataSource;\n     private final int vectorDim;\n+    /** ANN 索引类型：hnsw（默认，pgvector≥0.5）或 ivfflat（老版本兼容回退）。 */\n+    private final String indexType;\n \n     private final ObjectMapper mapper = new ObjectMapper();\n \n@@ -78,8 +80,24 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {\n                                String host, int port, String database,\n                                String username, String password,\n                                int vectorDim) {\n+        this(embeddingClient, host, port, database, username, password, vectorDim, \"hnsw\");\n+    }\n+\n+    /**\n+     * 构造 PgVector 记忆存储（可指定 ANN 索引类型）。\n+     *\n+     * @param indexType 索引类型：hnsw（默认，pgvector≥0.5 推荐，召回精度更高）或 ivfflat\n+     */\n+    public PgVectorMemoryStore(EmbeddingClient embeddingClient,\n+                               String host, int port, String database,\n+                               String username, String password,\n+                               int vectorDim, String indexType) {\n         this.embeddingClient = embeddingClient;\n         this.vectorDim = vectorDim;\n+        this.indexType = (indexType == null || indexType.isBlank()) ? \"hnsw\" : indexType.toLowerCase();\n+        if (!\"hnsw\".equals(this.indexType) && !\"ivfflat\".equals(this.indexType)) {\n+            throw new IllegalArgumentException(\"不支持的向量索引类型: \" + indexType + \"（仅支持 hnsw / ivfflat）\");\n+        }\n \n         HikariConfig cfg = new HikariConfig();\n         cfg.setJdbcUrl(\"jdbc:postgresql://\" + host + \":\" + port + \"/\" + database);\n@@ -96,7 +114,8 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {\n         cfg.setConnectionTestQuery(\"SELECT 1\");\n         this.hikari = new HikariDataSource(cfg);\n         this.dataSource = this.hikari;\n-        log.info(\"[PgVector] 已创建 HikariCP 连接池（{}:{}/{}, 最大连接={}）\", host, port, database, 10);\n+        log.info(\"[PgVector] 已创建 HikariCP 连接池（{}:{}/{}, 最大连接={}，ANN 索引={}）\",\n+                host, port, database, 10, this.indexType);\n     }\n \n     /**\n@@ -110,7 +129,7 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {\n      * </ol>\n      */\n     @PostConstruct\n-    protected void init() {\n+    public void init() {\n         try (Connection conn = getConnection();\n              Statement stmt = conn.createStatement()) {\n             // 启用 pgvector 扩展\n@@ -123,12 +142,9 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {\n                 migrate(conn, stmt);\n             }\n \n-            // 建索引：IVFFlat 近似最近邻索引（余弦距离）\n-            stmt.execute(\"\"\"\n-                    CREATE INDEX IF NOT EXISTS idx_memory_embedding\n-                    ON memory_store USING ivfflat (embedding vector_cosine_ops)\n-                    WITH (lists = 100)\n-                    \"\"\");\n+            // 建向量 ANN 索引：HNSW 优先（pgvector≥0.5，召回精度与速度均优），\n+            // 存量 ivfflat 库自动迁移；HNSW 不可用（老 pgvector）时回退 ivfflat。\n+            ensureVectorIndex(stmt);\n             stmt.execute(\"CREATE INDEX IF NOT EXISTS idx_memory_agent ON memory_store (agent_type)\");\n             stmt.execute(\"CREATE INDEX IF NOT EXISTS idx_memory_team ON memory_store (team_id)\");\n \n@@ -142,12 +158,92 @@ public class PgVectorMemoryStore implements MemoryStore, DisposableBean {\n                     ON memory_store USING gin (search_vector)\n                     \"\"\");\n \n-            log.info(\"[PgVector] 表与索引就绪（vector({}), ivfflat 索引, gin(tsvector)）\", vectorDim);\n+            log.info(\"[PgVector] 表与索引就绪（vector({}), {} 索引, gin(tsvector)）\",\n+                    vectorDim, indexType);\n         } catch (SQLException e) {\n             throw new IllegalStateException(\"[PgVector] 初始化失败: \" + e.getMessage(), e);\n         }\n     }\n \n+    /**\n+     * 确保向量 ANN 索引存在且为期望类型（hnsw / ivfflat），幂等。\n+     *\n+     * <p>策略：\n+     * <ul>\n+     *   <li>索引不存在 → 直接按期望类型创建（hnsw 失败则 WARN 回退 ivfflat，老 pgvector 无 hnsw）；</li>\n+     *   <li>存量库为 ivfflat 而期望 hnsw → DROP 后重建迁移（启动时一次性，数据量小时可接受；\n+     *       数据量大时仍会执行——hnsw 在 pgvector 0.5+ 均可用，迁移收益明确）；</li>\n+     *   <li>已为期望类型 → 跳过（幂等，不重复重建大索引）。</li>\n+     * </ul>\n+     */\n+    private void ensureVectorIndex(Statement stmt) throws SQLException {\n+        String existing = currentEmbeddingIndexType();\n+        if (indexType.equals(existing)) {\n+            log.info(\"[PgVector] 向量索引已就绪（{}），跳过创建\", existing);\n+            return;\n+        }\n+        if (existing != null) {\n+            log.warn(\"[PgVector] 存量向量索引为 {}，按配置迁移为 {}（DROP 后重建）\", existing, indexType);\n+            stmt.execute(\"DROP INDEX IF EXISTS idx_memory_embedding\");\n+        }\n+        try {\n+            createVectorIndex(stmt, indexType);\n+        } catch (SQLException e) {\n+            if (\"hnsw\".equals(indexType)) {\n+                // 老 pgvector（<0.5）无 hnsw access method → 回退 ivfflat，保证服务可启动\n+                log.warn(\"[PgVector] HNSW 索引创建失败（pgvector < 0.5?），回退 IVFFlat：{}\", e.getMessage());\n+                stmt.execute(\"DROP INDEX IF EXISTS idx_memory_embedding\");\n+                createVectorIndex(stmt, \"ivfflat\");\n+                return;\n+            }\n+            throw e;\n+        }\n+        log.info(\"[PgVector] 向量索引已创建：{}\", indexType);\n+    }\n+\n+    /** 当前 idx_memory_embedding 的索引类型（hnsw / ivfflat），不存在返回 null。 */\n+    private String currentEmbeddingIndexType() {\n+        String sql = \"\"\"\n+                SELECT indexdef FROM pg_indexes\n+                WHERE tablename = 'memory_store' AND indexname = 'idx_memory_embedding'\n+                \"\"\";\n+        try (Connection conn = getConnection();\n+             PreparedStatement ps = conn.prepareStatement(sql);\n+             ResultSet rs = ps.executeQuery()) {\n+            if (rs.next()) {\n+                String def = rs.getString(1);\n+                if (def != null && def.contains(\"USING hnsw\")) {\n+                    return \"hnsw\";\n+                }\n+                if (def != null && def.contains(\"USING ivfflat\")) {\n+                    return \"ivfflat\";\n+                }\n+                return \"unknown\";\n+            }\n+            return null;\n+        } catch (SQLException e) {\n+            log.warn(\"[PgVector] 查询现有向量索引类型失败（按不存在处理）: {}\", e.getMessage());\n+            return null;\n+        }\n+    }\n+\n+    private void createVectorIndex(Statement stmt, String type) throws SQLException {\n+        if (\"hnsw\".equals(type)) {\n+            // HNSW：无需 lists；m=16/ef_construction=64 为 pgvector 默认，显式声明便于调优可观测\n+            stmt.execute(\"\"\"\n+                    CREATE INDEX idx_memory_embedding\n+                    ON memory_store USING hnsw (embedding vector_cosine_ops)\n+                    WITH (m = 16, ef_construction = 64)\n+                    \"\"\");\n+        } else {\n+            stmt.execute(\"\"\"\n+                    CREATE INDEX idx_memory_embedding\n+                    ON memory_store USING ivfflat (embedding vector_cosine_ops)\n+                    WITH (lists = 100)\n+                    \"\"\");\n+        }\n+    }\n+\n     private boolean tableExists(Connection conn, String table) throws SQLException {\n         try (PreparedStatement ps = conn.prepareStatement(\n                 \"SELECT 1 FROM information_schema.tables WHERE table_name = ?\")) {\ndiff --git a/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java b/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java\nindex 70374b4..3229708 100644\n--- a/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java\n+++ b/src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java\n@@ -2,14 +2,19 @@ package com.codereview.agent.core.memory;\n \n import com.codereview.agent.core.model.CodeDiff;\n import com.codereview.agent.core.rag.HeuristicReranker;\n+import com.codereview.agent.core.rag.IdentityQueryRewriter;\n import com.codereview.agent.core.rag.KnowledgeStore;\n import com.codereview.agent.core.rag.RagEvaluator;\n import com.codereview.agent.core.rag.Reranker;\n+import com.codereview.agent.core.rag.ReviewQueryRewriter;\n import com.codereview.agent.tenant.Teams;\n import org.slf4j.Logger;\n import org.slf4j.LoggerFactory;\n+import org.springframework.beans.factory.annotation.Autowired;\n+import org.springframework.beans.factory.annotation.Value;\n import org.springframework.stereotype.Component;\n \n+import java.time.Duration;\n import java.util.List;\n \n /**\n@@ -18,17 +23,25 @@ import java.util.List;\n  * <p>审查前检索规范文档 / 历史 PR / 安全 Wiki，将相关内容作为【相关历史知识】注入提示词。\n  * 内部链路对标业界最佳实践：\n  * <pre>\n- *   提取查询 → 混合检索(向量+BM25,RRF融合) → 阈值过滤(abstain) → Cross-Encoder重排 → Top-5格式化\n+ *   提取查询 → [查询改写(可选)] → 混合检索(向量+BM25,RRF融合) → 阈值过滤(abstain)\n+ *        → Cross-Encoder重排 → Top-5格式化\n  * </pre>\n  * 各阶段能力由协作组件提供，均可离线运行（无 API 时自动降级到启发式）：\n  * <ul>\n- *   <li>混合检索：{@link KnowledgeStore#searchKnowledge}（PG 实现含 tsvector BM25 + 向量 RRF）；</li>\n+ *   <li>查询改写：{@link ReviewQueryRewriter}（默认 {@link IdentityQueryRewriter} 恒等；\n+ *       配置 {@code review.rag.query-rewrite.enabled=true} 时切 LLM 改写，失败自动降级）；</li>\n+ *   <li>混合检索：{@link KnowledgeStore#searchKnowledge}（PG 实现含 tsvector BM25 + 向量 RRF，\n+ *       候选窗大小由 {@code review.rag.retrieve-k} 控制，默认 50 对标业界 Top-50~200 召回）；</li>\n  *   <li>阈值过滤 / 选择性回答：{@link RagEvaluator#filterByThreshold}；</li>\n  *   <li>重排：{@link Reranker}（{@link HeuristicReranker} 默认，可配 {@code ApiReranker}）；</li>\n- *   <li>评估 / 可观测：{@link RagEvaluator}（记录命中、相似度、trace）。</li>\n+ *   <li>评估 / 可观测：{@link RagEvaluator}（记录命中、相似度、golden 排序指标 firstHitRank/MRR）。</li>\n  * </ul>\n  * 检索时始终纳入团队自身内容 + 全局基线（编码规范手册），实现\"全局基线 + 团队叠加\"。\n  *\n+ * <p><b>freshness（知识时效）</b>：{@code review.rag.max-age-days} 控制召回的知识块最大入库年龄\n+ * （默认 0 = 不过滤），检索侧（Pg/InMemory 的 {@code searchKnowledge} 5 参重载）按 created_at 过滤，\n+ * 避免过期历史 PR 复盘 / 旧版规范污染当前审查。\n+ *\n  * <p><b>历史经验回流</b>：知识块之外，同时把 {@link ExperienceStore}（反思沉淀的「问题模式 →\n  * 建议」条目）命中项以【历史经验参考】分区注入——闭合记忆闭环的\"读\"侧\n  * （写侧由 ReflectionService 在审查完成后执行）。经验命中即刷新遗忘时钟（spaced repetition）。\n@@ -43,12 +56,19 @@ public class RagContextBuilder {\n     private final RagEvaluator evaluator;\n     private final ExperienceStore experienceStore;\n \n-    /** 初检召回数（重排前）。 */\n-    private static final int CANDIDATE_K = 10;\n-    /** 最终注入 Top-N。 */\n-    private static final int INJECT_TOP_N = 5;\n+    /** 初检召回数（重排前）。业界召回窗 Top-50~200 再精排，默认 50（可配 {@code review.rag.retrieve-k}）。 */\n+    @Value(\"${review.rag.retrieve-k:50}\")\n+    private int retrieveK = 50;\n+    /** 最终注入 Top-N（精排输出）。 */\n+    @Value(\"${review.rag.inject-top-n:5}\")\n+    private int injectTopN = 5;\n+    /** freshness：知识块最大入库年龄（天），0 = 不过滤。 */\n+    @Value(\"${review.rag.max-age-days:0}\")\n+    private long maxAgeDays = 0;\n+    /** 查询改写器（默认恒等；由容器按配置注入 LLM 实现，无 Spring 时测试可 new 后覆写）。 */\n+    private ReviewQueryRewriter queryRewriter = new IdentityQueryRewriter();\n \n-    @org.springframework.beans.factory.annotation.Autowired\n+    @Autowired\n     public RagContextBuilder(KnowledgeStore knowledgeStore,\n                              Reranker reranker,\n                              RagEvaluator evaluator,\n@@ -59,6 +79,36 @@ public class RagContextBuilder {\n         this.experienceStore = experienceStore;\n     }\n \n+    /**\n+     * 容器注入查询改写器（{@code review.rag.query-rewrite.enabled=true} 时由配置类装配\n+     * LLM 实现；否则容器无此 bean，required=false 保留默认恒等，链路零感知）。\n+     */\n+    @Autowired(required = false)\n+    public void setQueryRewriter(ReviewQueryRewriter queryRewriter) {\n+        if (queryRewriter != null) {\n+            this.queryRewriter = queryRewriter;\n+        }\n+    }\n+\n+    /** 测试 / 工具用：直接设定改写器与窗口（跳过 Spring 装配）。 */\n+    public RagContextBuilder withQueryRewriter(ReviewQueryRewriter rewriter) {\n+        this.queryRewriter = rewriter == null ? new IdentityQueryRewriter() : rewriter;\n+        return this;\n+    }\n+\n+    /** 测试 / 工具用：直接设定检索窗口。 */\n+    public RagContextBuilder withRetrievalWindow(int retrieveK, int injectTopN) {\n+        this.retrieveK = retrieveK;\n+        this.injectTopN = injectTopN;\n+        return this;\n+    }\n+\n+    /** 测试 / 工具用：直接设定 freshness 天数。 */\n+    public RagContextBuilder withMaxAgeDays(long days) {\n+        this.maxAgeDays = days;\n+        return this;\n+    }\n+\n     /**\n      * 为指定团队 / Agent 构建 RAG 增强上下文。\n      *\n@@ -69,11 +119,18 @@ public class RagContextBuilder {\n      */\n     public String buildContext(String teamId, String agentType, List<CodeDiff> diffs) {\n         long t0 = System.currentTimeMillis();\n-        // 1. 从代码提取查询意图\n-        String query = extractQueryFromDiffs(diffs);\n-        // 2. 混合检索（向量 + BM25 + RRF），含全局基线\n-        List<MemoryEntry> candidates = knowledgeStore.searchKnowledge(query, CANDIDATE_K,\n-                Teams.sanitize(teamId), true);\n+        // 1. 从代码提取查询意图（diff 形态）\n+        String rawQuery = extractQueryFromDiffs(diffs);\n+        // 1b. 查询改写：diff 形态 → 规范术语形态（可选；失败降级恒等，绝不劣化）\n+        String query = queryRewriter.rewrite(rawQuery);\n+        if (!query.equals(rawQuery)) {\n+            log.info(\"[RAG] 查询改写（{} → {}）：{} 字符 → {} 字符\",\n+                    queryRewriter.name(), agentType, rawQuery.length(), query.length());\n+        }\n+        // 2. 混合检索（向量 + BM25 + RRF），含全局基线 + freshness 过滤\n+        Duration maxAge = maxAgeDays > 0 ? Duration.ofDays(maxAgeDays) : null;\n+        List<MemoryEntry> candidates = knowledgeStore.searchKnowledge(query, retrieveK,\n+                Teams.sanitize(teamId), true, maxAge);\n         // 3. 阈值过滤（低于 minSimilarity 的块剔除；全低于则 abstain）\n         List<MemoryEntry> passed = evaluator.filterByThreshold(candidates);\n         StringBuilder sb = new StringBuilder();\n@@ -81,8 +138,8 @@ public class RagContextBuilder {\n             log.info(\"[RAG] 无相关知识（候选 {} 条均低于阈值或为空），知识分区 abstain, 耗时 {}ms\",\n                     candidates.size(), System.currentTimeMillis() - t0);\n         } else {\n-            // 4. Cross-Encoder 重排 → Top-5\n-            List<MemoryEntry> reranked = reranker.rerank(query, passed, INJECT_TOP_N);\n+            // 4. Cross-Encoder 重排 → Top-N\n+            List<MemoryEntry> reranked = reranker.rerank(query, passed, injectTopN);\n             // 5. 注入前去重：按 content hash 去除 handbook 重叠切块产生的重复块（避免同一段注入多次）\n             List<MemoryEntry> deduped = dedupeByContent(reranked);\n             if (deduped.size() < reranked.size()) {\n@@ -102,7 +159,7 @@ public class RagContextBuilder {\n                     System.currentTimeMillis() - t0);\n         }\n         // 7. 历史经验回流（记忆闭环读侧；独立于知识 abstain——经验命中仍注入）\n-        appendExperience(sb, teamId, agentType, query);\n+        appendExperience(sb, teamId, agentType, rawQuery);\n         String result = sb.toString().trim();\n         if (!result.isBlank()) {\n             log.info(\"[RAG] 注入上下文合计 {} 字符（知识分区 + 历史经验参考）, 总耗时 {}ms\",\ndiff --git a/src/main/java/com/codereview/agent/core/rag/IdentityQueryRewriter.java b/src/main/java/com/codereview/agent/core/rag/IdentityQueryRewriter.java\nnew file mode 100644\nindex 0000000..1241cb0\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/rag/IdentityQueryRewriter.java\n@@ -0,0 +1,20 @@\n+package com.codereview.agent.core.rag;\n+\n+/**\n+ * 恒等改写器：原样返回查询（默认实现 / 离线降级兜底）。\n+ *\n+ * <p>无 LLM 依赖、零开销、行为完全可预测；作为 {@code LlmQueryRewriter} 的降级目标，\n+ * 保证「改写层不可用 ≠ 检索链路不可用」。\n+ */\n+public class IdentityQueryRewriter implements ReviewQueryRewriter {\n+\n+    @Override\n+    public String rewrite(String rawQuery) {\n+        return rawQuery == null ? \"\" : rawQuery;\n+    }\n+\n+    @Override\n+    public String name() {\n+        return \"identity\";\n+    }\n+}\ndiff --git a/src/main/java/com/codereview/agent/core/rag/InMemoryKnowledgeStore.java b/src/main/java/com/codereview/agent/core/rag/InMemoryKnowledgeStore.java\nindex bbebefb..f9eca77 100644\n--- a/src/main/java/com/codereview/agent/core/rag/InMemoryKnowledgeStore.java\n+++ b/src/main/java/com/codereview/agent/core/rag/InMemoryKnowledgeStore.java\n@@ -70,17 +70,29 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {\n \n     @Override\n     public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal) {\n-        return hybridSearch(query, topK, teamId, includeGlobal);\n+        return hybridSearch(query, topK, teamId, includeGlobal, null);\n+    }\n+\n+    @Override\n+    public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,\n+                                             boolean includeGlobal, java.time.Duration maxAge) {\n+        return hybridSearch(query, topK, teamId, includeGlobal, maxAge);\n     }\n \n     /**\n      * 混合检索：BM25 + 稠密向量，RRF 融合。\n      */\n-    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId, boolean includeGlobal) {\n+    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId,\n+                                           boolean includeGlobal, java.time.Duration maxAge) {\n         String t = Teams.sanitize(teamId);\n+        java.time.Instant cutoff = (maxAge == null || maxAge.isNegative() || maxAge.isZero())\n+                ? null : java.time.Instant.now().minus(maxAge);\n         List<MemoryEntry> pool = store.values().stream()\n                 .filter(e -> \"RAG\".equals(e.agentType()))\n                 .filter(e -> {\n+                    if (cutoff != null && e.createdAt() != null && e.createdAt().isBefore(cutoff)) {\n+                        return false; // freshness：超过 maxAge 的陈旧知识不参与召回\n+                    }\n                     boolean teamMatch = t.equals(e.teamId());\n                     boolean globalMatch = includeGlobal && Teams.GLOBAL.equals(e.teamId());\n                     return teamMatch || globalMatch;\n@@ -175,4 +187,18 @@ public class InMemoryKnowledgeStore implements KnowledgeStore {\n         String t = Teams.sanitize(teamId);\n         store.values().removeIf(e -> t.equals(e.teamId()) && value.equals(e.metadata().get(key)));\n     }\n+\n+    /**\n+     * 直接注入一条已构造条目（同包测试用：可指定 createdAt 验证 freshness 过滤）。\n+     * 未携带向量时自动补算，保证后续检索可用。\n+     */\n+    void putDirect(MemoryEntry entry) {\n+        MemoryEntry e = entry;\n+        if (e.embedding() == null || e.embedding().length == 0) {\n+            float[] emb = embeddingClient.embed(e.content());\n+            e = new MemoryEntry(e.id(), e.agentType(), e.teamId(), e.content(),\n+                    e.metadata(), e.level(), e.createdAt(), emb);\n+        }\n+        store.put(e.id() == null ? idGen.getAndIncrement() : e.id(), e);\n+    }\n }\ndiff --git a/src/main/java/com/codereview/agent/core/rag/KnowledgeStore.java b/src/main/java/com/codereview/agent/core/rag/KnowledgeStore.java\nindex 223931d..5e0b745 100644\n--- a/src/main/java/com/codereview/agent/core/rag/KnowledgeStore.java\n+++ b/src/main/java/com/codereview/agent/core/rag/KnowledgeStore.java\n@@ -2,6 +2,7 @@ package com.codereview.agent.core.rag;\n \n import com.codereview.agent.core.memory.MemoryEntry;\n \n+import java.time.Duration;\n import java.util.List;\n import java.util.Map;\n \n@@ -50,6 +51,21 @@ public interface KnowledgeStore {\n      */\n     List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal);\n \n+    /**\n+     * RAG 语义检索 + freshness 过滤（知识时效，业界「新鲜度优先」实践）。\n+     *\n+     * <p>默认实现忽略 {@code maxAge} 委托 {@link #searchKnowledge(String, int, String, boolean)}\n+     * （保证存量实现与测试桩无需改动即可编译）；生产实现（{@code Pg}/{@code InMemory}）\n+     * 覆写本方法在检索侧按 {@code created_at} 过滤——超过 {@code maxAge} 未入库的陈旧\n+     * 知识不参与召回，避免「过期的历史 PR 复盘 / 旧版规范」污染当前审查上下文。\n+     *\n+     * @param maxAge 最大年龄；null 或 <=0 表示不过滤（全量召回）\n+     */\n+    default List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,\n+                                              boolean includeGlobal, Duration maxAge) {\n+        return searchKnowledge(query, topK, teamId, includeGlobal);\n+    }\n+\n     /**\n      * 按团队 + 元数据键值删除知识条目（团队隔离版本）。\n      *\ndiff --git a/src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java b/src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java\nnew file mode 100644\nindex 0000000..ef37f95\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java\n@@ -0,0 +1,107 @@\n+package com.codereview.agent.core.rag;\n+\n+import com.codereview.agent.core.llm.LlmClient;\n+import org.slf4j.Logger;\n+import org.slf4j.LoggerFactory;\n+\n+/**\n+ * 大模型查询改写器：把「代码 patch 形态」的原始查询改写为「规范术语形态」的检索查询。\n+ *\n+ * <p>审查知识检索的痛点：库内规范文档（编码规范 / 安全手册 / 历史 PR 复盘）是自然语言\n+ * 术语（如「SQL 注入」「预处理语句」「参数绑定」），而查询来自 diff 文本（充满符号、\n+ * 行号、变量名）。直接把 patch 前 500 字符丢给向量库，语义鸿沟导致召回不佳。\n+ * 本组件让模型先做一次\"术语归一化\"，把 diff 提炼为知识库更可能命中的关键词。\n+ *\n+ * <p><b>可靠性与降级契约</b>（fail-safe，绝不劣化检索）：\n+ * <ul>\n+ *   <li>LLM 调用异常（网关超时 / 熔断 / 网络）→ 捕获并回退 {@link IdentityQueryRewriter}；</li>\n+ *   <li>模型输出为空白 / 长度越界（&lt;1 或 &gt;200 字符）→ 视为无效，回退原查询；</li>\n+ *   <li>结果仅取单行（去首尾空白与引号包裹），避免模型附带解释性文本污染查询。</li>\n+ * </ul>\n+ *\n+ * <p>本类只负责\"改写\"，不含任何业务知识注入；输出作为混合检索查询使用，\n+ * 不直接拼进提示词，安全边界与原始查询一致。\n+ */\n+public class LlmQueryRewriter implements ReviewQueryRewriter {\n+\n+    private static final Logger log = LoggerFactory.getLogger(LlmQueryRewriter.class);\n+\n+    /** 改写结果长度下限（低于视为模型没认真回答，丢弃）。 */\n+    private static final int MIN_LEN = 1;\n+    /** 改写结果长度上限（防止模型把整段原文抄回来撑爆查询）。 */\n+    private static final int MAX_LEN = 200;\n+\n+    private final LlmClient llmClient;\n+    private final ReviewQueryRewriter fallback;\n+    private final String promptTemplate;\n+\n+    public LlmQueryRewriter(LlmClient llmClient) {\n+        this(llmClient, new IdentityQueryRewriter());\n+    }\n+\n+    public LlmQueryRewriter(LlmClient llmClient, ReviewQueryRewriter fallback) {\n+        this.llmClient = llmClient;\n+        this.fallback = fallback == null ? new IdentityQueryRewriter() : fallback;\n+        this.promptTemplate = buildPrompt();\n+    }\n+\n+    /**\n+     * 改写入口：失败一律回退，不向上抛（调用方无需感知改写层的存在）。\n+     */\n+    @Override\n+    public String rewrite(String rawQuery) {\n+        if (rawQuery == null || rawQuery.isBlank()) {\n+            return rawQuery == null ? \"\" : rawQuery;\n+        }\n+        try {\n+            String prompt = promptTemplate + \"\\n\\n<diff 片段>\\n\" + rawQuery + \"\\n</diff 片段>\";\n+            String out = llmClient.chat(prompt);\n+            String cleaned = sanitize(out);\n+            if (cleaned == null) {\n+                log.debug(\"[RagRewrite] 模型输出无效（空白/越界），回退原查询\");\n+                return fallback.rewrite(rawQuery);\n+            }\n+            log.info(\"[RagRewrite] 查询改写：{} 字符 → {} 字符\", rawQuery.length(), cleaned.length());\n+            return cleaned;\n+        } catch (Exception e) {\n+            // fail-safe：改写只是增强项，绝不能因它阻断审查主链路\n+            log.warn(\"[RagRewrite] 改写失败，回退原查询: {}\", e.getMessage());\n+            return fallback.rewrite(rawQuery);\n+        }\n+    }\n+\n+    /** 清洗模型输出：去首尾空白 / 引号，只保留单行；非法返回 null（触发回退）。 */\n+    private String sanitize(String out) {\n+        if (out == null) {\n+            return null;\n+        }\n+        String t = out.trim();\n+        // 只保留第一行，去掉模型可能附加的解释（先裁行再剥引号，避免首尾引号跨行误判）\n+        int nl = t.indexOf('\\n');\n+        if (nl >= 0) {\n+            t = t.substring(0, nl).trim();\n+        }\n+        // 去可能的引号包裹（模型常爱输出 \"...\" 或 '...'）\n+        if (t.length() >= 2 && (t.startsWith(\"\\\"\") && t.endsWith(\"\\\"\"))\n+                || (t.startsWith(\"'\") && t.endsWith(\"'\"))) {\n+            t = t.substring(1, t.length() - 1).trim();\n+        }\n+        if (t.length() < MIN_LEN || t.length() > MAX_LEN) {\n+            return null;\n+        }\n+        return t;\n+    }\n+\n+    private String buildPrompt() {\n+        return \"\"\"\n+                你是代码审查知识库的检索查询改写器。给定一段代码变更（diff）片段，\n+                请把它改写为 1~3 个最能命中「编码规范/安全规则文档」的检索关键词短语，\n+                要求：\n+                1. 只输出改写后的查询文本，不要解释、不要编号、不要引号；\n+                2. 聚焦技术主题（如 SQL 注入、日志脱敏、事务边界、异常吞噬、并发安全）；\n+                3. 保留代码中出现的专有名词与 API 名（如 prepared statement、HttpClient）；\n+                4. 用中文输出主题词，可夹带英文 API 名；总长不超过 80 字；\n+                5. 若 diff 与规范无关（如纯文案），输出「与规范无关」四个字即可。\n+                \"\"\";\n+    }\n+}\ndiff --git a/src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java b/src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java\nindex 628a7f4..7869542 100644\n--- a/src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java\n+++ b/src/main/java/com/codereview/agent/core/rag/PgKnowledgeStore.java\n@@ -51,7 +51,7 @@ import java.util.Map;\n  *   <li>结果归一化为 {@code similarity} 元数据，供 {@link RagEvaluator} 阈值过滤。</li>\n  * </ul>\n  */\n-public class PgKnowledgeStore implements KnowledgeStore {\n+public class PgKnowledgeStore implements KnowledgeStore, AutoCloseable {\n \n     private static final Logger log = LoggerFactory.getLogger(PgKnowledgeStore.class);\n \n@@ -131,7 +131,13 @@ public class PgKnowledgeStore implements KnowledgeStore {\n \n     @Override\n     public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal) {\n-        return hybridSearch(query, topK, teamId, includeGlobal);\n+        return hybridSearch(query, topK, teamId, includeGlobal, null);\n+    }\n+\n+    @Override\n+    public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,\n+                                             boolean includeGlobal, java.time.Duration maxAge) {\n+        return hybridSearch(query, topK, teamId, includeGlobal, maxAge);\n     }\n \n     @Override\n@@ -139,10 +145,25 @@ public class PgKnowledgeStore implements KnowledgeStore {\n         writer.deleteByMetadata(teamId, key, value);\n     }\n \n+    /**\n+     * 关闭只读检索连接池（E2E / 容器销毁时调用；写入器连接池由 MemoryStore 负责）。\n+     */\n+    @Override\n+    public void close() {\n+        if (readPool != null && !readPool.isClosed()) {\n+            readPool.close();\n+            log.info(\"[PgKnowledge] 只读检索连接池已关闭\");\n+        }\n+    }\n+\n     /**\n      * 混合检索：稠密向量 + BM25(ts_rank)，RRF 融合。\n+     *\n+     * @param maxAge freshness 过滤：仅保留 {@code created_at} 距今不超过 {@code maxAge}\n+     *               的知识块；null / <=0 表示不过滤（向后兼容默认）。\n      */\n-    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId, boolean includeGlobal) {\n+    private List<MemoryEntry> hybridSearch(String query, int topK, String teamId,\n+                                           boolean includeGlobal, java.time.Duration maxAge) {\n         long t0 = System.currentTimeMillis();\n         float[] q = embeddingClient.embed(query == null ? \"\" : query);\n         if (q == null || q.length == 0) {\n@@ -157,6 +178,12 @@ public class PgKnowledgeStore implements KnowledgeStore {\n         // 稠密路：取 topK*2 扩大召回；BM25 路：同样 topK*2\n         int widen = Math.max(topK * 2, 20);\n \n+        // freshness：超过 maxAge 的陈旧知识不参与召回（null / <=0 = 不过滤）\n+        String freshSql = \"\";\n+        if (maxAge != null && !maxAge.isNegative() && !maxAge.isZero()) {\n+            freshSql = \" AND created_at >= now() - (? || ' seconds')::interval\";\n+        }\n+\n         Map<Long, Double> denseRank = new HashMap<>();\n         Map<Long, Double> sparseRank = new HashMap<>();\n         Map<Long, MemoryEntry> byId = new HashMap<>();\n@@ -165,20 +192,22 @@ public class PgKnowledgeStore implements KnowledgeStore {\n                 SELECT id, agent_type, team_id, content, metadata, level, created_at,\n                        1 - (embedding <=> ?::vector) AS sim\n                 FROM memory_store\n-                WHERE agent_type = 'RAG' AND %s\n+                WHERE agent_type = 'RAG' AND %s %s\n                 ORDER BY embedding <=> ?::vector\n                 LIMIT ?\n-                \"\"\".formatted(teamFilter);\n+                \"\"\".formatted(teamFilter, freshSql);\n+        // freshSql 为空时是空串，不会产生多余 AND；非空自带前导空格，与 %s 拼接为\n+        // \"AND (team...) AND created_at ...\" —— freshSql 前不含模板空格（%s%s 紧贴）。\n \n         String sparseSql = \"\"\"\n                 SELECT id, agent_type, team_id, content, metadata, level, created_at,\n                        ts_rank(search_vector, plainto_tsquery('simple', ?)) AS bm25\n                 FROM memory_store\n-                WHERE agent_type = 'RAG' AND %s\n+                WHERE agent_type = 'RAG' AND %s %s\n                   AND search_vector @@ plainto_tsquery('simple', ?)\n                 ORDER BY ts_rank(search_vector, plainto_tsquery('simple', ?)) DESC\n                 LIMIT ?\n-                \"\"\".formatted(teamFilter);\n+                \"\"\".formatted(teamFilter, freshSql);\n \n         try (Connection conn = getConnection()) {\n             try (PreparedStatement ps = conn.prepareStatement(denseSql)) {\n@@ -188,6 +217,9 @@ public class PgKnowledgeStore implements KnowledgeStore {\n                 if (includeGlobal) {\n                     ps.setString(idx++, Teams.GLOBAL);\n                 }\n+                if (!freshSql.isEmpty()) {\n+                    ps.setLong(idx++, maxAge.toSeconds());\n+                }\n                 ps.setString(idx++, vectorStr);\n                 ps.setInt(idx++, widen);\n                 try (ResultSet rs = ps.executeQuery()) {\n@@ -206,6 +238,9 @@ public class PgKnowledgeStore implements KnowledgeStore {\n                 if (includeGlobal) {\n                     ps.setString(idx++, Teams.GLOBAL);\n                 }\n+                if (!freshSql.isEmpty()) {\n+                    ps.setLong(idx++, maxAge.toSeconds());\n+                }\n                 ps.setString(idx++, query == null ? \"\" : query);\n                 ps.setString(idx++, query == null ? \"\" : query);\n                 ps.setInt(idx++, widen);\ndiff --git a/src/main/java/com/codereview/agent/core/rag/RagEvaluator.java b/src/main/java/com/codereview/agent/core/rag/RagEvaluator.java\nindex a06cb6d..503f93c 100644\n--- a/src/main/java/com/codereview/agent/core/rag/RagEvaluator.java\n+++ b/src/main/java/com/codereview/agent/core/rag/RagEvaluator.java\n@@ -68,9 +68,18 @@ public class RagEvaluator {\n     }\n \n     /**\n-     * 计算检索质量指标（无 ground-truth 时仅返回命中/相似度统计）。\n+     * 计算检索质量指标。\n      *\n-     * @param passed      通过阈值的块\n+     * <p><b>排序质量指标（golden 指标扩展）</b>：传入列表按相关性降序（如重排后 Top-N），\n+     * 计算首个命中 ground-truth 的位置与 MRR（Mean Reciprocal Rank，业界排序质量核心指标）：\n+     * <ul>\n+     *   <li>{@code firstHitRank}：首个相关块的位置（1-based）；无命中为 0；</li>\n+     *   <li>{@code mrr}：{@code 1 / firstHitRank}（无命中为 0）。</li>\n+     * </ul>\n+     * hit@k 语义由调用方组合表达：Top-N 注入命中即 {@code hitCount>0}，\n+     * {@code firstHitRank <= N} 表示候选窗口内可召回。\n+     *\n+     * @param passed      按相关性排序的候选块（生产为重排后注入集；golden 测试可为检索候选）\n      * @param groundTruth 已知相关 chunk 的 id 集合（可空）\n      * @return 指标快照\n      */\n@@ -78,15 +87,26 @@ public class RagEvaluator {\n         double maxSim = passed.stream().mapToDouble(this::parseSimilarity).max().orElse(0.0);\n         double avgSim = passed.stream().mapToDouble(this::parseSimilarity).average().orElse(0.0);\n         double precision = Double.NaN, recall = Double.NaN;\n+        int firstHitRank = 0;\n+        double mrr = 0.0;\n         if (evalEnabled && groundTruth != null && !groundTruth.isEmpty()) {\n-            long tp = passed.stream()\n-                    .map(e -> String.valueOf(e.id()))\n-                    .filter(groundTruth::contains)\n-                    .count();\n+            long tp = 0;\n+            int rank = 0;\n+            for (MemoryEntry e : passed) {\n+                rank++;\n+                String id = String.valueOf(e.id());\n+                if (groundTruth.contains(id)) {\n+                    tp++;\n+                    if (firstHitRank == 0) {\n+                        firstHitRank = rank;\n+                    }\n+                }\n+            }\n             precision = passed.isEmpty() ? 0.0 : (double) tp / passed.size();\n             recall = (double) tp / groundTruth.size();\n+            mrr = firstHitRank == 0 ? 0.0 : 1.0 / firstHitRank;\n         }\n-        return new RagMetrics(passed.size(), maxSim, avgSim, precision, recall);\n+        return new RagMetrics(passed.size(), maxSim, avgSim, precision, recall, firstHitRank, mrr);\n     }\n \n     /** 从 MemoryEntry 元数据解析相似度（由检索实现写入）。 */\n@@ -101,9 +121,22 @@ public class RagEvaluator {\n         }\n     }\n \n-    /** 检索质量指标快照。 */\n+    /**\n+     * 检索质量指标快照。\n+     *\n+     * <p>golden 扩展：{@code firstHitRank}（首个相关块位置，1-based，无命中 0）\n+     * 与 {@code mrr}（1/首个命中位，无命中 0）为排序质量指标（Mean Reciprocal Rank）。\n+     */\n     public record RagMetrics(int hitCount, double maxSimilarity, double avgSimilarity,\n-                             double precision, double recall) {\n+                             double precision, double recall,\n+                             int firstHitRank, double mrr) {\n+\n+        /**\n+         * hit@k 便捷判断：首个相关块是否落在前 k 位（业界 golden 评估口径）。\n+         */\n+        public boolean hitAtK(int k) {\n+            return firstHitRank > 0 && firstHitRank <= k;\n+        }\n     }\n \n     /**\ndiff --git a/src/main/java/com/codereview/agent/core/rag/ReviewQueryRewriter.java b/src/main/java/com/codereview/agent/core/rag/ReviewQueryRewriter.java\nnew file mode 100644\nindex 0000000..34ec1d4\n--- /dev/null\n+++ b/src/main/java/com/codereview/agent/core/rag/ReviewQueryRewriter.java\n@@ -0,0 +1,36 @@\n+package com.codereview.agent.core.rag;\n+\n+/**\n+ * 检索查询改写器（业界 RAG 关键组件：query rewrite / query expansion）。\n+ *\n+ * <p>审查场景存在「代码 patch 形态」与「规范文档形态」的语义鸿沟——原始查询是从 diff\n+ * 截取的补丁文本（充满代码符号、行号、上下文噪音），而知识库内容以自然语言规范 / 术语\n+ * 为主。改写器负责把代码形态的查询转换为更贴合知识库语义的检索查询，提升召回命中率。\n+ *\n+ * <p>实现策略：\n+ * <ul>\n+ *   <li>{@link IdentityQueryRewriter}：原样返回（默认 / 离线降级，零依赖）；</li>\n+ *   <li>{@link LlmQueryRewriter}：大模型改写（需配置 {@code review.rag.query-rewrite.enabled=true}），\n+ *       提炼类名 / 方法名 / 异常类型 / 技术主题等关键词；失败或产出为空时自动降级原查询；</li>\n+ * </ul>\n+ *\n+ * <p>可靠性契约：<b>任何实现都不得让查询变得更差</b>——改写失败 / 超时 / 输出非法时必须\n+ * 返回原始查询（fail-safe），由调用方继续走混合检索。本接口为纯逻辑、无 Spring 依赖。\n+ */\n+public interface ReviewQueryRewriter {\n+\n+    /**\n+     * 改写检索查询。\n+     *\n+     * @param rawQuery 原始查询（通常为 diff 提取的补丁文本）\n+     * @return 改写后的查询；改写不可用 / 失败时必须原样返回 {@code rawQuery}\n+     */\n+    String rewrite(String rawQuery);\n+\n+    /**\n+     * 组件名（供日志可观测）。\n+     */\n+    default String name() {\n+        return getClass().getSimpleName();\n+    }\n+}\ndiff --git a/src/main/resources/application.yml b/src/main/resources/application.yml\nindex 02769b9..d3d9f3d 100644\n--- a/src/main/resources/application.yml\n+++ b/src/main/resources/application.yml\n@@ -103,6 +103,9 @@ pgvector:\n   # PgVectorMemoryStore 启动检测到配置维度与存量列不一致会「备份旧表后重建向量列」（存量向量作废），\n   # 因此维度口径在 dev/prod 必须一致，禁止各自覆盖。\n   vector-dim: ${PGVECTOR_VECTOR_DIM:1024}\n+  # ANN 向量索引类型：hnsw（默认，pgvector≥0.5 推荐，召回精度/构建速度优于 ivfflat）| ivfflat（老版本兼容）。\n+  # 存量 ivfflat 库会自动迁移重建为 hnsw；hnsw 创建失败（pgvector < 0.5）自动回退 ivfflat。\n+  index-type: ${PGVECTOR_INDEX_TYPE:hnsw}\n \n # ===== 审查调度配置 =====\n review:\n@@ -163,8 +166,9 @@ review:\n   # enabled=true 时，RAG/语义注入检测的嵌入计算切换为 LangChain4j OpenAiEmbeddingModel\n   # （OpenAI 兼容协议，复用上方 tokenhub.api-key / base-url）。\n   # 已实测 TokenHub 可用嵌入模型：kinfra-text-embedding-0.6b(1024维) / kinfra-text-embedding-4b(2560维)。\n-  # 默认用 0.6b：pgvector ivfflat 索引上限 2000 维，4b 无法建索引；\n-  # 切换模型时需同步把 pgvector.vector-dim 改为对应维度（存量表会自动迁移重建向量列）。\n+  # 默认用 0.6b：成本/延迟优先（hnsw 无 ivfflat 的 2000 维上限，4b=2560 维亦可建 hnsw 索引，\n+  # 但向量更大、内存与算力开销成倍增长）。切换模型时需同步把 pgvector.vector-dim 改为对应\n+  # 维度（存量表会自动迁移重建向量列）。\n   llm:\n     gateway:\n       # 熔断器：连续失败 N 次 → OPEN 30s；OPEN 期间快速失败，避免对已知不健康供应商继续浪费 RTT。\n@@ -206,6 +210,19 @@ review:\n       api-key: ${RERANK_API_KEY:}\n       model: ${RERANK_MODEL:rerank-english-v3.0}\n       timeout-ms: 5000\n+    # 检索候选窗（初检召回数，重排前）：业界混合检索先召回 Top-50~200 再精排 Top-N。\n+    # 默认 50（比旧值 10 提升召回上限，配合阈值过滤+重排保证注入质量不降）。\n+    retrieve-k: ${RAG_RETRIEVE_K:50}\n+    # 精排后最终注入 Top-N（LLM 上下文有限且对噪声敏感，业界精排输出 Top-5 左右）。\n+    inject-top-n: ${RAG_INJECT_TOP_N:5}\n+    # freshness：知识块最大入库年龄（天），超过该年龄的陈旧知识不参与召回\n+    # （如过期的历史 PR 复盘 / 旧版规范）。0 = 不过滤（默认，向后兼容）。\n+    max-age-days: ${RAG_MAX_AGE_DAYS:0}\n+    # 查询改写（query rewrite）：把「代码 diff 形态」的原始查询改写为「规范术语形态」，\n+    # 弥合代码 ↔ 规范文档的语义鸿沟，提升召回命中率。\n+    # 默认关闭（恒等改写，零依赖）；开启后由大模型改写，失败自动降级恒等，绝不劣化检索。\n+    query-rewrite:\n+      enabled: ${RAG_QUERY_REWRITE_ENABLED:false}\n     # 相似度阈值：低于此值的候选块不注入 prompt（选择性回答 abstain，抑制噪声）。\n     # 0.0 表示不拦截；真实向量下建议 0.2~0.4（已设为 0.3 启用 abstain）。\n     min-similarity: ${RAG_MIN_SIMILARITY:0.3}\ndiff --git a/src/test/java/com/codereview/agent/core/rag/RagContextBuilderHardeningTest.java b/src/test/java/com/codereview/agent/core/rag/RagContextBuilderHardeningTest.java\nnew file mode 100644\nindex 0000000..bc044fb\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/rag/RagContextBuilderHardeningTest.java\n@@ -0,0 +1,239 @@\n+package com.codereview.agent.core.rag;\n+\n+import com.codereview.agent.core.llm.SimpleHashEmbeddingClient;\n+import com.codereview.agent.core.memory.ExperienceStore;\n+import com.codereview.agent.core.memory.InMemoryExperienceLibrary;\n+import com.codereview.agent.core.memory.MemoryEntry;\n+import com.codereview.agent.core.memory.MemoryLevel;\n+import com.codereview.agent.core.memory.RagContextBuilder;\n+import com.codereview.agent.core.model.CodeDiff;\n+import org.junit.jupiter.api.Test;\n+\n+import java.time.Duration;\n+import java.time.Instant;\n+import java.util.ArrayList;\n+import java.util.List;\n+import java.util.Map;\n+import java.util.concurrent.atomic.AtomicInteger;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertFalse;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * RAG 加固链路测试（P0 五项中的候选扩窗 / freshness / 查询改写接线）。\n+ *\n+ * 覆盖：\n+ *  - retrieve-k 配置化：候选窗从默认 50 生效，且可调小（配置化而不是写死 10）；\n+ *  - freshness：超过 max-age-days 的陈旧知识不注入，配置关闭（0）时不过滤；\n+ *  - 查询改写接线：注入改写器后，检索确实使用改写后的查询（且默认恒等时链路不变）；\n+ *  - 全链路仍保持既有语义（阈值 / 去重 / 注入 Top-N 不变）。\n+ */\n+class RagContextBuilderHardeningTest {\n+\n+    private final ExperienceStore emptyExp = new ExperienceStore(new InMemoryExperienceLibrary());\n+\n+    private CodeDiff diff(String patch) {\n+        return new CodeDiff(\"Demo.java\", patch);\n+    }\n+\n+    /** 记录查询与 topK 的桩 store（可编程返回预置结果）。 */\n+    static class RecordingStore implements KnowledgeStore {\n+        final List<MemoryEntry> preset;\n+        String lastQuery;\n+        int lastTopK;\n+        Duration lastMaxAge;\n+        boolean lastIncludeGlobal;\n+        String lastTeam;\n+\n+        RecordingStore(List<MemoryEntry> preset) {\n+            this.preset = preset;\n+        }\n+\n+        @Override public int saveKnowledge(String teamId, String doc, Map<String, String> meta) { return 0; }\n+        @Override public void deleteByMetadata(String teamId, String key, String value) {}\n+\n+        @Override\n+        public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId, boolean includeGlobal) {\n+            return searchKnowledge(query, topK, teamId, includeGlobal, null);\n+        }\n+\n+        @Override\n+        public List<MemoryEntry> searchKnowledge(String query, int topK, String teamId,\n+                                                 boolean includeGlobal, Duration maxAge) {\n+            this.lastQuery = query;\n+            this.lastTopK = topK;\n+            this.lastTeam = teamId;\n+            this.lastIncludeGlobal = includeGlobal;\n+            this.lastMaxAge = maxAge;\n+            return preset;\n+        }\n+    }\n+\n+    private MemoryEntry entry(long id, String content, String source, double sim, Instant createdAt) {\n+        Map<String, String> m = new java.util.HashMap<>(Map.of(\n+                \"source\", source, \"type\", \"security_rule\",\n+                \"similarity\", String.format(\"%.4f\", sim)));\n+        return new MemoryEntry(id, \"RAG\", \"teamA\", content, Map.copyOf(m),\n+                MemoryLevel.LONG_TERM, createdAt, null);\n+    }\n+\n+    // ---------- 候选扩窗（retrieve-k 配置化）----------\n+\n+    @Test\n+    void retrieveKDefaultsTo50AndIsConfigurable() {\n+        RecordingStore store = new RecordingStore(List.of());\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp);\n+        // 默认窗 = 50（对标业界 Top-50~200 召回）\n+        builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(\"x\")));\n+        assertEquals(50, store.lastTopK, \"候选扩窗默认应到 50\");\n+\n+        // 配置化：显式设定更小的窗（模拟 yml review.rag.retrieve-k 被调低）\n+        builder.withRetrievalWindow(10, 5);\n+        builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(\"x\")));\n+        assertEquals(10, store.lastTopK, \"retrieve-k 应可配置（此处调回 10）\");\n+    }\n+\n+    // ---------- freshness（max-age-days）----------\n+\n+    @Test\n+    void freshnessPassesMaxAgeToStore() {\n+        RecordingStore store = new RecordingStore(List.of());\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp);\n+        // 默认 0 天 = 不过滤（null）\n+        builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(\"x\")));\n+        assertEquals(null, store.lastMaxAge, \"默认 max-age-days=0 应不过滤（传 null）\");\n+\n+        // 配置 30 天后应透传 Duration\n+        builder.withMaxAgeDays(30);\n+        builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(\"x\")));\n+        assertEquals(Duration.ofDays(30), store.lastMaxAge, \"freshness 应透传 maxAge 给检索层\");\n+    }\n+\n+    @Test\n+    void freshnessFiltersStaleEntriesEndToEnd() {\n+        // 端到端：注入一条「1 天前」与一条「100 天前」的知识，maxAge=30 天时应只注入新鲜条目\n+        InMemoryKnowledgeStore store = new InMemoryKnowledgeStore(new SimpleHashEmbeddingClient());\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp).withMaxAgeDays(30);\n+\n+        String freshContent = \"SQL 注入 防护 预处理语句 参数绑定 fresh\";\n+        String staleContent = \"旧版规范 明文存储 密码 stale\";\n+        store.saveKnowledge(\"teamA\", freshContent, Map.of(\"source\", \"handbook-new\", \"type\", \"security_rule\"));\n+        // 用同包 putDirect 注入一条 createdAt=100 天前的旧知识（走真实混合检索池）\n+        store.putDirect(entry(999, staleContent, \"handbook-old\", 0.99, Instant.now().minus(Duration.ofDays(100))));\n+\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"String sql = \\\"select\\\" + id; SQL 注入\")));\n+        assertTrue(ctx.contains(\"预处理语句\"), \"新鲜知识应被注入\");\n+        assertFalse(ctx.contains(\"handbook-old\"), \"超过 max-age 的陈旧知识不应注入\");\n+    }\n+\n+    @Test\n+    void freshnessZeroDisablesFiltering() {\n+        InMemoryKnowledgeStore store = new InMemoryKnowledgeStore(new SimpleHashEmbeddingClient());\n+        // maxAgeDays=0 → 不过滤，旧知识仍可召回\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp);\n+        store.putDirect(entry(999, \"旧版规范 明文存储 密码 stale-only\", \"handbook-old\",\n+                0.99, Instant.now().minus(Duration.ofDays(365))));\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"password 明文 存储\")));\n+        assertTrue(ctx.contains(\"明文存储\"), \"max-age-days=0（默认）不应过滤旧知识\");\n+    }\n+\n+    // ---------- 查询改写接线 ----------\n+\n+    @Test\n+    void queryRewriterIsAppliedToRetrievalQuery() {\n+        RecordingStore store = new RecordingStore(List.of());\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp);\n+        AtomicInteger calls = new AtomicInteger();\n+        // 改写器：把任何 diff 查询统一改写为「规范术语查询」，并记录调用\n+        ReviewQueryRewriter spy = raw -> {\n+            calls.incrementAndGet();\n+            return \"SQL 注入 参数绑定 prepared statement\";\n+        };\n+        builder.withQueryRewriter(spy);\n+        builder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(\"String sql = \\\"select * from user where id=\\\" + id;\")));\n+        assertEquals(1, calls.get(), \"查询改写器应被调用一次\");\n+        assertEquals(\"SQL 注入 参数绑定 prepared statement\", store.lastQuery,\n+                \"检索应使用改写后的查询（代码形态 → 规范术语形态）\");\n+    }\n+\n+    @Test\n+    void defaultIdentityRewriterKeepsRawQuery() {\n+        RecordingStore store = new RecordingStore(List.of());\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp);\n+        String raw = \"String sql = \\\"select * from user where id=\\\" + id;\";\n+        builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(raw)));\n+        assertTrue(store.lastQuery.contains(\"String sql\"), \"默认恒等改写应保留原始 diff 查询\");\n+    }\n+\n+    @Test\n+    void queryRewriteRescuesAbstainedQuery() {\n+        // 语义鸿沟场景：两条候选——「代码符号块」与「规范术语块」。\n+        // 原始 diff 查询（代码形态）会让代码符号块排第一（词重叠高），\n+        // 而改写为规范术语后，规范库块应排到第一（改写把查询拉回知识库语言）。\n+        InMemoryKnowledgeStore store = new InMemoryKnowledgeStore(new SimpleHashEmbeddingClient());\n+        // 用同包 putDirect 注入两条预置相似度（避免哈希嵌入对中文区分度低导致 sim 失真）\n+        store.putDirect(entry(1,\n+                \"SQL 注入 必须 使用 预处理语句 prepared statement 参数绑定 禁止拼接\",\n+                \"sec-kb\", 0.6, Instant.now()));\n+        store.putDirect(entry(2,\n+                \"String sql select from user where id name 拼接 demo 变量\",\n+                \"code-block\", 0.95, Instant.now()));\n+        // 注意：InMemory store 会按真实哈希余弦覆写 similarity 元数据，故此处阈值 0.0\n+        // （不做相似度拦截）——本测试聚焦「改写改变重排顺序」，由词重叠排序决定高下。\n+        RagEvaluator evaluator = new RagEvaluator(0.0, true);\n+\n+        String rawDiff = \"String sql = \\\"select * from user where name=\\\" + name;\";\n+        // 恒等改写：代码形态查询 → 代码符号块（code-block）应排最前\n+        RagContextBuilder identityBuilder = new RagContextBuilder(store, new HeuristicReranker(),\n+                evaluator, emptyExp);\n+        String withoutRewrite = identityBuilder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(rawDiff)));\n+\n+        // LLM 改写（模拟模型把 diff 归纳为规范术语）→ 规范库块（sec-kb）应排最前\n+        ReviewQueryRewriter llmLike = raw -> \"SQL 注入 预处理语句 参数绑定\";\n+        RagContextBuilder rewrittenBuilder = new RagContextBuilder(store, new HeuristicReranker(),\n+                evaluator, emptyExp).withQueryRewriter(llmLike);\n+        String withRewrite = rewrittenBuilder.buildContext(\"teamA\", \"SecurityAgent\",\n+                List.of(diff(rawDiff)));\n+\n+        assertTrue(withoutRewrite.indexOf(\"[code-block]\") < withoutRewrite.indexOf(\"[sec-kb]\"),\n+                \"恒等改写时代码符号块应排第一（当前注入:\\n\" + withoutRewrite + \")\");\n+        assertTrue(withRewrite.indexOf(\"[sec-kb]\") < withRewrite.indexOf(\"[code-block]\"),\n+                \"规范术语改写后规范库块应排第一（当前注入:\\n\" + withRewrite + \")\");\n+        assertTrue(withRewrite.contains(\"预处理语句\"), \"改写后应命中规范库语义\");\n+    }\n+\n+    /** 空 diff / 空知识库不因改写层而回归（abstain 语义保持）。 */\n+    @Test\n+    void rewriteLayerDoesNotBreakAbstainOnEmptyKnowledge() {\n+        InMemoryKnowledgeStore store = new InMemoryKnowledgeStore(new SimpleHashEmbeddingClient());\n+        ReviewQueryRewriter llmLike = raw -> \"SQL 注入 预处理语句\";\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp).withQueryRewriter(llmLike);\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(\"some diff\")));\n+        assertEquals(\"\", ctx, \"知识库为空时仍应 abstain（改写层不应凭空造知识）\");\n+    }\n+\n+    /** 回归：既有端到端断言（命中 / 跨团队隔离 / 空 diff 安全）不受新配置影响。 */\n+    @Test\n+    void regressionEndToEndSemanticsPreserved() {\n+        InMemoryKnowledgeStore store = new InMemoryKnowledgeStore(new SimpleHashEmbeddingClient());\n+        store.saveKnowledge(\"teamB\", \"团队B 支付风控 secretB 规则\", Map.of(\"source\", \"b-kb\", \"type\", \"security_rule\"));\n+        RagContextBuilder builder = new RagContextBuilder(store, new HeuristicReranker(),\n+                new RagEvaluator(0.0, false), emptyExp);\n+        String ctx = builder.buildContext(\"teamA\", \"SecurityAgent\", List.of(diff(\"secretB 风控\")));\n+        assertFalse(ctx.contains(\"secretB\"), \"跨团队隔离不因加固而回退\");\n+        assertEquals(\"\", builder.buildContext(\"teamA\", \"SecurityAgent\", List.of()),\n+                \"空 diff 仍安全返回\");\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/core/rag/RagEvaluatorTest.java b/src/test/java/com/codereview/agent/core/rag/RagEvaluatorTest.java\nindex 39c5a21..09ca360 100644\n--- a/src/test/java/com/codereview/agent/core/rag/RagEvaluatorTest.java\n+++ b/src/test/java/com/codereview/agent/core/rag/RagEvaluatorTest.java\n@@ -93,6 +93,35 @@ class RagEvaluatorTest {\n         RagEvaluator.RagMetrics m = eval.evaluate(passed, gt);\n         assertEquals(0.5, m.precision(), 1e-6);\n         assertEquals(0.5, m.recall(), 1e-6);\n+        // golden 排序指标：首个相关块在 rank 1 → firstHitRank=1, MRR=1\n+        assertEquals(1, m.firstHitRank());\n+        assertEquals(1.0, m.mrr(), 1e-6);\n+        assertTrue(m.hitAtK(1), \"相关块位于首位应命中 hit@1\");\n+        assertTrue(m.hitAtK(5), \"相关块位于首位必命中 hit@5\");\n+    }\n+\n+    @Test\n+    void evaluateComputesMrrWhenRelevantNotFirst() {\n+        RagEvaluator eval = new RagEvaluator(0.0, true);\n+        // 相关块（id=3）排第 3 → firstHitRank=3, MRR=1/3；hit@2 不命中、hit@5 命中\n+        List<MemoryEntry> passed = List.of(withSim(1, 0.9), withSim(2, 0.8), withSim(3, 0.7), withSim(4, 0.6));\n+        Set<String> gt = Set.of(\"3\", \"9\");\n+        RagEvaluator.RagMetrics m = eval.evaluate(passed, gt);\n+        assertEquals(3, m.firstHitRank());\n+        assertEquals(1.0 / 3.0, m.mrr(), 1e-6);\n+        assertFalse(m.hitAtK(2), \"相关块不在前 2 → hit@2 不命中\");\n+        assertTrue(m.hitAtK(5), \"相关块在前 5 → hit@5 命中\");\n+    }\n+\n+    @Test\n+    void evaluateMrrZeroWhenNoGroundTruthHit() {\n+        RagEvaluator eval = new RagEvaluator(0.0, true);\n+        List<MemoryEntry> passed = List.of(withSim(1, 0.9), withSim(2, 0.8));\n+        Set<String> gt = Set.of(\"99\");\n+        RagEvaluator.RagMetrics m = eval.evaluate(passed, gt);\n+        assertEquals(0, m.firstHitRank(), \"无命中时 firstHitRank=0\");\n+        assertEquals(0.0, m.mrr(), 1e-6);\n+        assertFalse(m.hitAtK(5), \"无命中时 hit@k 恒不命中\");\n     }\n \n     @Test\ndiff --git a/src/test/java/com/codereview/agent/core/rag/ReviewQueryRewriterTest.java b/src/test/java/com/codereview/agent/core/rag/ReviewQueryRewriterTest.java\nnew file mode 100644\nindex 0000000..225805b\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/core/rag/ReviewQueryRewriterTest.java\n@@ -0,0 +1,103 @@\n+package com.codereview.agent.core.rag;\n+\n+import com.codereview.agent.core.llm.LlmClient;\n+import org.junit.jupiter.api.Test;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 查询改写层测试（P0：diff 代码形态 → 规范术语形态的语义鸿沟弥合）。\n+ *\n+ * 覆盖：\n+ *  - IdentityQueryRewriter 恒等返回（默认 / 降级兜底，零依赖）；\n+ *  - LlmQueryRewriter 正常改写（去引号 / 截断首行）；\n+ *  - LLM 返回空 / 超长 → 视为无效回退原查询；\n+ *  - LLM 抛异常（网关熔断 / 超时）→ fail-safe 回退原查询，绝不阻断检索链路。\n+ */\n+class ReviewQueryRewriterTest {\n+\n+    /** 可编程 LlmClient 桩（chat 返回预设 / 抛异常）。 */\n+    private static final class StubLlm implements LlmClient {\n+        private final String reply;\n+        private final RuntimeException error;\n+        private String lastPrompt;\n+\n+        StubLlm(String reply) {\n+            this.reply = reply;\n+            this.error = null;\n+        }\n+\n+        StubLlm(RuntimeException error) {\n+            this.reply = null;\n+            this.error = error;\n+        }\n+\n+        @Override\n+        public String chat(String prompt) {\n+            this.lastPrompt = prompt;\n+            if (error != null) {\n+                throw error;\n+            }\n+            return reply;\n+        }\n+    }\n+\n+    @Test\n+    void identityReturnsQueryUnchanged() {\n+        ReviewQueryRewriter rw = new IdentityQueryRewriter();\n+        String q = \"String sql = \\\"select * from user where id=\\\" + id;\";\n+        assertEquals(q, rw.rewrite(q));\n+        assertEquals(\"identity\", rw.name());\n+    }\n+\n+    @Test\n+    void llmRewritesToNormativeTerms() {\n+        StubLlm llm = new StubLlm(\"SQL 注入 预处理语句 prepared statement\");\n+        ReviewQueryRewriter rw = new LlmQueryRewriter(llm);\n+        String out = rw.rewrite(\"String sql = \\\"select * from user where id=\\\" + id;\");\n+        assertEquals(\"SQL 注入 预处理语句 prepared statement\", out);\n+        assertTrue(llm.lastPrompt != null && llm.lastPrompt.contains(\"改写\"));\n+    }\n+\n+    @Test\n+    void llmStripsQuotesAndFirstLine() {\n+        // 模型常输出引号包裹或附带解释：都应被清洗为纯查询\n+        StubLlm quoted = new StubLlm(\"\\\"SQL 注入 参数绑定\\\"\\n以上是改写结果\");\n+        ReviewQueryRewriter rw = new LlmQueryRewriter(quoted);\n+        assertEquals(\"SQL 注入 参数绑定\", rw.rewrite(\"jdbc sql concat\"));\n+    }\n+\n+    @Test\n+    void llmEmptyOutputFallsBackToRaw() {\n+        StubLlm blank = new StubLlm(\"   \");\n+        ReviewQueryRewriter rw = new LlmQueryRewriter(blank);\n+        String raw = \"select * from t where a=1 拼接\";\n+        assertEquals(raw, rw.rewrite(raw), \"空白输出应回退原查询\");\n+    }\n+\n+    @Test\n+    void llmOverlongOutputFallsBackToRaw() {\n+        // 超长输出（模型把整段原文抄回来）应视为无效\n+        StubLlm verbose = new StubLlm(\"x\".repeat(500));\n+        ReviewQueryRewriter rw = new LlmQueryRewriter(verbose);\n+        String raw = \"some diff\";\n+        assertEquals(raw, rw.rewrite(raw), \"超长输出应回退原查询\");\n+    }\n+\n+    @Test\n+    void llmExceptionFallsBackToRawFailSafe() {\n+        StubLlm failing = new StubLlm(new IllegalStateException(\"网关熔断\"));\n+        ReviewQueryRewriter rw = new LlmQueryRewriter(failing);\n+        String raw = \"HttpClient post 明文传输\";\n+        assertEquals(raw, rw.rewrite(raw), \"LLM 异常必须回退，绝不向上抛\");\n+    }\n+\n+    @Test\n+    void nullQueryHandledGracefully() {\n+        ReviewQueryRewriter identity = new IdentityQueryRewriter();\n+        assertEquals(\"\", identity.rewrite(null));\n+        StubLlm llm = new StubLlm(\"anything\");\n+        assertEquals(\"\", new LlmQueryRewriter(llm).rewrite(null), \"null 输入不应触发 LLM 也不应 NPE\");\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/e2e/PgHnswIndexE2eTest.java b/src/test/java/com/codereview/agent/e2e/PgHnswIndexE2eTest.java\nnew file mode 100644\nindex 0000000..eb320fd\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/e2e/PgHnswIndexE2eTest.java\n@@ -0,0 +1,116 @@\n+package com.codereview.agent.e2e;\n+\n+import com.codereview.agent.core.llm.SimpleHashEmbeddingClient;\n+import com.codereview.agent.core.memory.PgVectorMemoryStore;\n+import org.junit.jupiter.api.Assumptions;\n+import org.junit.jupiter.api.BeforeAll;\n+import org.junit.jupiter.api.Test;\n+import org.junit.jupiter.api.TestInstance;\n+\n+import java.sql.Connection;\n+import java.sql.DriverManager;\n+import java.sql.ResultSet;\n+import java.sql.Statement;\n+\n+import static org.junit.jupiter.api.Assertions.assertNotNull;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 【HNSW 索引 E2E】真实 PostgreSQL + pgvector（0.8.x）下验证 PgVectorMemoryStore 建索引行为：\n+ * <ul>\n+ *   <li>默认（index-type=hnsw）在真库上创建 HNSW 索引（pgvector≥0.5 支持）；</li>\n+ *   <li>存量 ivfflat 索引自动迁移为 hnsw（DROP 后重建）；</li>\n+ *   <li>幂等：重复 init 不重建（已是期望类型直接跳过）。</li>\n+ * </ul>\n+ *\n+ * <p>无本地 PG 时整类跳过（与 {@link PgClusterE2eTest} 同策略）。\n+ */\n+@TestInstance(TestInstance.Lifecycle.PER_CLASS)\n+class PgHnswIndexE2eTest {\n+\n+    private static final String HOST = \"localhost\";\n+    private static final int PORT = 5432;\n+    private static final String DB = \"codereview\";\n+    private static final String USER = \"yunfei\";\n+\n+    private static boolean pgUp;\n+\n+    @BeforeAll\n+    static void requirePg() {\n+        try (Connection c = DriverManager.getConnection(\"jdbc:postgresql://\" + HOST + \":\" + PORT + \"/\" + DB, USER, \"\")) {\n+            // pgvector 扩展可用且版本支持 hnsw（≥0.5.0）\n+            try (Statement s = c.createStatement();\n+                 ResultSet rs = s.executeQuery(\"SELECT extversion FROM pg_extension WHERE extname='vector'\")) {\n+                if (rs.next()) {\n+                    String v = rs.getString(1);\n+                    pgUp = parseVersion(v) >= 0.5;\n+                }\n+            }\n+        } catch (Throwable t) {\n+            pgUp = false;\n+        }\n+        Assumptions.assumeTrue(pgUp, \"无本地 PostgreSQL + pgvector(≥0.5)，跳过 HNSW E2E\");\n+    }\n+\n+    private static double parseVersion(String v) {\n+        try {\n+            return Double.parseDouble(v.split(\"\\\\.\")[0] + \".\" + v.split(\"\\\\.\")[1]);\n+        } catch (Exception e) {\n+            return 0;\n+        }\n+    }\n+\n+    private String currentIndexType() throws Exception {\n+        try (Connection c = DriverManager.getConnection(\n+                \"jdbc:postgresql://\" + HOST + \":\" + PORT + \"/\" + DB, USER, \"\");\n+             Statement s = c.createStatement();\n+             ResultSet rs = s.executeQuery(\n+                     \"SELECT indexdef FROM pg_indexes WHERE tablename='memory_store' \"\n+                             + \"AND indexname='idx_memory_embedding'\")) {\n+            return rs.next() ? rs.getString(1) : null;\n+        }\n+    }\n+\n+    @Test\n+    void hnswIndexCreatedOrMigratedOnRealPg() throws Exception {\n+        PgVectorMemoryStore store = new PgVectorMemoryStore(\n+                new SimpleHashEmbeddingClient(), HOST, PORT, DB, USER, \"\", 1024, \"hnsw\");\n+        try {\n+            store.init(); // 建表（若缺）/迁移/建索引，等价 Spring 启动\n+            String indexdef = currentIndexType();\n+            assertNotNull(indexdef, \"真库上应存在 idx_memory_embedding 向量索引\");\n+            assertTrue(indexdef.contains(\"USING hnsw\"),\n+                    \"index-type=hnsw 时真库索引应为 HNSW，实际: \" + indexdef);\n+\n+            // 幂等：再次 init 不重建、不报错，索引仍是 hnsw\n+            store.init();\n+            String again = currentIndexType();\n+            assertTrue(again.contains(\"USING hnsw\"), \"重复 init 应保持 HNSW 索引，实际: \" + again);\n+        } finally {\n+            store.destroy();\n+        }\n+    }\n+\n+    @Test\n+    void ivfflatFallbackStillCreatesIndexWhenRequested() throws Exception {\n+        // 显式 ivfflat（老版本兼容路径）：应成功创建 ivfflat 索引（不因默认 hnsw 而失败）\n+        PgVectorMemoryStore store = new PgVectorMemoryStore(\n+                new SimpleHashEmbeddingClient(), HOST, PORT, DB, USER, \"\", 1024, \"ivfflat\");\n+        try {\n+            store.init();\n+            String indexdef = currentIndexType();\n+            assertNotNull(indexdef, \"ivfflat 配置下也应存在向量索引\");\n+            assertTrue(indexdef.contains(\"USING ivfflat\"), \"显式 ivfflat 应创建 ivfflat 索引，实际: \" + indexdef);\n+        } finally {\n+            store.destroy();\n+            // 还原为默认 hnsw，避免污染后续用例\n+            PgVectorMemoryStore restore = new PgVectorMemoryStore(\n+                    new SimpleHashEmbeddingClient(), HOST, PORT, DB, USER, \"\", 1024, \"hnsw\");\n+            try {\n+                restore.init();\n+            } finally {\n+                restore.destroy();\n+            }\n+        }\n+    }\n+}\ndiff --git a/src/test/java/com/codereview/agent/e2e/PgRagFreshnessE2eTest.java b/src/test/java/com/codereview/agent/e2e/PgRagFreshnessE2eTest.java\nnew file mode 100644\nindex 0000000..858ac8c\n--- /dev/null\n+++ b/src/test/java/com/codereview/agent/e2e/PgRagFreshnessE2eTest.java\n@@ -0,0 +1,128 @@\n+package com.codereview.agent.e2e;\n+\n+import com.codereview.agent.core.llm.EmbeddingClient;\n+import com.codereview.agent.core.memory.MemoryEntry;\n+import com.codereview.agent.core.rag.PgKnowledgeStore;\n+import org.junit.jupiter.api.Assumptions;\n+import org.junit.jupiter.api.BeforeAll;\n+import org.junit.jupiter.api.Test;\n+import org.junit.jupiter.api.TestInstance;\n+\n+import java.sql.Connection;\n+import java.sql.DriverManager;\n+import java.sql.Statement;\n+import java.time.Duration;\n+import java.util.List;\n+import java.util.Map;\n+import java.util.UUID;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertTrue;\n+\n+/**\n+ * 【RAG freshness 真库 E2E】验证 PgKnowledgeStore 的 maxAge 过滤在真实 PostgreSQL 上生效\n+ * （SQL 绑定顺序 / created_at 条件正确性——纯 InMemory 测试覆盖不到 PG 特有拼接）。\n+ *\n+ * <p>策略：向 memory_store 插入两条同 team RAG 数据（一条 now、一条 100 天前），\n+ * 用零向量（1024 维）做稠密查询（语义上两者等价，唯一变量是 freshness），\n+ * 断言 maxAge=30 天时只召回新鲜条目。\n+ */\n+@TestInstance(TestInstance.Lifecycle.PER_CLASS)\n+class PgRagFreshnessE2eTest {\n+\n+    private static final String HOST = \"localhost\";\n+    private static final int PORT = 5432;\n+    private static final String DB = \"codereview\";\n+    private static final String USER = \"yunfei\";\n+    private static final int DIM = 1024;\n+\n+    private static boolean pgUp;\n+\n+    /** 1024 维零向量嵌入桩：检索时避免维度 mismatch（dense 路不区分内容，让 freshness 成为唯一变量）。 */\n+    private static final EmbeddingClient ZERO_EMBED = new EmbeddingClient() {\n+        @Override\n+        public float[] embed(String text) {\n+            return new float[DIM];\n+        }\n+    };\n+\n+    @BeforeAll\n+    static void requirePg() {\n+        try (Connection c = DriverManager.getConnection(\"jdbc:postgresql://\" + HOST + \":\" + PORT + \"/\" + DB, USER, \"\")) {\n+            pgUp = true;\n+        } catch (Throwable t) {\n+            pgUp = false;\n+        }\n+        Assumptions.assumeTrue(pgUp, \"无本地 PostgreSQL，跳过 RAG freshness E2E\");\n+    }\n+\n+    private String zeroVectorSql() {\n+        return \"array_fill(0::float8, ARRAY[\" + DIM + \"])::vector\";\n+    }\n+\n+    private void insert(String team, String content, String ageSql) throws Exception {\n+        try (Connection c = DriverManager.getConnection(\n+                \"jdbc:postgresql://\" + HOST + \":\" + PORT + \"/\" + DB, USER, \"\");\n+             Statement s = c.createStatement()) {\n+            s.executeUpdate(\"INSERT INTO memory_store (agent_type, team_id, content, metadata, level, created_at, embedding, search_vector) \"\n+                    + \"VALUES ('RAG', '\" + team + \"', '\" + content + \"', '{\\\"source\\\":\\\"e2e-fresh\\\"}', 'LONG_TERM', \"\n+                    + ageSql + \", \" + zeroVectorSql() + \", to_tsvector('simple', '\" + content + \"'))\");\n+        }\n+    }\n+\n+    private void cleanup(String team) throws Exception {\n+        try (Connection c = DriverManager.getConnection(\n+                \"jdbc:postgresql://\" + HOST + \":\" + PORT + \"/\" + DB, USER, \"\");\n+             Statement s = c.createStatement()) {\n+            s.executeUpdate(\"DELETE FROM memory_store WHERE team_id = '\" + team + \"'\");\n+        }\n+    }\n+\n+    @Test\n+    void freshnessFiltersStaleRowsOnRealPg() throws Exception {\n+        String team = \"e2e-fresh-\" + UUID.randomUUID().toString().substring(0, 8);\n+        try {\n+            insert(team, \"freshrule 最新规范 参数绑定 prepared statement\", \"now()\");\n+            insert(team, \"stalerecord 陈旧记录 已废弃的明文密码规则\", \"now() - interval '100 days'\");\n+\n+            PgKnowledgeStore store = new PgKnowledgeStore(ZERO_EMBED, null,\n+                    HOST, PORT, DB, USER, \"\", DIM);\n+\n+            // 无 maxAge → 两条都召回（freshness 默认关闭）\n+            List<MemoryEntry> all = store.searchKnowledge(\"规范 规则\", 10, team, false);\n+            assertEquals(2, all.size(), \"无 maxAge 时应召回新旧两条\");\n+\n+            // maxAge=30 天 → 只召回 100 天内入库的新条目\n+            List<MemoryEntry> fresh = store.searchKnowledge(\"规范 规则\", 10, team, false,\n+                    Duration.ofDays(30));\n+            assertEquals(1, fresh.size(), \"maxAge=30 天时应过滤掉 100 天前的陈旧条目\");\n+            assertTrue(fresh.get(0).content().contains(\"freshrule\"),\n+                    \"剩余条目应为新鲜条目，实际: \" + fresh.get(0).content());\n+            store.close();\n+        } finally {\n+            cleanup(team);\n+        }\n+    }\n+\n+    @Test\n+    void nonRagRowsUntouchedByFreshnessSearch() throws Exception {\n+        // 检索限定 agent_type='RAG'：即使库里有经验类（EXPERIENCE）旧行也不应被召回\n+        String team = \"e2e-nonrag-\" + UUID.randomUUID().toString().substring(0, 8);\n+        try {\n+            try (Connection c = DriverManager.getConnection(\n+                    \"jdbc:postgresql://\" + HOST + \":\" + PORT + \"/\" + DB, USER, \"\");\n+                 Statement s = c.createStatement()) {\n+                s.executeUpdate(\"INSERT INTO memory_store (agent_type, team_id, content, metadata, level, created_at, embedding, search_vector) \"\n+                        + \"VALUES ('EXPERIENCE', '\" + team + \"', '经验 不在 RAG 视角', '{}', 'LONG_TERM', now(), \"\n+                        + zeroVectorSql() + \", to_tsvector('simple', '经验 不在 RAG 视角'))\");\n+            }\n+            PgKnowledgeStore store = new PgKnowledgeStore(ZERO_EMBED, null,\n+                    HOST, PORT, DB, USER, \"\", DIM);\n+            List<MemoryEntry> hits = store.searchKnowledge(\"经验\", 10, team, false);\n+            assertTrue(hits.isEmpty(), \"EXPERIENCE 行不应出现在 RAG 检索结果中\");\n+            store.close();\n+        } finally {\n+            cleanup(team);\n+        }\n+    }\n+}\n",
+  "patchBytes": 84248,
+  "patchSha256": "e4a347338f3378759da94ea566b23ec36cf240ade47acd4dc457643b2bd33ecd",
+  "provenance": "git-history",
+  "provenanceNote": "feat：RAG 检索加固（可配窗口 + LLM 查询改写）",
+  "replayInput": {
+    "agents": [
+      {
+        "agentType": "ARCHITECTURE",
+        "findings": [
+          {
+            "agentType": "ARCHITECTURE",
+            "category": "architecture",
+            "confidence": 0.9,
+            "description": "与安全/逻辑 Agent 在同一位置给出相反结论，用于验证仲裁按优先级保留高优方",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 194,
+            "lineStart": 194,
+            "ruleId": "ARCH-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "保持现状",
+            "title": "（仲裁受控样本）此处无需改动"
+          }
+        ]
+      },
+      {
+        "agentType": "LOGIC",
+        "findings": [
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 194,
+            "lineStart": 194,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 223,
+            "lineStart": 223,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 225,
+            "lineStart": 225,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 226,
+            "lineStart": 226,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因",
+            "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+            "lineEnd": 68,
+            "lineStart": 68,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "只打 e.getMessage() 丢了堆栈与异常类型，线上无法定位根因"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+            "lineEnd": 76,
+            "lineStart": 76,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          },
+          {
+            "agentType": "LOGIC",
+            "category": "logic",
+            "confidence": 0.8,
+            "description": "新增 return null 且未在同处说明契约，调用方易漏判空",
+            "file": "src/main/java/com/codereview/agent/core/rag/LlmQueryRewriter.java",
+            "lineEnd": 90,
+            "lineStart": 90,
+            "ruleId": "LOGIC-005",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "新增 return null 且未在同处说明契约，调用方易漏判空"
+          }
+        ]
+      },
+      {
+        "agentType": "PERFORMANCE",
+        "findings": [
+          {
+            "agentType": "PERFORMANCE",
+            "category": "logic",
+            "confidence": 0.6,
+            "description": "与首条同 (文件@行#规则)，用于验证去重只保留一条且不丢真问题",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 194,
+            "lineStart": 194,
+            "ruleId": "AE-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "同上",
+            "title": "（去重受控样本）AE-001"
+          }
+        ]
+      },
+      {
+        "agentType": "STYLE",
+        "findings": [
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 132,
+            "lineStart": 132,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 94,
+            "lineStart": 94,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 100,
+            "lineStart": 100,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.8,
+            "description": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）",
+            "file": "src/main/java/com/codereview/agent/core/memory/RagContextBuilder.java",
+            "lineEnd": 107,
+            "lineStart": 107,
+            "ruleId": "DOC-001",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "按评审意见修复",
+            "title": "同文件同族方法都写了 Javadoc，这一处没有（本项目规范要求 public 方法写明用途）"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 726,
+            "lineStart": 726,
+            "ruleId": "STYLE-900",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 1）命名风格建议"
+          },
+          {
+            "agentType": "STYLE",
+            "category": "style",
+            "confidence": 0.7,
+            "description": "ground-truth 中不存在的问题，用于衡量 precision（不该留的被留下）",
+            "file": "src/main/java/com/codereview/agent/core/memory/PgVectorMemoryStore.java",
+            "lineEnd": 743,
+            "lineStart": 743,
+            "ruleId": "STYLE-910",
+            "severity": "MINOR",
+            "source": "LLM",
+            "suggestion": "重命名",
+            "title": "（噪音受控样本 2）命名风格建议"
+          }
+        ]
+      }
+    ],
+    "feedback": [],
+    "note": "由 groundTruth 派生 + 受控干扰项（noise/dup/conflict/feedback）；**不是真实模型产出**，故本基准测的是确定性后处理链，不是模型质量",
+    "origin": "derived-from-ground-truth+controlled-distractors"
+  },
+  "repoKey": "code-review-agent",
+  "repoUrl": "https://github.com/13liyunfei/code-review-agent",
+  "sha": "a36992dbc64abb5ac42a16bf4da54ca931a69e7a",
+  "shaShort": "a36992d",
+  "subject": "feat(rag): harden retrieval — configurable window, LLM query rewrite, hit@k/MRR, freshness, HNSW"
+}

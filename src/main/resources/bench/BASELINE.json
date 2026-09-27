@@ -1,0 +1,23 @@
+{
+  "head" : "8c4dc2662cd1120fb78cf8a64b69c6cef106459d",
+  "replayOrigin" : "derived-from-ground-truth+controlled-distractors",
+  "corpusCases" : 20,
+  "scorableCases" : 17,
+  "groundTruth" : 148,
+  "all" : {
+    "precision" : 0.8131868131868132,
+    "recall" : 1.0,
+    "f1" : 0.896969696969697,
+    "tp" : 148,
+    "fp" : 34,
+    "fn" : 0,
+    "noisePerCase" : 10.705882352941176
+  },
+  "defectOnly" : {
+    "precision" : 0.32967032967032966,
+    "recall" : 1.0,
+    "f1" : 0.49586776859504134,
+    "noisePerCase" : 10.705882352941176
+  },
+  "policy" : "精度优先（precision-first）"
+}
